@@ -2,8 +2,17 @@ from pydantic import BaseModel, Field
 
 
 class ExplainRequest(BaseModel):
-    log: str = Field(..., description="Raw log line or alert payload to analyze")
-    source: str | None = Field(None, description="Origin (e.g. nginx, auth, syslog)")
+    log: str = Field(
+        ...,
+        min_length=1,
+        max_length=20_000,
+        description="Raw log line or alert payload to analyze",
+    )
+    source: str | None = Field(
+        None,
+        max_length=200,
+        description="Origin (e.g. nginx, auth, syslog)",
+    )
 
 
 class ExplainResponse(BaseModel):
