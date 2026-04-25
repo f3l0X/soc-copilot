@@ -46,7 +46,7 @@ docker compose up --build
 # Frontend:  http://localhost:3000
 # API:       http://localhost:8080
 # API docs:  http://localhost:8080/docs
-# Postgres:  localhost:5432
+# Postgres:  localhost:55432  (puerto cambiado: rango 5xxx reservado por Windows/Hyper-V)
 # Chroma:    http://localhost:8001
 ```
 
