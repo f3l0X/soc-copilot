@@ -1,0 +1,16 @@
+# Hetzner production reverse proxy. Local dev uses ports 3000/8080 directly.
+# Replace example.com with the real domain once provisioned.
+{
+    email admin@example.com
+}
+
+example.com {
+    encode gzip zstd
+    @api path /api/*
+    handle @api {
+        reverse_proxy api:8080
+    }
+    handle {
+        reverse_proxy web:3000
+    }
+}

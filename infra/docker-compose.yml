@@ -1,0 +1,68 @@
+name: soc-copilot
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-soc}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+      POSTGRES_DB: ${POSTGRES_DB:-soc_copilot}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-soc}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  chroma:
+    image: chromadb/chroma:0.5.23
+    restart: unless-stopped
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma-data:/data
+    environment:
+      IS_PERSISTENT: "TRUE"
+      ANONYMIZED_TELEMETRY: "FALSE"
+
+  api:
+    build:
+      context: ../apps/api
+    restart: unless-stopped
+    env_file: ../.env
+    environment:
+      POSTGRES_HOST: postgres
+      CHROMA_HOST: chroma
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../apps/api/app:/code/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      chroma:
+        condition: service_started
+
+  web:
+    build:
+      context: ../apps/web
+      target: dev
+    restart: unless-stopped
+    env_file: ../.env
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8080
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../apps/web/src:/app/src
+      - ../apps/web/public:/app/public
+    depends_on:
+      - api
+
+volumes:
+  postgres-data:
+  chroma-data:
