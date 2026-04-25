@@ -1,5 +1,8 @@
 async function getApiHealth() {
-  const url = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+  const url =
+    process.env.INTERNAL_API_URL ??
+    process.env.NEXT_PUBLIC_API_URL ??
+    "http://localhost:8080";
   try {
     const res = await fetch(`${url}/api/health`, { cache: "no-store" });
     return res.ok ? await res.json() : { status: "unreachable" };
