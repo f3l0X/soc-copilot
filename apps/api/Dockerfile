@@ -8,7 +8,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /code
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential curl \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
