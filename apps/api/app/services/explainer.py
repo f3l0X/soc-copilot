@@ -4,7 +4,7 @@ suitable for a junior SOC analyst.
 from __future__ import annotations
 
 from app.schemas.alerts import ExplainResponse
-from app.services.llm import LLMAdapter, LLMError, get_llm
+from app.services.llm import LLMAdapter, get_llm
 
 SYSTEM_PROMPT = """Eres un analista SOC senior que explica alertas a juniors.
 Para cada log o alerta:
@@ -36,16 +36,17 @@ RESPONSE_SCHEMA = {
 }
 
 
-def explain(log: str, source: str | None = None, llm: LLMAdapter | None = None) -> ExplainResponse:
+def explain(
+    log: str,
+    source: str | None = None,
+    llm: LLMAdapter | None = None,
+) -> ExplainResponse:
     llm = llm or get_llm()
     user_prompt = f"Fuente: {source or 'desconocida'}\n\nLog/Alerta:\n{log}"
-    try:
-        data = llm.generate_json(
-            user_prompt,
-            schema=RESPONSE_SCHEMA,
-            system=SYSTEM_PROMPT,
-            temperature=0.2,
-        )
-    except LLMError:
-        raise
+    data = llm.generate_json(
+        user_prompt,
+        schema=RESPONSE_SCHEMA,
+        system=SYSTEM_PROMPT,
+        temperature=0.2,
+    )
     return ExplainResponse(**data)

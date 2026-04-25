@@ -18,7 +18,11 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements.txt
+      - run: ruff check app
       - run: python -c "from app.main import app; print(app.title)"
+      - run: pytest -q
+        env:
+          GEMINI_API_KEY: dummy_for_ci_no_real_calls
 
   web:
     runs-on: ubuntu-latest
