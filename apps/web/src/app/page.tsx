@@ -27,9 +27,14 @@ export default async function Home() {
           {health.status}
         </span>
       </div>
-      <ul className="text-sm text-slate-400 list-disc pl-5">
+      <ul className="text-sm text-slate-400 list-disc pl-5 space-y-1">
+        <li>
+          <a className="text-sky-400 hover:underline" href="/alerts">
+            /alerts
+          </a>{" "}
+          — Alert Explainer ✅
+        </li>
         <li>/dashboard — KPIs y alertas (pendiente)</li>
-        <li>/alerts — Alert Explainer (pendiente)</li>
         <li>/respond — Next Step Recommender (pendiente)</li>
         <li>/chat — Chat IA (pendiente)</li>
       </ul>

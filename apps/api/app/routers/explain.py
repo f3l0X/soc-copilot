@@ -1,15 +1,15 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from app.schemas.alerts import ExplainRequest, ExplainResponse
+from app.services.explainer import explain
+from app.services.llm import LLMError
 
 router = APIRouter(prefix="/explain", tags=["alert-explainer"])
 
 
 @router.post("", response_model=ExplainResponse)
 def explain_alert(payload: ExplainRequest) -> ExplainResponse:
-    return ExplainResponse(
-        summary="(stub) module not implemented yet",
-        risk_level="unknown",
-        mitre_techniques=[],
-        reasoning="Phase 1 will implement Gemini-backed explanation.",
-    )
+    try:
+        return explain(payload.log, payload.source)
+    except LLMError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
