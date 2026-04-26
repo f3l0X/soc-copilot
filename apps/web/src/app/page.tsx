@@ -34,9 +34,19 @@ export default async function Home() {
           </a>{" "}
           — Alert Explainer ✅
         </li>
-        <li>/dashboard — KPIs y alertas (pendiente)</li>
-        <li>/respond — Next Step Recommender (pendiente)</li>
-        <li>/chat — Chat IA (pendiente)</li>
+        <li>
+          <a className="text-sky-400 hover:underline" href="/respond">
+            /respond
+          </a>{" "}
+          — Next Step Recommender ✅
+        </li>
+        <li>
+          <a className="text-sky-400 hover:underline" href="/history">
+            /history
+          </a>{" "}
+          — Histórico de alertas ✅
+        </li>
+        <li>/chat — Chat IA (Fase 3)</li>
       </ul>
     </main>
   );

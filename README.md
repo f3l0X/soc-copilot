@@ -62,11 +62,16 @@ Para parar: `docker compose down`. Para reiniciar limpio (borra datos): `docker 
 | Endpoint | Módulo | Estado |
 |----------|--------|--------|
 | `POST /api/explain` | Alert Explainer (Gemini + MITRE) | ✅ Fase 1 |
-| `POST /api/recommend` | Next Step Recommender | ⏳ Fase 2 |
+| `POST /api/recommend` | Next Step Recommender | ✅ Fase 2 |
+| `GET  /api/alerts` | Lista de alertas persistidas | ✅ Fase 2 |
+| `GET  /api/alerts/{id}` | Alerta + sus recomendaciones | ✅ Fase 2 |
 | `POST /api/chat` | Chat IA + RAG | ⏳ Fase 3 |
-| `GET /api/health` | Health check | ✅ |
+| `GET  /api/health` | Health check | ✅ |
 
-UI Alert Explainer: http://localhost:13000/alerts
+UI:
+- http://localhost:13000/alerts — Alert Explainer
+- http://localhost:13000/respond?alert_id=N — Next Step Recommender
+- http://localhost:13000/history — Histórico
 
 ## Tests y lint
 

@@ -1,4 +1,10 @@
-from pydantic import BaseModel, Field, field_validator
+from __future__ import annotations
+
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+# ─── Alert Explainer ────────────────────────────────────────────────────────
 
 
 class ExplainRequest(BaseModel):
@@ -23,15 +29,22 @@ class ExplainRequest(BaseModel):
 
 
 class ExplainResponse(BaseModel):
+    id: int | None = None  # populated after persistence
     summary: str
     risk_level: str
     mitre_techniques: list[str]
     reasoning: str
 
 
+# ─── Next Step Recommender ──────────────────────────────────────────────────
+
+
 class RecommendRequest(BaseModel):
-    log: str
-    explanation: str | None = None
+    """Either alert_id (use stored explanation) or raw log+source."""
+
+    alert_id: int | None = None
+    log: str | None = Field(None, max_length=20_000)
+    source: str | None = Field(None, max_length=200)
 
 
 class RecommendAction(BaseModel):
@@ -41,9 +54,49 @@ class RecommendAction(BaseModel):
 
 
 class RecommendResponse(BaseModel):
+    id: int | None = None
+    alert_id: int | None = None
     actions: list[RecommendAction]
     priority: str
     learning_notes: str
+
+
+# ─── Alert history (DB views) ───────────────────────────────────────────────
+
+
+class AlertSummary(BaseModel):
+    """Compact view for list endpoints."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    source: str | None
+    summary: str | None
+    risk_level: str | None
+    mitre_techniques: list[str] | None
+    created_at: datetime
+
+
+class AlertDetail(AlertSummary):
+    log: str
+    reasoning: str | None
+    recommendations: list[RecommendationDetail] = []
+
+
+class RecommendationDetail(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    actions: list[RecommendAction]
+    priority: str
+    learning_notes: str | None
+    created_at: datetime
+
+
+AlertDetail.model_rebuild()
+
+
+# ─── Chat (kept for Phase 3) ────────────────────────────────────────────────
 
 
 class ChatMessage(BaseModel):

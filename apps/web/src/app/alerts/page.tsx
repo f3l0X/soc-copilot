@@ -1,14 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
-import { explainAlert, type ExplainResponse } from "@/lib/api";
 
-const RISK_STYLES: Record<ExplainResponse["risk_level"], string> = {
-  low: "bg-emerald-900/40 text-emerald-300 border-emerald-700",
-  medium: "bg-amber-900/40 text-amber-300 border-amber-700",
-  high: "bg-orange-900/40 text-orange-300 border-orange-700",
-  critical: "bg-rose-900/50 text-rose-300 border-rose-700",
-};
+import { MitreList, RiskBadge } from "@/components/RiskBadge";
+import { explainAlert, type ExplainResponse } from "@/lib/api";
 
 const SAMPLES = {
   "Brute-force SSH": `Apr 25 18:42:31 srv-01 sshd[2342]: Failed password for root from 91.234.56.78 port 41234 ssh2
@@ -42,12 +38,17 @@ export default function AlertsPage() {
 
   return (
     <main className="min-h-screen max-w-5xl mx-auto p-8 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Alert Explainer</h1>
-        <p className="text-slate-400 mt-1">
-          Pega un log o alerta. La IA explica qué ocurre, asigna riesgo y mapea
-          a MITRE ATT&CK.
-        </p>
+      <div className="flex items-baseline justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Alert Explainer</h1>
+          <p className="text-slate-400 mt-1">
+            Pega un log o alerta. La IA explica qué ocurre, asigna riesgo y
+            mapea a MITRE ATT&CK.
+          </p>
+        </div>
+        <Link href="/history" className="text-sm text-sky-400 hover:underline">
+          Histórico →
+        </Link>
       </div>
 
       <div className="flex flex-wrap gap-2 text-xs">
@@ -96,12 +97,13 @@ export default function AlertsPage() {
       {result && (
         <div className="space-y-4 rounded-lg border border-slate-800 bg-slate-900/40 p-6">
           <div className="flex items-start justify-between gap-4">
-            <h2 className="text-lg font-semibold">Resumen</h2>
-            <span
-              className={`rounded border px-3 py-1 text-xs font-medium uppercase ${RISK_STYLES[result.risk_level]}`}
-            >
-              {result.risk_level}
-            </span>
+            <h2 className="text-lg font-semibold">
+              Resumen{" "}
+              {result.id != null && (
+                <span className="text-xs text-slate-500">#{result.id}</span>
+              )}
+            </h2>
+            <RiskBadge level={result.risk_level} />
           </div>
           <p className="text-slate-200 leading-relaxed">{result.summary}</p>
 
@@ -109,23 +111,7 @@ export default function AlertsPage() {
             <h3 className="text-sm font-semibold text-slate-400 mb-2">
               MITRE ATT&CK
             </h3>
-            {result.mitre_techniques.length === 0 ? (
-              <span className="text-xs text-slate-500">Sin técnicas mapeadas</span>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {result.mitre_techniques.map((t) => (
-                  <a
-                    key={t}
-                    href={`https://attack.mitre.org/techniques/${t.replace(".", "/")}/`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded border border-sky-700 bg-sky-950/40 px-2 py-1 text-xs text-sky-300 hover:bg-sky-900/40"
-                  >
-                    {t} ↗
-                  </a>
-                ))}
-              </div>
-            )}
+            <MitreList techniques={result.mitre_techniques} />
           </div>
 
           <div>
@@ -136,6 +122,17 @@ export default function AlertsPage() {
               {result.reasoning}
             </p>
           </div>
+
+          {result.id != null && (
+            <div className="pt-2">
+              <Link
+                href={`/respond?alert_id=${result.id}`}
+                className="inline-block rounded bg-emerald-700 hover:bg-emerald-600 px-4 py-2 text-sm font-medium"
+              >
+                Siguiente paso → recomendar acciones
+              </Link>
+            </div>
+          )}
         </div>
       )}
     </main>
