@@ -29,35 +29,63 @@ soc-copilot/
 ## Setup local (Windows 11)
 
 Requisitos previos:
-- Docker Desktop con WSL2
+- Docker Desktop con WSL2 activo (virtualización en BIOS habilitada)
 - Git
-- (Opcional) Node 22 y Python 3.12 si quieres correr fuera de Docker
 
 ```bash
-# 1. Copia y rellena el .env
+# 1. Clona el repo
+git clone https://github.com/f3l0X/soc-copilot.git
+cd soc-copilot
+
+# 2. Copia el .env y pon tu GEMINI_API_KEY
 cp .env.example .env
-# Edita .env y pon tu GEMINI_API_KEY
+# Edita .env → GEMINI_API_KEY=AIza...
+# Obtener una key: https://aistudio.google.com/apikey
 
-# 2. Levanta el stack
+# 3. Levanta el stack (primera vez tarda ~3 min para construir imágenes)
 cd infra
-docker compose up --build
+docker compose up --build -d
+docker compose logs -f   # opcional: ver logs en vivo
 
-# 3. Servicios
-# Frontend:  http://localhost:3000
+# 4. Servicios
+# Frontend:  http://localhost:13000
 # API:       http://localhost:8080
 # API docs:  http://localhost:8080/docs
-# Postgres:  localhost:55432  (puerto cambiado: rango 5xxx reservado por Windows/Hyper-V)
+# Postgres:  localhost:55432  (puerto cambiado: 5432–5757 reservados por Windows/Hyper-V)
 # Chroma:    http://localhost:8001
 ```
+
+Para parar: `docker compose down`. Para reiniciar limpio (borra datos): `docker compose down -v`.
 
 ## Módulos
 
 | Endpoint | Módulo | Estado |
 |----------|--------|--------|
-| `POST /api/explain` | Alert Explainer | stub (Fase 1) |
-| `POST /api/recommend` | Next Step Recommender | stub (Fase 2) |
-| `POST /api/chat` | Chat IA + RAG | stub (Fase 3) |
+| `POST /api/explain` | Alert Explainer (Gemini + MITRE) | ✅ Fase 1 |
+| `POST /api/recommend` | Next Step Recommender | ⏳ Fase 2 |
+| `POST /api/chat` | Chat IA + RAG | ⏳ Fase 3 |
 | `GET /api/health` | Health check | ✅ |
+
+UI Alert Explainer: http://localhost:13000/alerts
+
+## Tests y lint
+
+```bash
+# Lint backend
+cd apps/api
+docker run --rm -v "$PWD/app:/code/app" soc-copilot-api ruff check app
+
+# Tests backend
+docker run --rm \
+  -v "$PWD/app:/code/app" -v "$PWD/tests:/code/tests" \
+  -e GEMINI_API_KEY=dummy \
+  -w /code soc-copilot-api pytest -q tests/
+
+# TypeScript typecheck
+docker exec soc-copilot-web-1 npx tsc --noEmit
+```
+
+CI (GitHub Actions) corre ruff + pytest + `next build` en cada push a `main`.
 
 ## Reparto del equipo
 

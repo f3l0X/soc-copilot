@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ExplainRequest(BaseModel):
@@ -13,6 +13,13 @@ class ExplainRequest(BaseModel):
         max_length=200,
         description="Origin (e.g. nginx, auth, syslog)",
     )
+
+    @field_validator("log")
+    @classmethod
+    def _log_must_have_content(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("log must contain non-whitespace characters")
+        return v
 
 
 class ExplainResponse(BaseModel):

@@ -5,6 +5,7 @@ by adding a sibling adapter and selecting via settings.
 """
 from __future__ import annotations
 
+import json
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -62,8 +63,6 @@ class GeminiAdapter(LLMAdapter):
             )
         except Exception as exc:
             raise LLMError(f"Gemini call failed: {exc}") from exc
-
-        import json
 
         try:
             return json.loads(response.text)
