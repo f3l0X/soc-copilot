@@ -92,6 +92,33 @@ docker exec soc-copilot-web-1 npx tsc --noEmit
 
 CI (GitHub Actions) corre ruff + pytest + `next build` en cada push a `main`.
 
+## Seguridad
+
+- **Errores LLM saneados** — el cliente recibe `AI provider error` o
+  `AI response could not be processed` (502); el detalle se loggea
+  internamente. Nunca se expone la API key, modelo, ni mensajes de quota.
+- **Mitigación prompt injection** — los logs de usuario van envueltos en
+  delimitadores `BEGIN_UNTRUSTED_LOG` / `END_UNTRUSTED_LOG` y el system
+  prompt instruye al modelo a tratarlos como dato, no instrucciones.
+- **Rate limit por IP** — `/api/explain` y `/api/recommend` aplican
+  ventana deslizante en memoria. Configurable vía env:
+
+  | Variable | Default | Descripción |
+  |----------|---------|-------------|
+  | `RATE_LIMIT_ENABLED` | `true` | Activa el limitador |
+  | `RATE_LIMIT_REQUESTS` | `20` | Peticiones permitidas por ventana |
+  | `RATE_LIMIT_WINDOW_SECONDS` | `60` | Tamaño de la ventana |
+
+  Exceso → `HTTP 429 {"detail":"rate limit exceeded"}`.
+- **Validación estricta** — campos obligatorios, longitudes acotadas,
+  rechazo de payloads whitespace-only y roles de chat restringidos.
+
+## Despliegue producción
+
+`infra/docker-compose.yml` es **dev-only** (puertos expuestos, hot-reload).
+Para Hetzner, copiar `infra/docker-compose.prod.example.yml` y adaptar
+dominio/secretos. Usa Caddy 2 como reverse proxy con TLS automático.
+
 ## Reparto del equipo
 
 - **P1** Backend Core / LLM adapter

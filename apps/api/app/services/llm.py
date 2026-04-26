@@ -6,6 +6,7 @@ by adding a sibling adapter and selecting via settings.
 from __future__ import annotations
 
 import json
+import logging
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -14,9 +15,19 @@ from google.genai import types
 
 from app.config import get_settings
 
+logger = logging.getLogger(__name__)
+
 
 class LLMError(RuntimeError):
-    """Raised when the LLM provider fails (network, quota, malformed reply)."""
+    """Base error for LLM provider failures."""
+
+
+class LLMProviderError(LLMError):
+    """The provider rejected the request (network, quota, auth)."""
+
+
+class LLMResponseError(LLMError):
+    """The provider replied but the payload could not be parsed/validated."""
 
 
 class LLMAdapter(ABC):
@@ -38,7 +49,7 @@ class GeminiAdapter(LLMAdapter):
     def __init__(self) -> None:
         settings = get_settings()
         if not settings.gemini_api_key or settings.gemini_api_key == "replace_me":
-            raise LLMError("GEMINI_API_KEY is not configured")
+            raise LLMProviderError("GEMINI_API_KEY is not configured")
         self._client = genai.Client(api_key=settings.gemini_api_key)
         self._chat_model = settings.gemini_chat_model
         self._embed_model = settings.gemini_embed_model
@@ -62,12 +73,14 @@ class GeminiAdapter(LLMAdapter):
                 model=self._chat_model, contents=prompt, config=config
             )
         except Exception as exc:
-            raise LLMError(f"Gemini call failed: {exc}") from exc
+            logger.exception("Gemini provider call failed")
+            raise LLMProviderError(str(exc)) from exc
 
         try:
             return json.loads(response.text)
         except (TypeError, ValueError) as exc:
-            raise LLMError(f"Gemini returned non-JSON: {response.text!r}") from exc
+            logger.exception("Gemini returned non-JSON payload: %r", response.text)
+            raise LLMResponseError("non-json reply") from exc
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         try:
@@ -75,7 +88,8 @@ class GeminiAdapter(LLMAdapter):
                 model=self._embed_model, contents=texts
             )
         except Exception as exc:
-            raise LLMError(f"Gemini embed failed: {exc}") from exc
+            logger.exception("Gemini embed call failed")
+            raise LLMProviderError(str(exc)) from exc
         return [e.values for e in response.embeddings]
 
 

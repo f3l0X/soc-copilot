@@ -19,7 +19,11 @@ class Settings(BaseSettings):
     chroma_host: str = "chroma"
     chroma_port: int = 8000
 
-    api_cors_origins: str = "http://localhost:3000"
+    api_cors_origins: str = "http://localhost:13000"
+
+    rate_limit_enabled: bool = True
+    rate_limit_requests: int = 20
+    rate_limit_window_seconds: int = 60
 
     @property
     def cors_origins_list(self) -> list[str]:

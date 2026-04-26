@@ -1,12 +1,21 @@
-from fastapi import APIRouter, HTTPException
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import ValidationError
 
 from app.db import DbSession
+from app.middleware.ratelimit import rate_limit
 from app.models import Alert, Recommendation
 from app.schemas.alerts import RecommendRequest, RecommendResponse
-from app.services.llm import LLMError
+from app.services.llm import LLMProviderError, LLMResponseError
 from app.services.recommender import recommend
 
-router = APIRouter(prefix="/recommend", tags=["next-step-recommender"])
+logger = logging.getLogger(__name__)
+router = APIRouter(
+    prefix="/recommend",
+    tags=["next-step-recommender"],
+    dependencies=[Depends(rate_limit)],
+)
 
 
 @router.post("", response_model=RecommendResponse)
@@ -21,23 +30,35 @@ def recommend_actions(payload: RecommendRequest, db: DbSession) -> RecommendResp
         alert = db.get(Alert, payload.alert_id)
         if alert is None:
             raise HTTPException(
-                status_code=404, detail=f"alert {payload.alert_id} not found"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"alert {payload.alert_id} not found",
             )
         log = alert.log
         source = alert.source
         explanation = alert.summary
         risk_level = alert.risk_level
 
+    # Schema-level validators already enforce log non-empty when alert_id is
+    # absent; this guard is belt-and-suspenders.
     if not log or not log.strip():
         raise HTTPException(
-            status_code=422,
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="provide either alert_id of an existing alert or non-empty log",
         )
 
     try:
         result = recommend(log, source, explanation, risk_level)
-    except LLMError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except LLMProviderError:
+        logger.exception("LLM provider error in /recommend")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail="AI provider error"
+        ) from None
+    except (LLMResponseError, ValidationError):
+        logger.exception("LLM response could not be processed in /recommend")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="AI response could not be processed",
+        ) from None
 
     if alert is not None:
         rec = Recommendation(

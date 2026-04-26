@@ -1,3 +1,14 @@
+# ────────────────────────────────────────────────────────────────────────────
+# LOCAL / DEV stack.  Trade-offs vs production are intentional:
+#   • Postgres, Chroma and the API expose host ports so devs can poke them
+#     directly with `psql`, `curl`, the Chroma client, etc.
+#   • `web` runs the `dev` Dockerfile target → next dev with HMR.
+#   • `api` runs uvicorn with --reload (default in its Dockerfile CMD) and
+#     bind-mounts `apps/api/app` for live reload.
+#   • Default postgres credentials live in `.env`; rotate before any deploy.
+#
+# Production (Hetzner) uses a different file: see docker-compose.prod.example.yml.
+# ────────────────────────────────────────────────────────────────────────────
 name: soc-copilot
 
 x-logging: &default-logging
@@ -13,6 +24,7 @@ services:
     logging: *default-logging
     env_file: ../.env
     ports:
+      # Dev convenience: localhost:55432 → container 5432. Drop in prod.
       - "55432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
@@ -30,6 +42,7 @@ services:
     restart: unless-stopped
     logging: *default-logging
     ports:
+      # Dev convenience. Drop in prod.
       - "8001:8000"
     volumes:
       - chroma-data:/data
@@ -50,6 +63,7 @@ services:
     ports:
       - "8080:8080"
     volumes:
+      # Live-reload backend code without rebuilding the image.
       - ../apps/api/app:/code/app
     depends_on:
       postgres:
@@ -60,7 +74,7 @@ services:
   web:
     build:
       context: ../apps/web
-      target: dev
+      target: dev    # next dev (HMR). Prod uses target: runner.
     restart: unless-stopped
     logging: *default-logging
     env_file: ../.env

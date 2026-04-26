@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 # ─── Alert Explainer ────────────────────────────────────────────────────────
 
@@ -40,11 +41,20 @@ class ExplainResponse(BaseModel):
 
 
 class RecommendRequest(BaseModel):
-    """Either alert_id (use stored explanation) or raw log+source."""
-
-    alert_id: int | None = None
+    alert_id: int | None = Field(
+        None, ge=1, description="ID of an existing alert (>=1)"
+    )
     log: str | None = Field(None, max_length=20_000)
     source: str | None = Field(None, max_length=200)
+
+    @model_validator(mode="after")
+    def _require_alert_or_log(self) -> RecommendRequest:
+        if self.alert_id is None:
+            if self.log is None or not self.log.strip():
+                raise ValueError(
+                    "provide either alert_id (>=1) or a non-whitespace log"
+                )
+        return self
 
 
 class RecommendAction(BaseModel):
@@ -96,17 +106,27 @@ class RecommendationDetail(BaseModel):
 AlertDetail.model_rebuild()
 
 
-# ─── Chat (kept for Phase 3) ────────────────────────────────────────────────
+# ─── Chat (Phase 3, currently stub) ─────────────────────────────────────────
+
+
+ChatRole = Literal["user", "assistant", "system"]
 
 
 class ChatMessage(BaseModel):
-    role: str
-    content: str
+    role: ChatRole
+    content: str = Field(..., min_length=1, max_length=4_000)
+
+    @field_validator("content")
+    @classmethod
+    def _content_non_whitespace(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("content must contain non-whitespace characters")
+        return v
 
 
 class ChatRequest(BaseModel):
-    messages: list[ChatMessage]
-    log_context: str | None = None
+    messages: list[ChatMessage] = Field(..., min_length=1, max_length=30)
+    log_context: str | None = Field(None, max_length=20_000)
 
 
 class ChatResponse(BaseModel):
