@@ -1,0 +1,214 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
+
+import {
+  type ChatMessage,
+  type KBStatus,
+  kbStatus,
+  sendChat,
+} from "@/lib/api";
+
+const STARTERS = [
+  "¿Qué es un ataque de fuerza bruta y cómo lo detecto?",
+  "Explícame el flujo típico de respuesta a un compromiso de credenciales.",
+  "¿Cómo encaja OWASP A07:2021 con MITRE T1110?",
+];
+
+function SourcePill({ id }: { id: string }) {
+  const [kind, ref] = id.split(":");
+  const url =
+    kind === "mitre"
+      ? `https://attack.mitre.org/techniques/${ref.replace(".", "/")}/`
+      : kind === "owasp"
+        ? `https://owasp.org/Top10/${ref.replace(":", "_").replace("2021", "2021/")}`
+        : "#";
+  const color =
+    kind === "mitre"
+      ? "border-sky-700 bg-sky-950/40 text-sky-300"
+      : "border-emerald-700 bg-emerald-950/40 text-emerald-300";
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`rounded border px-2 py-0.5 text-[11px] ${color}`}
+    >
+      {ref} ↗
+    </a>
+  );
+}
+
+export default function ChatPage() {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [logContext, setLogContext] = useState("");
+  const [showLogContext, setShowLogContext] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [lastSources, setLastSources] = useState<string[]>([]);
+  const [kb, setKb] = useState<KBStatus | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    kbStatus()
+      .then(setKb)
+      .catch(() => setKb(null));
+  }, []);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({
+      top: scrollRef.current.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [messages, loading]);
+
+  async function send(content: string) {
+    const trimmed = content.trim();
+    if (!trimmed || loading) return;
+    const userMsg: ChatMessage = { role: "user", content: trimmed };
+    const next: ChatMessage[] = [...messages, userMsg];
+    setMessages(next);
+    setInput("");
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await sendChat({
+        messages: next,
+        log_context: logContext || undefined,
+      });
+      setMessages([...next, { role: "assistant", content: res.reply }]);
+      setLastSources(res.sources);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <main className="min-h-screen max-w-4xl mx-auto p-8 flex flex-col gap-4">
+      <div className="flex items-baseline justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Chat IA</h1>
+          <p className="text-slate-400 mt-1 text-sm">
+            Mentor SOC con RAG sobre MITRE ATT&CK + OWASP Top 10.
+          </p>
+        </div>
+        <div className="text-right text-xs">
+          {kb ? (
+            <span className="text-slate-400">
+              KB: {kb.total} docs ({kb.mitre} MITRE · {kb.owasp} OWASP)
+            </span>
+          ) : (
+            <span className="text-amber-400">KB no disponible</span>
+          )}
+          <div className="mt-1">
+            <Link href="/alerts" className="text-sky-400 hover:underline">
+              ← alertas
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {messages.length === 0 && (
+        <div className="space-y-2">
+          <p className="text-xs text-slate-500">Empieza con uno de estos:</p>
+          <div className="flex flex-col gap-2">
+            {STARTERS.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => send(s)}
+                className="rounded border border-slate-700 bg-slate-900 px-3 py-2 text-left text-sm hover:border-slate-500"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div
+        ref={scrollRef}
+        className="flex-1 min-h-[300px] overflow-y-auto space-y-3 rounded-lg border border-slate-800 bg-slate-950/40 p-4"
+      >
+        {messages.map((m, i) => (
+          <div
+            key={i}
+            className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
+              m.role === "user"
+                ? "ml-auto bg-sky-900/50 text-sky-50"
+                : "mr-auto bg-slate-800/70 text-slate-100"
+            }`}
+          >
+            <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">
+              {m.role === "user" ? "Tú" : "Mentor"}
+            </div>
+            <p className="whitespace-pre-line">{m.content}</p>
+          </div>
+        ))}
+        {loading && (
+          <div className="text-xs text-slate-500">Mentor está pensando…</div>
+        )}
+      </div>
+
+      {lastSources.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-slate-500">Fuentes citables:</span>
+          {lastSources.map((id) => (
+            <SourcePill key={id} id={id} />
+          ))}
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded border border-rose-700 bg-rose-950/40 p-3 text-xs text-rose-300">
+          <strong>Error:</strong> {error}
+        </div>
+      )}
+
+      <div className="flex flex-col gap-2">
+        <button
+          type="button"
+          onClick={() => setShowLogContext((v) => !v)}
+          className="self-start text-xs text-slate-400 hover:text-slate-200"
+        >
+          {showLogContext ? "▼" : "▶"} contexto del log (opcional)
+        </button>
+        {showLogContext && (
+          <textarea
+            value={logContext}
+            onChange={(e) => setLogContext(e.target.value)}
+            rows={4}
+            placeholder="Pega aquí un log o alerta para que el mentor lo tenga en cuenta…"
+            className="w-full rounded bg-slate-900 border border-slate-700 px-3 py-2 font-mono text-xs"
+          />
+        )}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            send(input);
+          }}
+          className="flex gap-2"
+        >
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Escribe tu pregunta…"
+            disabled={loading}
+            className="flex-1 rounded bg-slate-900 border border-slate-700 px-3 py-2 text-sm"
+          />
+          <button
+            type="submit"
+            disabled={loading || !input.trim()}
+            className="rounded bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 px-4 text-sm font-medium"
+          >
+            Enviar
+          </button>
+        </form>
+      </div>
+    </main>
+  );
+}

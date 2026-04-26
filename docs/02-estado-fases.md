@@ -2,7 +2,7 @@
 
 ## Estado general
 
-El proyecto se encuentra al cierre de la fase 2. Ya existe una version local ejecutable con Docker Compose, backend FastAPI, frontend Next.js, PostgreSQL para persistencia y ChromaDB preparado para la fase 3.
+El proyecto se encuentra al cierre de la fase 3. Ya existe una version local ejecutable con Docker Compose, backend FastAPI, frontend Next.js, PostgreSQL para persistencia y ChromaDB con base de conocimiento RAG (MITRE ATT&CK + OWASP Top 10) en uso.
 
 ## Fase 0: base del proyecto
 
@@ -61,23 +61,22 @@ Salida generada:
 
 ## Fase 3: RAG + Chat IA
 
-Estado: pendiente de iniciar.
+Estado: completada.
 
-Base ya disponible:
+Incluye:
 
-- Servicio ChromaDB en Docker Compose.
-- Configuracion `CHROMA_HOST` y `CHROMA_PORT`.
-- Endpoint `POST /api/chat` creado como stub.
-- Esquemas `ChatRequest` y `ChatResponse`.
+- Script idempotente `apps/api/scripts/ingest_kb.py` que descarga el bundle STIX de MITRE ATT&CK Enterprise, extrae todas las tecnicas vigentes y las combina con la lista hardcodeada de OWASP Top 10 2021. Embeddings con Gemini en lotes con backoff exponencial.
+- Coleccion ChromaDB `soc_kb` con 691 docs MITRE + 10 docs OWASP (701 total).
+- Servicio `app/services/rag.py` con `Retriever` y diagnostico `kb_status`.
+- Servicio `app/services/chat.py` que orquesta retrieval + LLM aplicando los mismos delimitadores `BEGIN/END_UNTRUSTED_KB` y `BEGIN/END_UNTRUSTED_LOG` de la fase 2 contra prompt injection.
+- Endpoint `POST /api/chat` con sanitizacion de errores (502 generico) y rate limit por IP.
+- Endpoint `GET /api/kb/status` para inspeccionar la base de conocimiento.
+- UI `/chat` en frontend con conversacion, contexto opcional de log y pildoras de fuentes citables (link directo a MITRE/OWASP).
 
-Trabajo esperado:
+Salida generada:
 
-- Ingesta de conocimiento MITRE, OWASP u otras fuentes aprobadas.
-- Generacion de embeddings con Gemini.
-- Persistencia de documentos/vectorizaciones en ChromaDB.
-- Recuperacion de contexto relevante por consulta.
-- Implementacion real del endpoint `/api/chat`.
-- UI de chat en frontend.
+- Respuesta conversacional con citas MITRE T#### / OWASP A##:2021.
+- Lista de fuentes (`sources`) con los IDs de los documentos KB recuperados.
 
 ## Fases posteriores
 

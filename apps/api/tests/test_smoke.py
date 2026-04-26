@@ -1,14 +1,26 @@
 """Smoke tests that don't hit the real LLM or DB."""
 
+from dataclasses import dataclass
+
 import pytest
 from fastapi.testclient import TestClient
 
 from app.config import get_settings
 from app.main import app
 from app.middleware import ratelimit
-from app.schemas.alerts import ExplainResponse, RecommendResponse
+from app.schemas.alerts import ChatMessage, ExplainResponse, RecommendResponse
+from app.services import chat as chat_module
 from app.services import explainer, recommender
 from app.services.llm import LLMAdapter, LLMProviderError, LLMResponseError
+from app.services.rag import KBDoc
+
+
+@dataclass
+class _FakeRetriever:
+    docs: list[KBDoc]
+
+    def retrieve(self, query: str, k: int = 5) -> list[KBDoc]:
+        return self.docs[:k]
 
 
 # ─── Fakes ──────────────────────────────────────────────────────────────────
@@ -27,6 +39,9 @@ class FakeExplainLLM(LLMAdapter):
             "mitre_techniques": ["T1110"],
             "reasoning": "fake reasoning",
         }
+
+    def generate_text(self, prompt, *, system=None, temperature=0.2):
+        return "fake reply"
 
     def embed(self, texts):
         return [[0.0] * 8 for _ in texts]
@@ -56,12 +71,36 @@ class FakeRecommendLLM(LLMAdapter):
             "learning_notes": "Brute force responses always start with containment.",
         }
 
+    def generate_text(self, prompt, *, system=None, temperature=0.2):
+        return "fake reply"
+
     def embed(self, texts):
         return [[0.0] * 8 for _ in texts]
 
 
+class FakeChatLLM(LLMAdapter):
+    last_prompt: str | None = None
+    last_system: str | None = None
+
+    def generate_json(self, prompt, *, schema, system=None, temperature=0.2):
+        return {}
+
+    def generate_text(self, prompt, *, system=None, temperature=0.2):
+        FakeChatLLM.last_prompt = prompt
+        FakeChatLLM.last_system = system
+        return "respuesta de prueba"
+
+    def embed(self, texts):
+        # Deterministic embedding so the (real) Chroma path could in theory
+        # be exercised. Tests inject a FakeRetriever so this is unused.
+        return [[float(i) for i in range(8)] for _ in texts]
+
+
 class ProviderFailingLLM(LLMAdapter):
     def generate_json(self, prompt, *, schema, system=None, temperature=0.2):
+        raise LLMProviderError("internal-only: 429 quota AIzaSyXXX")
+
+    def generate_text(self, prompt, *, system=None, temperature=0.2):
         raise LLMProviderError("internal-only: 429 quota AIzaSyXXX")
 
     def embed(self, texts):
@@ -71,6 +110,9 @@ class ProviderFailingLLM(LLMAdapter):
 class ResponseFailingLLM(LLMAdapter):
     def generate_json(self, prompt, *, schema, system=None, temperature=0.2):
         raise LLMResponseError("internal-only: malformed json")
+
+    def generate_text(self, prompt, *, system=None, temperature=0.2):
+        raise LLMResponseError("internal-only: empty reply")
 
     def embed(self, texts):
         return []
@@ -204,11 +246,21 @@ def test_chat_validation_422(payload):
     assert r.status_code == 422
 
 
-def test_chat_minimal_valid_payload_passes_validation():
+def test_chat_minimal_valid_payload_passes_validation(monkeypatch):
+    # Phase 3 chat now hits the LLM; inject a fake so this stays offline.
+    import app.services.chat as chat_module
+    import app.services.llm as llm_module
+
+    monkeypatch.setattr(llm_module, "_singleton", FakeChatLLM())
+    monkeypatch.setattr(
+        chat_module, "Retriever", lambda llm=None: _FakeRetriever([])
+    )
+
     r = client.post(
         "/api/chat", json={"messages": [{"role": "user", "content": "hola"}]}
     )
-    assert r.status_code == 200  # current stub returns 200
+    assert r.status_code == 200, r.text
+    assert r.json()["reply"] == "respuesta de prueba"
 
 
 # ─── LLM error sanitization ─────────────────────────────────────────────────
@@ -317,3 +369,94 @@ def test_explain_validation_oversize():
 def test_explain_missing_field():
     r = client.post("/api/explain", json={})
     assert r.status_code == 422
+
+
+# ─── Chat (Phase 3) — service-level with fake LLM + retriever ───────────────
+
+
+_SAMPLE_DOCS = [
+    KBDoc(
+        id="mitre:T1110",
+        text="T1110 — Brute Force",
+        source="mitre",
+        name="T1110 — Brute Force",
+    ),
+    KBDoc(
+        id="owasp:A07:2021",
+        text="A07:2021 — Identification and Authentication Failures",
+        source="owasp",
+        name="A07:2021 — Identification and Authentication Failures",
+    ),
+]
+
+
+def test_chat_returns_reply_and_sources():
+    result = chat_module.chat(
+        messages=[ChatMessage(role="user", content="¿Qué es brute force?")],
+        log_context=None,
+        llm=FakeChatLLM(),
+        retriever=_FakeRetriever(_SAMPLE_DOCS),
+    )
+    assert result.reply == "respuesta de prueba"
+    assert result.sources == ["mitre:T1110", "owasp:A07:2021"]
+
+
+def test_chat_wraps_kb_in_untrusted_delimiters():
+    chat_module.chat(
+        messages=[ChatMessage(role="user", content="explica")],
+        log_context="Failed login",
+        llm=FakeChatLLM(),
+        retriever=_FakeRetriever(_SAMPLE_DOCS),
+    )
+    assert "BEGIN_UNTRUSTED_KB" in FakeChatLLM.last_prompt
+    assert "END_UNTRUSTED_KB" in FakeChatLLM.last_prompt
+    assert "BEGIN_UNTRUSTED_LOG" in FakeChatLLM.last_prompt
+    assert "END_UNTRUSTED_LOG" in FakeChatLLM.last_prompt
+    # System prompt instructs the model to never obey instructions inside
+    # KB or log spans.
+    assert "BEGIN_UNTRUSTED_KB" in FakeChatLLM.last_system
+    assert "DATO NO CONFIABLE" in FakeChatLLM.last_system
+
+
+def test_chat_works_when_kb_is_empty():
+    """Empty Chroma → still answers (no KB block, no sources)."""
+    result = chat_module.chat(
+        messages=[ChatMessage(role="user", content="hola")],
+        log_context=None,
+        llm=FakeChatLLM(),
+        retriever=_FakeRetriever([]),
+    )
+    assert result.reply == "respuesta de prueba"
+    assert result.sources == []
+
+
+def test_chat_provider_error_returns_generic_502(monkeypatch):
+    import app.services.chat as cm
+    import app.services.llm as llm_module
+
+    monkeypatch.setattr(llm_module, "_singleton", ProviderFailingLLM())
+    monkeypatch.setattr(cm, "Retriever", lambda llm=None: _FakeRetriever([]))
+
+    r = client.post(
+        "/api/chat", json={"messages": [{"role": "user", "content": "hola"}]}
+    )
+    assert r.status_code == 502
+    assert "AI provider error" in r.text
+    assert "AIza" not in r.text
+    assert "quota" not in r.text.lower()
+    assert "internal-only" not in r.text
+
+
+def test_chat_response_error_returns_generic_502(monkeypatch):
+    import app.services.chat as cm
+    import app.services.llm as llm_module
+
+    monkeypatch.setattr(llm_module, "_singleton", ResponseFailingLLM())
+    monkeypatch.setattr(cm, "Retriever", lambda llm=None: _FakeRetriever([]))
+
+    r = client.post(
+        "/api/chat", json={"messages": [{"role": "user", "content": "hola"}]}
+    )
+    assert r.status_code == 502
+    assert "AI response could not be processed" in r.text
+    assert "internal-only" not in r.text

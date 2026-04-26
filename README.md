@@ -65,13 +65,31 @@ Para parar: `docker compose down`. Para reiniciar limpio (borra datos): `docker 
 | `POST /api/recommend` | Next Step Recommender | ✅ Fase 2 |
 | `GET  /api/alerts` | Lista de alertas persistidas | ✅ Fase 2 |
 | `GET  /api/alerts/{id}` | Alerta + sus recomendaciones | ✅ Fase 2 |
-| `POST /api/chat` | Chat IA + RAG | ⏳ Fase 3 |
+| `POST /api/chat` | Chat IA + RAG (MITRE + OWASP) | ✅ Fase 3 |
+| `GET  /api/kb/status` | Estado de la base de conocimiento | ✅ Fase 3 |
 | `GET  /api/health` | Health check | ✅ |
 
 UI:
 - http://localhost:13000/alerts — Alert Explainer
 - http://localhost:13000/respond?alert_id=N — Next Step Recommender
 - http://localhost:13000/history — Histórico
+- http://localhost:13000/chat — Chat IA con citaciones MITRE/OWASP
+
+## Knowledge base (RAG)
+
+`/api/chat` consulta una colección Chroma `soc_kb` poblada con MITRE
+ATT&CK Enterprise (todas las técnicas) y OWASP Top 10 2021.
+
+Para ingerir la KB la primera vez (o re-ingerir tras cambios):
+
+```bash
+docker compose exec api python -m scripts.ingest_kb           # idempotente, OWASP+MITRE
+docker compose exec api python -m scripts.ingest_kb --force   # re-ingerir
+docker compose exec api python -m scripts.ingest_kb --owasp-only
+```
+
+El script tarda 5–15 min según RPM disponibles del free tier de Gemini
+(~700 docs en lotes con backoff exponencial).
 
 ## Tests y lint
 

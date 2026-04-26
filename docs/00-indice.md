@@ -9,6 +9,8 @@ Este paquete contiene el estado actual del proyecto al cierre de la fase 2 y la 
 3. [Arquitectura tecnica](03-arquitectura.md)
 4. [Guia de trabajo para el equipo](04-guia-equipo.md)
 5. [Solucion de problemas](05-solucion-problemas.md)
+6. [Estado de seguridad y mitigaciones](security.md)
+7. [Roadmap de mejoras](roadmap.md)
 
 ## Resumen rapido
 

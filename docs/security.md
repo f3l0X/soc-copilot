@@ -58,7 +58,7 @@
 
 | Fase | Riesgo |
 |------|--------|
-| 3 (Chat/RAG) | El endpoint `/api/chat` aún es stub. Cuando se conecte ChromaDB hay que sanitizar también el contenido recuperado (RAG poisoning) y aplicar el mismo patrón de delimitadores. |
+| 3 (Chat/RAG) | El contenido recuperado de Chroma se trata como **dato no confiable**: se envuelve en `BEGIN/END_UNTRUSTED_KB` y el system prompt instruye al modelo a no obedecer instrucciones que aparezcan dentro. Riesgo residual: si un futuro pipeline de ingestión externo permite escribir en la KB, validar la fuente antes de aceptarla (RAG poisoning). |
 | 4 (Auth) | Sin autenticación: cualquiera con acceso al puerto `8080` puede generar coste de Gemini. El rate limit por IP mitiga, pero no sustituye auth. NextAuth + JWT pendiente. |
 | 4 (RBAC) | Endpoints `/api/alerts/{id}` no comprueban ownership porque no hay usuarios todavía. |
 | 4 (Tests) | Suite es smoke + service-level con fakes; faltan tests E2E con DB real (testcontainers o pytest-postgresql). |

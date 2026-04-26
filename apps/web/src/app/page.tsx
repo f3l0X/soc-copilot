@@ -46,7 +46,12 @@ export default async function Home() {
           </a>{" "}
           — Histórico de alertas ✅
         </li>
-        <li>/chat — Chat IA (Fase 3)</li>
+        <li>
+          <a className="text-sky-400 hover:underline" href="/chat">
+            /chat
+          </a>{" "}
+          — Chat IA + RAG ✅
+        </li>
       </ul>
     </main>
   );

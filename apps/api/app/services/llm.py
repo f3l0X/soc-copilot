@@ -42,6 +42,15 @@ class LLMAdapter(ABC):
     ) -> dict[str, Any]: ...
 
     @abstractmethod
+    def generate_text(
+        self,
+        prompt: str,
+        *,
+        system: str | None = None,
+        temperature: float = 0.2,
+    ) -> str: ...
+
+    @abstractmethod
     def embed(self, texts: list[str]) -> list[list[float]]: ...
 
 
@@ -81,6 +90,27 @@ class GeminiAdapter(LLMAdapter):
         except (TypeError, ValueError) as exc:
             logger.exception("Gemini returned non-JSON payload: %r", response.text)
             raise LLMResponseError("non-json reply") from exc
+
+    def generate_text(
+        self,
+        prompt: str,
+        *,
+        system: str | None = None,
+        temperature: float = 0.2,
+    ) -> str:
+        config = types.GenerateContentConfig(
+            system_instruction=system, temperature=temperature
+        )
+        try:
+            response = self._client.models.generate_content(
+                model=self._chat_model, contents=prompt, config=config
+            )
+        except Exception as exc:
+            logger.exception("Gemini provider call failed (text)")
+            raise LLMProviderError(str(exc)) from exc
+        if not response.text:
+            raise LLMResponseError("empty reply")
+        return response.text
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         try:

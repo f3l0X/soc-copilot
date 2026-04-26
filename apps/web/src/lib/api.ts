@@ -112,3 +112,39 @@ export const listAlerts = (limit = 50, offset = 0) =>
 
 export const getAlert = (id: number) =>
   request<AlertDetail>(`/api/alerts/${id}`);
+
+// ─── Chat ─────────────────────────────────────────────────────────────────
+
+export type ChatRole = "user" | "assistant" | "system";
+
+export interface ChatMessage {
+  role: ChatRole;
+  content: string;
+}
+
+export interface ChatRequest {
+  messages: ChatMessage[];
+  log_context?: string;
+}
+
+export interface ChatResponse {
+  reply: string;
+  sources: string[];
+}
+
+export const sendChat = (payload: ChatRequest) =>
+  request<ChatResponse>("/api/chat", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+// ─── Knowledge Base ───────────────────────────────────────────────────────
+
+export interface KBStatus {
+  total: number;
+  mitre: number;
+  owasp: number;
+  unknown: number;
+}
+
+export const kbStatus = () => request<KBStatus>("/api/kb/status");
