@@ -10,6 +10,7 @@ export type RiskLevel = "low" | "medium" | "high" | "critical";
 export interface ExplainRequest {
   log: string;
   source?: string;
+  model?: string;
 }
 
 export interface ExplainResponse {
@@ -30,6 +31,7 @@ export interface RecommendRequest {
   alert_id?: number;
   log?: string;
   source?: string;
+  model?: string;
 }
 
 export interface RecommendResponse {
@@ -125,6 +127,7 @@ export interface ChatMessage {
 export interface ChatRequest {
   messages: ChatMessage[];
   log_context?: string;
+  model?: string;
 }
 
 export interface ChatResponse {
@@ -148,3 +151,12 @@ export interface KBStatus {
 }
 
 export const kbStatus = () => request<KBStatus>("/api/kb/status");
+
+// ─── LLM ──────────────────────────────────────────────────────────────────
+
+export interface ModelsInfo {
+  default: string;
+  available: string[];
+}
+
+export const getModels = () => request<ModelsInfo>("/api/llm/models");

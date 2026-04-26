@@ -61,6 +61,7 @@ def explain(
     log: str,
     source: str | None = None,
     llm: LLMAdapter | None = None,
+    model: str | None = None,
 ) -> ExplainResponse:
     llm = llm or get_llm()
     user_prompt = build_user_prompt(log, source)
@@ -69,5 +70,6 @@ def explain(
         schema=RESPONSE_SCHEMA,
         system=SYSTEM_PROMPT,
         temperature=0.2,
+        model=model,
     )
     return ExplainResponse(**data)

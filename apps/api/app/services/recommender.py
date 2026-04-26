@@ -86,6 +86,7 @@ def recommend(
     explanation: str | None = None,
     risk_level: str | None = None,
     llm: LLMAdapter | None = None,
+    model: str | None = None,
 ) -> RecommendResponse:
     llm = llm or get_llm()
     user_prompt = build_user_prompt(log, source, explanation, risk_level)
@@ -94,5 +95,6 @@ def recommend(
         schema=RESPONSE_SCHEMA,
         system=SYSTEM_PROMPT,
         temperature=0.2,
+        model=model,
     )
     return RecommendResponse(**data)

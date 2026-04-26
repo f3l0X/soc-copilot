@@ -16,7 +16,9 @@ router = APIRouter(
 @router.post("", response_model=ChatResponse)
 def chat(payload: ChatRequest) -> ChatResponse:
     try:
-        return chat_service(payload.messages, payload.log_context)
+        return chat_service(
+            payload.messages, payload.log_context, model=payload.model
+        )
     except LLMProviderError:
         logger.exception("LLM provider error in /chat")
         raise HTTPException(

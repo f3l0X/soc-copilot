@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
+import { ModelSelector } from "@/components/ModelSelector";
 import { MitreList, RiskBadge } from "@/components/RiskBadge";
 import {
   type AlertDetail,
@@ -11,6 +12,7 @@ import {
   recommendActions,
   type RecommendResponse,
 } from "@/lib/api";
+import { useModel } from "@/lib/useModel";
 
 function RespondInner() {
   const params = useSearchParams();
@@ -22,6 +24,7 @@ function RespondInner() {
   const [loading, setLoading] = useState(false);
   const [recommending, setRecommending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { selected: model } = useModel();
 
   useEffect(() => {
     if (!alertId) return;
@@ -52,7 +55,9 @@ function RespondInner() {
     setError(null);
     setRec(null);
     try {
-      setRec(await recommendActions({ alert_id: alertId }));
+      setRec(
+        await recommendActions({ alert_id: alertId, model: model ?? undefined }),
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -86,9 +91,12 @@ function RespondInner() {
             Acciones concretas para esta alerta, con justificación didáctica.
           </p>
         </div>
-        <Link href="/alerts" className="text-sm text-sky-400 hover:underline">
-          ← nueva alerta
-        </Link>
+        <div className="flex flex-col items-end gap-1">
+          <ModelSelector compact />
+          <Link href="/alerts" className="text-sm text-sky-400 hover:underline">
+            ← nueva alerta
+          </Link>
+        </div>
       </div>
 
       {loading && <p className="text-slate-400">Cargando alerta #{alertId}…</p>}

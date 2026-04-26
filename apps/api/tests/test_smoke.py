@@ -30,7 +30,7 @@ class FakeExplainLLM(LLMAdapter):
     last_prompt: str | None = None
     last_system: str | None = None
 
-    def generate_json(self, prompt, *, schema, system=None, temperature=0.2):
+    def generate_json(self, prompt, *, schema, system=None, temperature=0.2, model=None):
         FakeExplainLLM.last_prompt = prompt
         FakeExplainLLM.last_system = system
         return {
@@ -40,7 +40,7 @@ class FakeExplainLLM(LLMAdapter):
             "reasoning": "fake reasoning",
         }
 
-    def generate_text(self, prompt, *, system=None, temperature=0.2):
+    def generate_text(self, prompt, *, system=None, temperature=0.2, model=None):
         return "fake reply"
 
     def embed(self, texts):
@@ -51,7 +51,7 @@ class FakeRecommendLLM(LLMAdapter):
     last_prompt: str | None = None
     last_system: str | None = None
 
-    def generate_json(self, prompt, *, schema, system=None, temperature=0.2):
+    def generate_json(self, prompt, *, schema, system=None, temperature=0.2, model=None):
         FakeRecommendLLM.last_prompt = prompt
         FakeRecommendLLM.last_system = system
         return {
@@ -71,7 +71,7 @@ class FakeRecommendLLM(LLMAdapter):
             "learning_notes": "Brute force responses always start with containment.",
         }
 
-    def generate_text(self, prompt, *, system=None, temperature=0.2):
+    def generate_text(self, prompt, *, system=None, temperature=0.2, model=None):
         return "fake reply"
 
     def embed(self, texts):
@@ -82,10 +82,10 @@ class FakeChatLLM(LLMAdapter):
     last_prompt: str | None = None
     last_system: str | None = None
 
-    def generate_json(self, prompt, *, schema, system=None, temperature=0.2):
+    def generate_json(self, prompt, *, schema, system=None, temperature=0.2, model=None):
         return {}
 
-    def generate_text(self, prompt, *, system=None, temperature=0.2):
+    def generate_text(self, prompt, *, system=None, temperature=0.2, model=None):
         FakeChatLLM.last_prompt = prompt
         FakeChatLLM.last_system = system
         return "respuesta de prueba"
@@ -97,10 +97,10 @@ class FakeChatLLM(LLMAdapter):
 
 
 class ProviderFailingLLM(LLMAdapter):
-    def generate_json(self, prompt, *, schema, system=None, temperature=0.2):
+    def generate_json(self, prompt, *, schema, system=None, temperature=0.2, model=None):
         raise LLMProviderError("internal-only: 429 quota AIzaSyXXX")
 
-    def generate_text(self, prompt, *, system=None, temperature=0.2):
+    def generate_text(self, prompt, *, system=None, temperature=0.2, model=None):
         raise LLMProviderError("internal-only: 429 quota AIzaSyXXX")
 
     def embed(self, texts):
@@ -108,10 +108,10 @@ class ProviderFailingLLM(LLMAdapter):
 
 
 class ResponseFailingLLM(LLMAdapter):
-    def generate_json(self, prompt, *, schema, system=None, temperature=0.2):
+    def generate_json(self, prompt, *, schema, system=None, temperature=0.2, model=None):
         raise LLMResponseError("internal-only: malformed json")
 
-    def generate_text(self, prompt, *, system=None, temperature=0.2):
+    def generate_text(self, prompt, *, system=None, temperature=0.2, model=None):
         raise LLMResponseError("internal-only: empty reply")
 
     def embed(self, texts):
@@ -460,3 +460,103 @@ def test_chat_response_error_returns_generic_502(monkeypatch):
     assert r.status_code == 502
     assert "AI response could not be processed" in r.text
     assert "internal-only" not in r.text
+
+
+# ─── Model allowlist (per-request override) ─────────────────────────────────
+
+
+def test_llm_models_endpoint_returns_default_and_available():
+    r = client.get("/api/llm/models")
+    assert r.status_code == 200
+    data = r.json()
+    assert "default" in data
+    assert isinstance(data["available"], list)
+    assert data["default"] in data["available"]
+    assert len(data["available"]) >= 1
+
+
+def test_explain_rejects_unknown_model():
+    r = client.post(
+        "/api/explain",
+        json={"log": "ok", "model": "gemini-2.5-pro"},  # not in allowlist
+    )
+    assert r.status_code == 422
+    assert "model must be one of" in r.text
+
+
+def test_recommend_rejects_unknown_model():
+    r = client.post(
+        "/api/recommend",
+        json={"log": "ok", "model": "totally-fake-model"},
+    )
+    assert r.status_code == 422
+
+
+def test_chat_rejects_unknown_model():
+    r = client.post(
+        "/api/chat",
+        json={
+            "messages": [{"role": "user", "content": "hi"}],
+            "model": "some-weird-model",
+        },
+    )
+    assert r.status_code == 422
+
+
+def test_explain_passes_allowed_model_to_llm():
+    """Service-level: confirm the model arg flows through to the adapter.
+    Avoids DB persistence (no Postgres in unit tests)."""
+    captured: dict[str, str | None] = {"model": "unset"}
+
+    class CapturingLLM(LLMAdapter):
+        def generate_json(self, prompt, *, schema, system=None, temperature=0.2, model=None):
+            captured["model"] = model
+            return {
+                "summary": "x",
+                "risk_level": "low",
+                "mitre_techniques": [],
+                "reasoning": "y",
+            }
+
+        def generate_text(self, prompt, *, system=None, temperature=0.2, model=None):
+            return ""
+
+        def embed(self, texts):
+            return []
+
+    explainer.explain("ok", llm=CapturingLLM(), model="gemini-2.5-flash")
+    assert captured["model"] == "gemini-2.5-flash"
+
+
+def test_chat_accepts_allowed_model(monkeypatch):
+    import app.services.chat as cm
+    import app.services.llm as llm_module
+
+    monkeypatch.setattr(llm_module, "_singleton", FakeChatLLM())
+    monkeypatch.setattr(cm, "Retriever", lambda llm=None: _FakeRetriever([]))
+
+    r = client.post(
+        "/api/chat",
+        json={
+            "messages": [{"role": "user", "content": "hi"}],
+            "model": "gemini-2.0-flash-lite",
+        },
+    )
+    assert r.status_code == 200, r.text
+
+
+def test_gemini_adapter_falls_back_to_default_for_unknown_model(monkeypatch):
+    """Defense in depth: even if a router skipped validation, the adapter
+    must not happily forward an unknown model name to Gemini."""
+    from app.services.llm import GeminiAdapter
+
+    # Build adapter with a real-looking config; we won't actually call
+    # Gemini, just exercise _resolve_chat_model.
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    get_settings.cache_clear()
+    a = GeminiAdapter()
+    assert a._resolve_chat_model(None) == a._default_chat_model
+    assert a._resolve_chat_model("not-real") == a._default_chat_model
+    # Allowlist members pass through.
+    allowed = list(a._allowlist)[0]
+    assert a._resolve_chat_model(allowed) == allowed

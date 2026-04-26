@@ -47,7 +47,7 @@ def recommend_actions(payload: RecommendRequest, db: DbSession) -> RecommendResp
         )
 
     try:
-        result = recommend(log, source, explanation, risk_level)
+        result = recommend(log, source, explanation, risk_level, model=payload.model)
     except LLMProviderError:
         logger.exception("LLM provider error in /recommend")
         raise HTTPException(

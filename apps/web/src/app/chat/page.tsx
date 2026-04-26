@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
+import { ModelSelector } from "@/components/ModelSelector";
 import {
   type ChatMessage,
   type KBStatus,
   kbStatus,
   sendChat,
 } from "@/lib/api";
+import { useModel } from "@/lib/useModel";
 
 const STARTERS = [
   "¿Qué es un ataque de fuerza bruta y cómo lo detecto?",
@@ -49,6 +51,7 @@ export default function ChatPage() {
   const [error, setError] = useState<string | null>(null);
   const [lastSources, setLastSources] = useState<string[]>([]);
   const [kb, setKb] = useState<KBStatus | null>(null);
+  const { selected: model } = useModel();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -77,6 +80,7 @@ export default function ChatPage() {
       const res = await sendChat({
         messages: next,
         log_context: logContext || undefined,
+        model: model ?? undefined,
       });
       setMessages([...next, { role: "assistant", content: res.reply }]);
       setLastSources(res.sources);
@@ -96,7 +100,7 @@ export default function ChatPage() {
             Mentor SOC con RAG sobre MITRE ATT&CK + OWASP Top 10.
           </p>
         </div>
-        <div className="text-right text-xs">
+        <div className="flex flex-col items-end gap-1 text-xs">
           {kb ? (
             <span className="text-slate-400">
               KB: {kb.total} docs ({kb.mitre} MITRE · {kb.owasp} OWASP)
@@ -104,11 +108,10 @@ export default function ChatPage() {
           ) : (
             <span className="text-amber-400">KB no disponible</span>
           )}
-          <div className="mt-1">
-            <Link href="/alerts" className="text-sky-400 hover:underline">
-              ← alertas
-            </Link>
-          </div>
+          <ModelSelector compact />
+          <Link href="/alerts" className="text-sky-400 hover:underline">
+            ← alertas
+          </Link>
         </div>
       </div>
 

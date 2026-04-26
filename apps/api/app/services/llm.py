@@ -39,6 +39,7 @@ class LLMAdapter(ABC):
         schema: dict[str, Any],
         system: str | None = None,
         temperature: float = 0.2,
+        model: str | None = None,
     ) -> dict[str, Any]: ...
 
     @abstractmethod
@@ -48,6 +49,7 @@ class LLMAdapter(ABC):
         *,
         system: str | None = None,
         temperature: float = 0.2,
+        model: str | None = None,
     ) -> str: ...
 
     @abstractmethod
@@ -60,8 +62,24 @@ class GeminiAdapter(LLMAdapter):
         if not settings.gemini_api_key or settings.gemini_api_key == "replace_me":
             raise LLMProviderError("GEMINI_API_KEY is not configured")
         self._client = genai.Client(api_key=settings.gemini_api_key)
-        self._chat_model = settings.gemini_chat_model
+        self._default_chat_model = settings.gemini_chat_model
         self._embed_model = settings.gemini_embed_model
+        self._allowlist = set(settings.chat_models_list)
+
+    def _resolve_chat_model(self, requested: str | None) -> str:
+        if not requested:
+            return self._default_chat_model
+        if requested not in self._allowlist:
+            # Soft-fail: log and fall back to default; routers validate
+            # against the allowlist before reaching here, so this branch is
+            # only ever hit if internal callers pass an unknown model.
+            logger.warning(
+                "requested model %r not in allowlist, using default %r",
+                requested,
+                self._default_chat_model,
+            )
+            return self._default_chat_model
+        return requested
 
     def generate_json(
         self,
@@ -70,6 +88,7 @@ class GeminiAdapter(LLMAdapter):
         schema: dict[str, Any],
         system: str | None = None,
         temperature: float = 0.2,
+        model: str | None = None,
     ) -> dict[str, Any]:
         config = types.GenerateContentConfig(
             response_mime_type="application/json",
@@ -79,7 +98,9 @@ class GeminiAdapter(LLMAdapter):
         )
         try:
             response = self._client.models.generate_content(
-                model=self._chat_model, contents=prompt, config=config
+                model=self._resolve_chat_model(model),
+                contents=prompt,
+                config=config,
             )
         except Exception as exc:
             logger.exception("Gemini provider call failed")
@@ -97,13 +118,16 @@ class GeminiAdapter(LLMAdapter):
         *,
         system: str | None = None,
         temperature: float = 0.2,
+        model: str | None = None,
     ) -> str:
         config = types.GenerateContentConfig(
             system_instruction=system, temperature=temperature
         )
         try:
             response = self._client.models.generate_content(
-                model=self._chat_model, contents=prompt, config=config
+                model=self._resolve_chat_model(model),
+                contents=prompt,
+                config=config,
             )
         except Exception as exc:
             logger.exception("Gemini provider call failed (text)")

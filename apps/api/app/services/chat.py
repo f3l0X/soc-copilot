@@ -77,6 +77,7 @@ def chat(
     llm: LLMAdapter | None = None,
     retriever: Retriever | None = None,
     k: int = 5,
+    model: str | None = None,
 ) -> ChatResponse:
     if not messages:
         raise ValueError("messages must contain at least one entry")
@@ -103,7 +104,7 @@ def chat(
     user_prompt = "\n\n".join(p for p in parts if p)
 
     reply = llm.generate_text(
-        user_prompt, system=SYSTEM_PROMPT, temperature=0.3
+        user_prompt, system=SYSTEM_PROMPT, temperature=0.3, model=model
     )
     sources = [d.id for d in docs]
     return ChatResponse(reply=reply, sources=sources)

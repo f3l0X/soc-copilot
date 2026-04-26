@@ -10,6 +10,22 @@ class Settings(BaseSettings):
     gemini_chat_model: str = "gemini-2.5-flash-lite"
     gemini_embed_model: str = "gemini-embedding-001"
 
+    # Allowlist of chat models the frontend can switch to. Each must support
+    # response_mime_type=application/json + response_schema (JSON mode) so
+    # /api/explain and /api/recommend keep parsing structured output.
+    # Comma-separated in env.
+    gemini_chat_models_allowlist: str = (
+        "gemini-2.5-flash-lite,gemini-2.5-flash,gemini-2.0-flash-lite"
+    )
+
+    @property
+    def chat_models_list(self) -> list[str]:
+        return [
+            m.strip()
+            for m in self.gemini_chat_models_allowlist.split(",")
+            if m.strip()
+        ]
+
     postgres_user: str = "soc"
     postgres_password: str = "change_me"
     postgres_db: str = "soc_copilot"

@@ -5,6 +5,17 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.config import get_settings
+
+
+def _validate_model_allowlist(value: str | None) -> str | None:
+    if value is None:
+        return None
+    allowed = get_settings().chat_models_list
+    if value not in allowed:
+        raise ValueError(f"model must be one of {allowed}")
+    return value
+
 # ─── Alert Explainer ────────────────────────────────────────────────────────
 
 
@@ -20,6 +31,9 @@ class ExplainRequest(BaseModel):
         max_length=200,
         description="Origin (e.g. nginx, auth, syslog)",
     )
+    model: str | None = Field(
+        None, description="Override default LLM (must be in allowlist)"
+    )
 
     @field_validator("log")
     @classmethod
@@ -27,6 +41,11 @@ class ExplainRequest(BaseModel):
         if not v.strip():
             raise ValueError("log must contain non-whitespace characters")
         return v
+
+    @field_validator("model")
+    @classmethod
+    def _model_in_allowlist(cls, v: str | None) -> str | None:
+        return _validate_model_allowlist(v)
 
 
 class ExplainResponse(BaseModel):
@@ -46,6 +65,7 @@ class RecommendRequest(BaseModel):
     )
     log: str | None = Field(None, max_length=20_000)
     source: str | None = Field(None, max_length=200)
+    model: str | None = Field(None)
 
     @model_validator(mode="after")
     def _require_alert_or_log(self) -> RecommendRequest:
@@ -55,6 +75,11 @@ class RecommendRequest(BaseModel):
                     "provide either alert_id (>=1) or a non-whitespace log"
                 )
         return self
+
+    @field_validator("model")
+    @classmethod
+    def _model_in_allowlist(cls, v: str | None) -> str | None:
+        return _validate_model_allowlist(v)
 
 
 class RecommendAction(BaseModel):
@@ -127,6 +152,12 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(..., min_length=1, max_length=30)
     log_context: str | None = Field(None, max_length=20_000)
+    model: str | None = Field(None)
+
+    @field_validator("model")
+    @classmethod
+    def _model_in_allowlist(cls, v: str | None) -> str | None:
+        return _validate_model_allowlist(v)
 
 
 class ChatResponse(BaseModel):

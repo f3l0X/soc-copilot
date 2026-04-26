@@ -19,7 +19,7 @@ router = APIRouter(
 @router.post("", response_model=ExplainResponse)
 def explain_alert(payload: ExplainRequest, db: DbSession) -> ExplainResponse:
     try:
-        result = explain(payload.log, payload.source)
+        result = explain(payload.log, payload.source, model=payload.model)
     except LLMProviderError:
         logger.exception("LLM provider error in /explain")
         raise HTTPException(

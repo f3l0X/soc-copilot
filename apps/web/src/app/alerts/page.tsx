@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import { ModelSelector } from "@/components/ModelSelector";
 import { MitreList, RiskBadge } from "@/components/RiskBadge";
 import { explainAlert, type ExplainResponse } from "@/lib/api";
+import { useModel } from "@/lib/useModel";
 
 const SAMPLES = {
   "Brute-force SSH": `Apr 25 18:42:31 srv-01 sshd[2342]: Failed password for root from 91.234.56.78 port 41234 ssh2
@@ -21,6 +23,7 @@ export default function AlertsPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ExplainResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { selected: model } = useModel();
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -28,7 +31,13 @@ export default function AlertsPage() {
     setError(null);
     setResult(null);
     try {
-      setResult(await explainAlert({ log, source: source || undefined }));
+      setResult(
+        await explainAlert({
+          log,
+          source: source || undefined,
+          model: model ?? undefined,
+        }),
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -46,9 +55,12 @@ export default function AlertsPage() {
             mapea a MITRE ATT&CK.
           </p>
         </div>
-        <Link href="/history" className="text-sm text-sky-400 hover:underline">
-          Histórico →
-        </Link>
+        <div className="flex flex-col items-end gap-1">
+          <ModelSelector compact />
+          <Link href="/history" className="text-sm text-sky-400 hover:underline">
+            Histórico →
+          </Link>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2 text-xs">
