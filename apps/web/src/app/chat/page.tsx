@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
+import { UserBadge } from "@/components/AuthGate";
 import { ModelSelector } from "@/components/ModelSelector";
 import {
   type ChatMessage,
@@ -10,6 +11,7 @@ import {
   kbStatus,
   sendChat,
 } from "@/lib/api";
+import { useRequireAuth } from "@/lib/auth";
 import { useModel } from "@/lib/useModel";
 
 const STARTERS = [
@@ -53,6 +55,7 @@ export default function ChatPage() {
   const [kb, setKb] = useState<KBStatus | null>(null);
   const { selected: model } = useModel();
   const scrollRef = useRef<HTMLDivElement>(null);
+  useRequireAuth();
 
   useEffect(() => {
     kbStatus()
@@ -101,6 +104,7 @@ export default function ChatPage() {
           </p>
         </div>
         <div className="flex flex-col items-end gap-1 text-xs">
+          <UserBadge />
           {kb ? (
             <span className="text-slate-400">
               KB: {kb.total} docs ({kb.mitre} MITRE · {kb.owasp} OWASP)

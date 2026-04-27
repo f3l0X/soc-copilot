@@ -8,11 +8,28 @@ from fastapi.testclient import TestClient
 from app.config import get_settings
 from app.main import app
 from app.middleware import ratelimit
+from app.middleware.auth import get_current_user
+from app.models import User, UserRole
 from app.schemas.alerts import ChatMessage, ExplainResponse, RecommendResponse
 from app.services import chat as chat_module
 from app.services import explainer, recommender
 from app.services.llm import LLMAdapter, LLMProviderError, LLMResponseError
 from app.services.rag import KBDoc
+
+
+def _fake_user() -> User:
+    """Synthetic admin user used as the auth principal in unit tests."""
+    return User(id=1, email="t@example.com", hashed_password="x", role=UserRole.ADMIN)
+
+
+@pytest.fixture(autouse=True)
+def _bypass_auth():
+    """Override the auth dependency module-wide so existing smoke tests
+    (validation, LLM error sanitization, rate limit) can hit protected
+    POST endpoints without spinning up Postgres. Cleared per test."""
+    app.dependency_overrides[get_current_user] = _fake_user
+    yield
+    app.dependency_overrides.pop(get_current_user, None)
 
 
 @dataclass

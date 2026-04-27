@@ -1,56 +1,48 @@
-async function getApiHealth() {
-  const url =
-    process.env.INTERNAL_API_URL ??
-    process.env.NEXT_PUBLIC_API_URL ??
-    "http://localhost:8080";
-  try {
-    const res = await fetch(`${url}/api/health`, { cache: "no-store" });
-    return res.ok ? await res.json() : { status: "unreachable" };
-  } catch {
-    return { status: "unreachable" };
-  }
-}
+"use client";
 
-export default async function Home() {
-  const health = await getApiHealth();
+import Link from "next/link";
+
+import { UserBadge } from "@/components/AuthGate";
+import { useRequireAuth } from "@/lib/auth";
+
+export default function Home() {
+  const auth = useRequireAuth();
+
+  if (auth.loading || !auth.user) {
+    return <main className="min-h-screen p-8" />;
+  }
+
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-8 gap-6">
+      <div className="absolute top-4 right-6">
+        <UserBadge />
+      </div>
       <h1 className="text-4xl font-bold tracking-tight">SOC Copilot</h1>
       <p className="text-slate-400">AI Copilot para Analistas SOC Junior</p>
-      <div className="rounded-lg border border-slate-800 px-4 py-2 text-sm">
-        API status:{" "}
-        <span
-          className={
-            health.status === "ok" ? "text-green-400" : "text-amber-400"
-          }
-        >
-          {health.status}
-        </span>
-      </div>
       <ul className="text-sm text-slate-400 list-disc pl-5 space-y-1">
         <li>
-          <a className="text-sky-400 hover:underline" href="/alerts">
+          <Link className="text-sky-400 hover:underline" href="/alerts">
             /alerts
-          </a>{" "}
-          — Alert Explainer ✅
+          </Link>{" "}
+          — Alert Explainer
         </li>
         <li>
-          <a className="text-sky-400 hover:underline" href="/respond">
+          <Link className="text-sky-400 hover:underline" href="/respond">
             /respond
-          </a>{" "}
-          — Next Step Recommender ✅
+          </Link>{" "}
+          — Next Step Recommender
         </li>
         <li>
-          <a className="text-sky-400 hover:underline" href="/history">
+          <Link className="text-sky-400 hover:underline" href="/history">
             /history
-          </a>{" "}
-          — Histórico de alertas ✅
+          </Link>{" "}
+          — Histórico de alertas
         </li>
         <li>
-          <a className="text-sky-400 hover:underline" href="/chat">
+          <Link className="text-sky-400 hover:underline" href="/chat">
             /chat
-          </a>{" "}
-          — Chat IA + RAG ✅
+          </Link>{" "}
+          — Chat IA + RAG
         </li>
       </ul>
     </main>

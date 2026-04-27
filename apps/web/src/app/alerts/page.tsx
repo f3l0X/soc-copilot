@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import { UserBadge } from "@/components/AuthGate";
 import { ModelSelector } from "@/components/ModelSelector";
 import { MitreList, RiskBadge } from "@/components/RiskBadge";
 import { explainAlert, type ExplainResponse } from "@/lib/api";
+import { useRequireAuth } from "@/lib/auth";
 import { useModel } from "@/lib/useModel";
 
 const SAMPLES = {
@@ -24,6 +26,7 @@ export default function AlertsPage() {
   const [result, setResult] = useState<ExplainResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { selected: model } = useModel();
+  useRequireAuth();
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -56,6 +59,7 @@ export default function AlertsPage() {
           </p>
         </div>
         <div className="flex flex-col items-end gap-1">
+          <UserBadge />
           <ModelSelector compact />
           <Link href="/history" className="text-sm text-sky-400 hover:underline">
             Histórico →

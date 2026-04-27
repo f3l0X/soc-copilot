@@ -4,8 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import ValidationError
 
 from app.db import DbSession
+from app.middleware.auth import CurrentUser
 from app.middleware.ratelimit import rate_limit
-from app.models import Alert, Recommendation
+from app.models import Alert, Recommendation, UserRole
 from app.schemas.alerts import RecommendRequest, RecommendResponse
 from app.services.llm import LLMProviderError, LLMResponseError
 from app.services.recommender import recommend
@@ -19,7 +20,9 @@ router = APIRouter(
 
 
 @router.post("", response_model=RecommendResponse)
-def recommend_actions(payload: RecommendRequest, db: DbSession) -> RecommendResponse:
+def recommend_actions(
+    payload: RecommendRequest, db: DbSession, user: CurrentUser
+) -> RecommendResponse:
     alert: Alert | None = None
     log = payload.log
     source = payload.source
@@ -29,6 +32,12 @@ def recommend_actions(payload: RecommendRequest, db: DbSession) -> RecommendResp
     if payload.alert_id is not None:
         alert = db.get(Alert, payload.alert_id)
         if alert is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"alert {payload.alert_id} not found",
+            )
+        # Ownership: analysts can only act on their own alerts; admin sees all.
+        if user.role != UserRole.ADMIN and alert.user_id != user.id:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"alert {payload.alert_id} not found",

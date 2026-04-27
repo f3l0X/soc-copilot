@@ -41,6 +41,14 @@ class Settings(BaseSettings):
     rate_limit_requests: int = 20
     rate_limit_window_seconds: int = 60
 
+    # ── Auth ────────────────────────────────────────────────────────────
+    # Generate with: openssl rand -base64 48
+    jwt_secret: str = "dev-only-change-me-32+chars-please"
+    jwt_alg: str = "HS256"
+    jwt_ttl_seconds: int = 3600  # 1h sessions
+    cookie_name: str = "soc_session"
+    cookie_secure: bool = False  # flip to true behind HTTPS / Caddy
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.api_cors_origins.split(",") if o.strip()]

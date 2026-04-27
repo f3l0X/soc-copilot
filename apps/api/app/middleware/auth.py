@@ -1,0 +1,71 @@
+"""FastAPI auth dependencies.
+
+`get_current_user` reads the JWT from the httpOnly cookie set at login,
+loads the user from the DB, and returns it. `require_admin` builds on top
+to gate admin-only routes.
+"""
+from __future__ import annotations
+
+from typing import Annotated
+
+from fastapi import Depends, HTTPException, Request, status
+
+from app.config import get_settings
+from app.db import DbSession
+from app.models import User, UserRole
+from app.services.auth import TokenError, decode_token
+
+
+def _extract_token(request: Request) -> str | None:
+    s = get_settings()
+    cookie = request.cookies.get(s.cookie_name)
+    if cookie:
+        return cookie
+    # Fallback: Authorization: Bearer <token> for API clients/tests.
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.lower().startswith("bearer "):
+        return auth_header.split(" ", 1)[1].strip()
+    return None
+
+
+def get_current_user(request: Request, db: DbSession) -> User:
+    token = _extract_token(request)
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    try:
+        payload = decode_token(token)
+    except TokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="invalid or expired token",
+        ) from None
+    try:
+        user_id = int(payload["sub"])
+    except (KeyError, ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="malformed token"
+        ) from None
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="user not found"
+        )
+    return user
+
+
+CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+def require_admin(user: CurrentUser) -> User:
+    if user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="admin role required"
+        )
+    return user
+
+
+AdminUser = Annotated[User, Depends(require_admin)]

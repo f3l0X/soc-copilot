@@ -67,6 +67,15 @@ export interface AlertDetail extends AlertSummary {
 
 // ─── Internal fetch helper ────────────────────────────────────────────────
 
+export class ApiError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly detail: string,
+  ) {
+    super(`API ${status}: ${detail}`);
+  }
+}
+
 async function request<T>(
   path: string,
   init: RequestInit & { timeoutMs?: number } = {},
@@ -77,13 +86,15 @@ async function request<T>(
   try {
     const res = await fetch(`${API_BASE}${path}`, {
       ...rest,
+      credentials: "include",
       headers: { "Content-Type": "application/json", ...(rest.headers ?? {}) },
       signal: ctrl.signal,
     });
     if (!res.ok) {
       const detail = await res.text();
-      throw new Error(`API ${res.status}: ${detail}`);
+      throw new ApiError(res.status, detail);
     }
+    if (res.status === 204) return undefined as T;
     return (await res.json()) as T;
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") {
@@ -160,3 +171,36 @@ export interface ModelsInfo {
 }
 
 export const getModels = () => request<ModelsInfo>("/api/llm/models");
+
+// ─── Auth ─────────────────────────────────────────────────────────────────
+
+export type UserRole = "analyst" | "admin";
+
+export interface UserMe {
+  id: number;
+  email: string;
+  role: UserRole;
+  created_at: string;
+}
+
+export interface LoginResponse {
+  user: UserMe;
+  expires_at: string;
+}
+
+export const register = (email: string, password: string) =>
+  request<UserMe>("/api/auth/register", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+
+export const login = (email: string, password: string) =>
+  request<LoginResponse>("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+
+export const logout = () =>
+  request<void>("/api/auth/logout", { method: "POST" });
+
+export const getMe = () => request<UserMe>("/api/auth/me");

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import ValidationError
 
 from app.db import DbSession
+from app.middleware.auth import CurrentUser
 from app.middleware.ratelimit import rate_limit
 from app.models import Alert
 from app.schemas.alerts import ExplainRequest, ExplainResponse
@@ -17,7 +18,9 @@ router = APIRouter(
 
 
 @router.post("", response_model=ExplainResponse)
-def explain_alert(payload: ExplainRequest, db: DbSession) -> ExplainResponse:
+def explain_alert(
+    payload: ExplainRequest, db: DbSession, user: CurrentUser
+) -> ExplainResponse:
     try:
         result = explain(payload.log, payload.source, model=payload.model)
     except LLMProviderError:
@@ -39,6 +42,7 @@ def explain_alert(payload: ExplainRequest, db: DbSession) -> ExplainResponse:
         risk_level=result.risk_level,
         mitre_techniques=result.mitre_techniques,
         reasoning=result.reasoning,
+        user_id=user.id,
     )
     db.add(alert)
     db.commit()

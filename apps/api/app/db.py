@@ -36,11 +36,34 @@ def get_db() -> Iterator[Session]:
 
 
 def init_db() -> None:
-    """Create tables that don't exist yet. Idempotent."""
-    # Importing models registers them on Base.metadata.
-    from app import models  # noqa: F401
+    """Create tables that don't exist yet, then run idempotent in-place
+    column patches for schema evolutions we don't want to lose data over.
+
+    Phase 4 adds users + alerts.user_id; without Alembic we use IF NOT
+    EXISTS / ADD COLUMN IF NOT EXISTS so existing alert rows persist.
+    """
+    from sqlalchemy import text
+
+    from app import models  # noqa: F401  (registers tables on Base.metadata)
 
     Base.metadata.create_all(bind=_engine)
+
+    with _engine.begin() as conn:
+        # Postgres-only patches. SQLite (used in tests) skips these.
+        if conn.dialect.name == "postgresql":
+            conn.execute(
+                text(
+                    "ALTER TABLE alerts "
+                    "ADD COLUMN IF NOT EXISTS user_id INTEGER "
+                    "REFERENCES users(id) ON DELETE SET NULL"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_alerts_user_id "
+                    "ON alerts (user_id)"
+                )
+            )
 
 
 # FastAPI dependency alias — avoids `Depends(get_db)` in defaults (B008).
