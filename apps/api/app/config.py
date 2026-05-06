@@ -2,9 +2,27 @@ from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Defaults that MUST never reach a non-development environment. If any of
+# them survive into prod the service refuses to start.
+_INSECURE_JWT_SECRETS = {
+    "",
+    "dev-only-change-me-32+chars-please",
+    "change_me",
+}
+_INSECURE_PG_PASSWORDS = {
+    "",
+    "change_me",
+    "change_me_in_prod",
+    "postgres",
+}
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # Environment marker. When "production" we enforce strict secrets and
+    # disable developer affordances (Swagger UI, permissive cookies).
+    app_env: str = "development"
 
     gemini_api_key: str = ""
     gemini_chat_model: str = "gemini-2.5-flash-lite"
@@ -48,10 +66,42 @@ class Settings(BaseSettings):
     jwt_ttl_seconds: int = 3600  # 1h sessions
     cookie_name: str = "soc_session"
     cookie_secure: bool = False  # flip to true behind HTTPS / Caddy
+    cookie_samesite: str = "lax"  # forced to "strict" in production
+
+    # Public registration. First user becomes admin; flip to false after
+    # bootstrap and create new users via admin endpoints.
+    allow_public_registration: bool = True
+
+    # ── Per-user LLM keys ───────────────────────────────────────────────
+    # Symmetric key (Fernet, base64-urlsafe 32 bytes) used to encrypt
+    # user-supplied Gemini API keys at rest. Generate with:
+    #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    # Empty string = feature disabled (server falls back to the global key).
+    app_encryption_key: str = ""
+
+    # Daily call budget when a user is using the SHARED server key. Users
+    # who configure their own key are not throttled here (their own quota
+    # at Google applies). Reset rolls forward at the next UTC day.
+    server_llm_daily_quota: int = 50
+
+    @property
+    def is_production(self) -> bool:
+        return self.app_env.lower() in {"prod", "production"}
+
+    @property
+    def effective_cookie_secure(self) -> bool:
+        return self.cookie_secure or self.is_production
+
+    @property
+    def effective_cookie_samesite(self) -> str:
+        return "strict" if self.is_production else self.cookie_samesite
 
     @property
     def cors_origins_list(self) -> list[str]:
-        return [o.strip() for o in self.api_cors_origins.split(",") if o.strip()]
+        origins = [o.strip() for o in self.api_cors_origins.split(",") if o.strip()]
+        # Wildcards combined with credentialed cookies are unsafe — strip
+        # them defensively even if someone sets API_CORS_ORIGINS=*.
+        return [o for o in origins if o != "*"]
 
     @property
     def database_url(self) -> str:
@@ -60,7 +110,39 @@ class Settings(BaseSettings):
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 
+    def validate_for_runtime(self) -> None:
+        """Refuse to start with insecure defaults in production."""
+        if not self.is_production:
+            return
+        problems: list[str] = []
+        if self.jwt_secret in _INSECURE_JWT_SECRETS or len(self.jwt_secret) < 32:
+            problems.append(
+                "JWT_SECRET must be set to a strong (>=32 chars) value in production"
+            )
+        if self.postgres_password in _INSECURE_PG_PASSWORDS:
+            problems.append("POSTGRES_PASSWORD must be rotated away from defaults")
+        if not self.app_encryption_key:
+            problems.append(
+                "APP_ENCRYPTION_KEY is required to encrypt per-user secrets"
+            )
+        if not self.gemini_api_key:
+            problems.append("GEMINI_API_KEY is required")
+        if not self.cors_origins_list:
+            problems.append("API_CORS_ORIGINS must list at least one explicit origin")
+        for o in self.cors_origins_list:
+            if not (o.startswith("https://") or o.startswith("http://localhost")):
+                problems.append(
+                    f"API_CORS_ORIGINS entry {o!r} must use https:// in production"
+                )
+        if problems:
+            raise RuntimeError(
+                "Refusing to start with insecure configuration:\n  - "
+                + "\n  - ".join(problems)
+            )
+
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    settings = Settings()
+    settings.validate_for_runtime()
+    return settings

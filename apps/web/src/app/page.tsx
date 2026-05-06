@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 
-import { UserBadge } from "@/components/AuthGate";
 import { useRequireAuth } from "@/lib/auth";
 
 export default function Home() {
@@ -14,9 +13,6 @@ export default function Home() {
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-8 gap-6">
-      <div className="absolute top-4 right-6">
-        <UserBadge />
-      </div>
       <h1 className="text-4xl font-bold tracking-tight">SOC Copilot</h1>
       <p className="text-slate-400">AI Copilot para Analistas SOC Junior</p>
       <ul className="text-sm text-slate-400 list-disc pl-5 space-y-1">
@@ -25,6 +21,12 @@ export default function Home() {
             /alerts
           </Link>{" "}
           — Alert Explainer
+        </li>
+        <li>
+          <Link className="text-sky-400 hover:underline" href="/logs">
+            /logs
+          </Link>{" "}
+          — Analizador y Filtrado de Logs
         </li>
         <li>
           <Link className="text-sky-400 hover:underline" href="/respond">
@@ -44,6 +46,14 @@ export default function Home() {
           </Link>{" "}
           — Chat IA + RAG
         </li>
+        {auth.user.role === "admin" && (
+          <li>
+            <Link className="text-sky-400 hover:underline" href="/admin">
+              /admin
+            </Link>{" "}
+            — Panel de Administración
+          </li>
+        )}
       </ul>
     </main>
   );

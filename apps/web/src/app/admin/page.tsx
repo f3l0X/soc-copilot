@@ -1,0 +1,837 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
+import {
+  ApiError,
+  AuditLogEntry,
+  PermissionCell,
+  PermissionChange,
+  UserMe,
+  UserRole,
+  adminChangePassword,
+  adminChangeRole,
+  adminCreateUser,
+  adminDeleteUser,
+  getAdminUsers,
+  getAuditLog,
+  getPermissions,
+  updatePermissions,
+} from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+
+type Tab = "usuarios" | "roles" | "permisos" | "auditoria";
+
+const AUDIT_PAGE_SIZE = 100;
+const ACTION_OPTIONS = [
+  "",
+  "user.create",
+  "user.delete",
+  "user.role_change",
+  "user.password_reset",
+] as const;
+
+const ROLE_DESCRIPTIONS: Record<UserRole, { title: string; blurb: string }> = {
+  analyst: {
+    title: "Analyst",
+    blurb:
+      "Rol por defecto. Puede analizar logs, generar recomendaciones y consultar el chat con RAG. Solo ve sus propias alertas.",
+  },
+  admin: {
+    title: "Admin",
+    blurb:
+      "Acceso completo. Gestiona usuarios, roles y contraseñas. Ve todas las alertas, incluidas las huérfanas (sin propietario).",
+  },
+};
+
+// Capacidades baseline (no gated por backend; se aplican en código de los
+// endpoints CurrentUser). Se muestran en la matriz como informativas.
+const BASELINE_CAPS: { area: string; action: string }[] = [
+  { area: "Alertas", action: "Crear / explicar (POST /api/explain)" },
+  { area: "Alertas", action: "Listar propias" },
+  { area: "Alertas", action: "Recomendar siguiente paso (POST /api/recommend)" },
+  { area: "Chat", action: "Chat IA + RAG (POST /api/chat)" },
+  { area: "Logs", action: "Subir y filtrar archivos locales (/logs)" },
+];
+
+export default function AdminPage() {
+  const auth = useAuth();
+  const [tab, setTab] = useState<Tab>("usuarios");
+  const [users, setUsers] = useState<UserMe[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Password modal
+  const [pwUser, setPwUser] = useState<UserMe | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [pwLoading, setPwLoading] = useState(false);
+  const [pwError, setPwError] = useState<string | null>(null);
+
+  // Per-row inline action state
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [rowError, setRowError] = useState<string | null>(null);
+
+  // Permisos tab
+  const [perms, setPerms] = useState<PermissionCell[]>([]);
+  const [permsDraft, setPermsDraft] = useState<Record<string, boolean>>({});
+  const [permsLoading, setPermsLoading] = useState(false);
+  const [permsSaving, setPermsSaving] = useState(false);
+  const [permsError, setPermsError] = useState<string | null>(null);
+
+  // Audit tab
+  const [audit, setAudit] = useState<AuditLogEntry[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditError, setAuditError] = useState<string | null>(null);
+  const [auditAction, setAuditAction] = useState<string>("");
+  const [auditActor, setAuditActor] = useState("");
+  const [auditOffset, setAuditOffset] = useState(0);
+  const [auditHasMore, setAuditHasMore] = useState(false);
+
+  // Create user modal
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+    role: "analyst" as UserRole,
+  });
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void loadUsers();
+  }, []);
+
+  const loadAudit = async (offset = 0) => {
+    setAuditLoading(true);
+    setAuditError(null);
+    try {
+      const data = await getAuditLog({
+        limit: AUDIT_PAGE_SIZE,
+        offset,
+        action: auditAction || undefined,
+        actor_email: auditActor.trim() || undefined,
+      });
+      setAudit(data);
+      setAuditOffset(offset);
+      setAuditHasMore(data.length === AUDIT_PAGE_SIZE);
+    } catch (err) {
+      setAuditError(
+        err instanceof ApiError ? err.detail : "Error cargando auditoría"
+      );
+    } finally {
+      setAuditLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (tab === "auditoria") void loadAudit(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, auditAction]);
+
+  const cellKey = (role: UserRole, k: string) => `${role}::${k}`;
+
+  const loadPerms = async () => {
+    setPermsLoading(true);
+    setPermsError(null);
+    try {
+      const data = await getPermissions();
+      setPerms(data);
+      const draft: Record<string, boolean> = {};
+      data.forEach((c) => {
+        draft[cellKey(c.role, c.permission_key)] = c.allowed;
+      });
+      setPermsDraft(draft);
+    } catch (err) {
+      setPermsError(err instanceof ApiError ? err.detail : "Error cargando permisos");
+    } finally {
+      setPermsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (tab === "permisos") void loadPerms();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
+  async function savePermissions() {
+    const changes: PermissionChange[] = perms
+      .filter((c) => !c.locked && permsDraft[cellKey(c.role, c.permission_key)] !== c.allowed)
+      .map((c) => ({
+        role: c.role,
+        permission_key: c.permission_key,
+        allowed: permsDraft[cellKey(c.role, c.permission_key)],
+      }));
+
+    if (changes.length === 0) return;
+
+    setPermsSaving(true);
+    setPermsError(null);
+    try {
+      const updated = await updatePermissions(changes);
+      setPerms(updated);
+      const draft: Record<string, boolean> = {};
+      updated.forEach((c) => {
+        draft[cellKey(c.role, c.permission_key)] = c.allowed;
+      });
+      setPermsDraft(draft);
+    } catch (err) {
+      setPermsError(err instanceof ApiError ? err.detail : "No se pudieron guardar los cambios");
+    } finally {
+      setPermsSaving(false);
+    }
+  }
+
+  function resetPermsDraft() {
+    const draft: Record<string, boolean> = {};
+    perms.forEach((c) => {
+      draft[cellKey(c.role, c.permission_key)] = c.allowed;
+    });
+    setPermsDraft(draft);
+  }
+
+  async function loadUsers() {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await getAdminUsers();
+      setUsers(data);
+    } catch {
+      setError("Error cargando usuarios");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleChangePassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (!pwUser) return;
+    setPwLoading(true);
+    setPwError(null);
+    try {
+      await adminChangePassword(pwUser.id, newPassword);
+      setPwUser(null);
+      setNewPassword("");
+    } catch (err) {
+      setPwError(err instanceof ApiError ? err.detail : "Error al actualizar la contraseña");
+    } finally {
+      setPwLoading(false);
+    }
+  }
+
+  async function handleRoleChange(target: UserMe, role: UserRole) {
+    if (target.role === role) return;
+    setBusyId(target.id);
+    setRowError(null);
+    try {
+      const updated = await adminChangeRole(target.id, role);
+      setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+    } catch (err) {
+      setRowError(
+        err instanceof ApiError ? err.detail : "No se pudo cambiar el rol"
+      );
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleCreateUser(e: React.FormEvent) {
+    e.preventDefault();
+    setCreateLoading(true);
+    setCreateError(null);
+    try {
+      const created = await adminCreateUser(createForm);
+      setUsers((prev) => [...prev, created]);
+      setCreateOpen(false);
+      setCreateForm({ name: "", email: "", password: "", role: "analyst" });
+    } catch (err) {
+      setCreateError(
+        err instanceof ApiError ? err.detail : "No se pudo crear el usuario"
+      );
+    } finally {
+      setCreateLoading(false);
+    }
+  }
+
+  async function handleDelete(target: UserMe) {
+    if (!confirm(`¿Eliminar a ${target.email}? Esta acción no se puede deshacer.`)) {
+      return;
+    }
+    setBusyId(target.id);
+    setRowError(null);
+    try {
+      await adminDeleteUser(target.id);
+      setUsers((prev) => prev.filter((u) => u.id !== target.id));
+    } catch (err) {
+      setRowError(
+        err instanceof ApiError ? err.detail : "No se pudo eliminar el usuario"
+      );
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const meId = auth.user?.id ?? -1;
+
+  return (
+    <main className="min-h-screen p-8 max-w-6xl mx-auto space-y-6">
+      <header>
+        <h1 className="text-3xl font-bold tracking-tight">Administración</h1>
+        <p className="text-slate-400 mt-2">
+          Gestión de usuarios, roles y permisos del sistema.
+        </p>
+      </header>
+
+      <nav className="flex gap-2 border-b border-slate-800">
+        {(["usuarios", "roles", "permisos", "auditoria"] as Tab[]).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`px-4 py-2 text-sm capitalize border-b-2 -mb-px transition-colors ${
+              tab === t
+                ? "border-sky-400 text-sky-300"
+                : "border-transparent text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            {t}
+          </button>
+        ))}
+      </nav>
+
+      {error && (
+        <div className="bg-rose-950/40 border border-rose-800 text-rose-300 p-4 rounded">
+          {error}
+        </div>
+      )}
+
+      {tab === "usuarios" && (
+        <section className="bg-slate-900/40 border border-slate-800 rounded-lg overflow-hidden">
+          <div className="p-4 border-b border-slate-800 bg-slate-900/60 flex justify-between items-center">
+            <div className="flex items-baseline gap-3">
+              <h2 className="text-xl font-semibold">Usuarios Registrados</h2>
+              <span className="text-xs text-slate-500">{users.length} cuentas</span>
+            </div>
+            <button
+              onClick={() => {
+                setCreateOpen(true);
+                setCreateError(null);
+              }}
+              className="px-3 py-1.5 text-sm bg-sky-600 hover:bg-sky-500 rounded font-medium"
+            >
+              + Crear usuario
+            </button>
+          </div>
+
+          {rowError && (
+            <div className="px-4 py-2 bg-rose-950/30 border-b border-rose-900 text-rose-300 text-sm">
+              {rowError}
+            </div>
+          )}
+
+          {loading ? (
+            <div className="p-8 text-center text-slate-400">Cargando usuarios...</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm whitespace-nowrap">
+                <thead className="bg-slate-900/80 text-slate-400">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">ID</th>
+                    <th className="px-4 py-3 font-medium">Nombre</th>
+                    <th className="px-4 py-3 font-medium">Email</th>
+                    <th className="px-4 py-3 font-medium">Rol</th>
+                    <th className="px-4 py-3 font-medium text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/50">
+                  {users.map((u) => {
+                    const isSelf = u.id === meId;
+                    const busy = busyId === u.id;
+                    return (
+                      <tr key={u.id} className="hover:bg-slate-800/30">
+                        <td className="px-4 py-3 text-slate-400">{u.id}</td>
+                        <td className="px-4 py-3 font-medium text-slate-200">
+                          {u.name}
+                          {isSelf && (
+                            <span className="ml-2 text-xs text-sky-400">(tú)</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-slate-400">{u.email}</td>
+                        <td className="px-4 py-3">
+                          <select
+                            value={u.role}
+                            disabled={busy || isSelf}
+                            onChange={(e) =>
+                              handleRoleChange(u, e.target.value as UserRole)
+                            }
+                            className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs disabled:opacity-50"
+                          >
+                            <option value="analyst">analyst</option>
+                            <option value="admin">admin</option>
+                          </select>
+                        </td>
+                        <td className="px-4 py-3 text-right space-x-3">
+                          <button
+                            disabled={busy}
+                            onClick={() => {
+                              setPwUser(u);
+                              setNewPassword("");
+                              setPwError(null);
+                            }}
+                            className="text-sky-400 hover:text-sky-300 underline disabled:opacity-50"
+                          >
+                            Password
+                          </button>
+                          <button
+                            disabled={busy || isSelf}
+                            onClick={() => handleDelete(u)}
+                            className="text-rose-400 hover:text-rose-300 underline disabled:opacity-30 disabled:no-underline"
+                          >
+                            Eliminar
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
+      {tab === "roles" && (
+        <section className="grid gap-4 md:grid-cols-2">
+          {(Object.entries(ROLE_DESCRIPTIONS) as [UserRole, typeof ROLE_DESCRIPTIONS["admin"]][]).map(
+            ([role, info]) => {
+              const count = users.filter((u) => u.role === role).length;
+              return (
+                <article
+                  key={role}
+                  className="bg-slate-900/40 border border-slate-800 rounded-lg p-5 space-y-3"
+                >
+                  <header className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold">{info.title}</h3>
+                    <span
+                      className={`px-2 py-1 rounded text-xs font-medium ${
+                        role === "admin"
+                          ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                          : "bg-sky-500/20 text-sky-300 border border-sky-500/30"
+                      }`}
+                    >
+                      {role}
+                    </span>
+                  </header>
+                  <p className="text-sm text-slate-400">{info.blurb}</p>
+                  <p className="text-xs text-slate-500">
+                    Usuarios con este rol: <span className="text-slate-300">{count}</span>
+                  </p>
+                </article>
+              );
+            }
+          )}
+          <p className="md:col-span-2 text-xs text-slate-500">
+            Los roles están definidos en <code>app/models.py::UserRole</code> y se
+            asignan en el alta o desde la pestaña Usuarios. El primer registro pasa
+            automáticamente a admin.
+          </p>
+        </section>
+      )}
+
+      {tab === "permisos" && (
+        <section className="bg-slate-900/40 border border-slate-800 rounded-lg overflow-hidden">
+          <div className="p-4 border-b border-slate-800 bg-slate-900/60 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-semibold">Matriz de Permisos</h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Activa o desactiva cada acción por rol. Las filas marcadas como
+                <span className="mx-1 px-1 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30">locked</span>
+                no se pueden modificar (protección anti-lockout). Las baseline
+                (alertas, chat, logs) están abiertas a cualquier usuario autenticado
+                y se aplican en código.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={resetPermsDraft}
+                disabled={permsSaving || permsLoading}
+                className="px-3 py-1.5 text-sm bg-slate-800 hover:bg-slate-700 disabled:opacity-50 rounded"
+              >
+                Descartar
+              </button>
+              <button
+                onClick={() => void savePermissions()}
+                disabled={permsSaving || permsLoading}
+                className="px-3 py-1.5 text-sm bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 rounded font-medium"
+              >
+                {permsSaving ? "Guardando..." : "Guardar cambios"}
+              </button>
+            </div>
+          </div>
+
+          {permsError && (
+            <div className="px-4 py-2 bg-rose-950/30 border-b border-rose-900 text-rose-300 text-sm">
+              {permsError}
+            </div>
+          )}
+
+          {permsLoading ? (
+            <div className="p-8 text-center text-slate-400">Cargando matriz...</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-900/80 text-slate-400">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Área</th>
+                    <th className="px-4 py-3 font-medium">Acción</th>
+                    <th className="px-4 py-3 font-medium text-center">Analyst</th>
+                    <th className="px-4 py-3 font-medium text-center">Admin</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/50">
+                  {/* Baseline (informativo) */}
+                  {BASELINE_CAPS.map((cap, i) => (
+                    <tr key={`base-${i}`} className="hover:bg-slate-800/30 opacity-70">
+                      <td className="px-4 py-3 text-slate-400">{cap.area}</td>
+                      <td className="px-4 py-3 text-slate-200">
+                        {cap.action}
+                        <span className="ml-2 text-[10px] text-slate-500">(baseline)</span>
+                      </td>
+                      <td className="px-4 py-3 text-center text-emerald-400">✓</td>
+                      <td className="px-4 py-3 text-center text-emerald-400">✓</td>
+                    </tr>
+                  ))}
+
+                  {/* Configurables (de la registry del backend) */}
+                  {Array.from(
+                    new Set(perms.map((c) => c.permission_key))
+                  ).map((key) => {
+                    const analyst = perms.find(
+                      (c) => c.permission_key === key && c.role === "analyst"
+                    );
+                    const admin = perms.find(
+                      (c) => c.permission_key === key && c.role === "admin"
+                    );
+                    if (!analyst || !admin) return null;
+                    return (
+                      <tr key={key} className="hover:bg-slate-800/30">
+                        <td className="px-4 py-3 text-slate-400">{analyst.area}</td>
+                        <td className="px-4 py-3 text-slate-200">
+                          {analyst.action}
+                          <code className="ml-2 text-[10px] text-slate-600">{key}</code>
+                          {analyst.locked && (
+                            <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] bg-amber-500/10 text-amber-300 border border-amber-500/30">
+                              locked
+                            </span>
+                          )}
+                        </td>
+                        {[analyst, admin].map((cell) => (
+                          <td key={cell.role} className="px-4 py-3 text-center">
+                            <input
+                              type="checkbox"
+                              disabled={cell.locked}
+                              checked={
+                                permsDraft[cellKey(cell.role, cell.permission_key)] ?? cell.allowed
+                              }
+                              onChange={(e) =>
+                                setPermsDraft((prev) => ({
+                                  ...prev,
+                                  [cellKey(cell.role, cell.permission_key)]: e.target.checked,
+                                }))
+                              }
+                              className="rounded bg-slate-950 border-slate-700 disabled:opacity-40"
+                            />
+                          </td>
+                        ))}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
+      {tab === "auditoria" && (
+        <section className="bg-slate-900/40 border border-slate-800 rounded-lg overflow-hidden">
+          <div className="p-4 border-b border-slate-800 bg-slate-900/60 flex flex-wrap gap-3 items-end justify-between">
+            <div>
+              <h2 className="text-xl font-semibold">Registro de Auditoría</h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Acciones administrativas registradas en orden cronológico inverso.
+                Solo lectura.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3 items-end">
+              <label className="block text-xs">
+                <span className="text-slate-400 block mb-1">Acción</span>
+                <select
+                  value={auditAction}
+                  onChange={(e) => setAuditAction(e.target.value)}
+                  className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-slate-200 text-sm"
+                >
+                  {ACTION_OPTIONS.map((a) => (
+                    <option key={a} value={a}>
+                      {a === "" ? "(todas)" : a}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-xs">
+                <span className="text-slate-400 block mb-1">Actor (email)</span>
+                <input
+                  type="text"
+                  value={auditActor}
+                  onChange={(e) => setAuditActor(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void loadAudit(0);
+                  }}
+                  placeholder="substring"
+                  className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-slate-200 text-sm"
+                />
+              </label>
+              <button
+                onClick={() => void loadAudit(0)}
+                className="px-3 py-1.5 text-sm bg-sky-600 hover:bg-sky-500 rounded font-medium"
+              >
+                Aplicar
+              </button>
+            </div>
+          </div>
+
+          {auditError && (
+            <div className="px-4 py-2 bg-rose-950/30 border-b border-rose-900 text-rose-300 text-sm">
+              {auditError}
+            </div>
+          )}
+
+          {auditLoading ? (
+            <div className="p-8 text-center text-slate-400">Cargando registros...</div>
+          ) : audit.length === 0 ? (
+            <div className="p-8 text-center text-slate-500">
+              No hay registros para los filtros actuales.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-900/80 text-slate-400">
+                  <tr>
+                    <th className="px-3 py-2 font-medium whitespace-nowrap">Fecha</th>
+                    <th className="px-3 py-2 font-medium">Actor</th>
+                    <th className="px-3 py-2 font-medium">Acción</th>
+                    <th className="px-3 py-2 font-medium">Objetivo</th>
+                    <th className="px-3 py-2 font-medium">Detalles</th>
+                    <th className="px-3 py-2 font-medium">IP</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/50 font-mono">
+                  {audit.map((e) => (
+                    <tr key={e.id} className="hover:bg-slate-800/30 align-top">
+                      <td className="px-3 py-2 text-slate-400 whitespace-nowrap">
+                        {new Date(e.created_at).toLocaleString()}
+                      </td>
+                      <td className="px-3 py-2 text-slate-200">
+                        {e.actor_email}
+                        <span className="text-slate-500"> #{e.actor_id ?? "—"}</span>
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className="px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-300 border border-sky-500/30">
+                          {e.action}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-slate-300">
+                        {e.target_label ? (
+                          <>
+                            {e.target_label}
+                            <span className="text-slate-500"> #{e.target_id}</span>
+                          </>
+                        ) : (
+                          <span className="text-slate-600">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-slate-400 max-w-md break-all">
+                        {e.details ? (
+                          <code className="text-[11px]">{JSON.stringify(e.details)}</code>
+                        ) : (
+                          <span className="text-slate-600">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-slate-500">
+                        {e.ip ?? <span className="text-slate-700">—</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="p-3 border-t border-slate-800 bg-slate-900 flex justify-between items-center text-sm">
+            <button
+              onClick={() => void loadAudit(Math.max(0, auditOffset - AUDIT_PAGE_SIZE))}
+              disabled={auditOffset === 0 || auditLoading}
+              className="px-3 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 rounded"
+            >
+              Anterior
+            </button>
+            <span className="text-slate-400">
+              Mostrando {audit.length} registros desde offset {auditOffset}
+            </span>
+            <button
+              onClick={() => void loadAudit(auditOffset + AUDIT_PAGE_SIZE)}
+              disabled={!auditHasMore || auditLoading}
+              className="px-3 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 rounded"
+            >
+              Siguiente
+            </button>
+          </div>
+        </section>
+      )}
+
+      {createOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <form
+            onSubmit={handleCreateUser}
+            className="w-full max-w-sm bg-slate-900 border border-slate-700 rounded-lg shadow-xl p-6 space-y-4"
+          >
+            <h3 className="text-lg font-bold">Crear Usuario</h3>
+
+            {createError && (
+              <div className="text-xs bg-rose-950 text-rose-300 p-2 rounded border border-rose-800">
+                {createError}
+              </div>
+            )}
+
+            <label className="block text-sm">
+              <span className="text-slate-400">Nombre</span>
+              <input
+                type="text"
+                required
+                minLength={2}
+                maxLength={100}
+                value={createForm.name}
+                onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+                className="mt-1 w-full rounded bg-slate-950 border border-slate-700 px-3 py-2 text-white"
+              />
+            </label>
+
+            <label className="block text-sm">
+              <span className="text-slate-400">Email</span>
+              <input
+                type="email"
+                required
+                value={createForm.email}
+                onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
+                className="mt-1 w-full rounded bg-slate-950 border border-slate-700 px-3 py-2 text-white"
+              />
+            </label>
+
+            <label className="block text-sm">
+              <span className="text-slate-400">Contraseña</span>
+              <input
+                type="password"
+                required
+                minLength={8}
+                value={createForm.password}
+                onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
+                className="mt-1 w-full rounded bg-slate-950 border border-slate-700 px-3 py-2 text-white"
+                placeholder="Mínimo 8 caracteres"
+              />
+            </label>
+
+            <label className="block text-sm">
+              <span className="text-slate-400">Rol</span>
+              <select
+                value={createForm.role}
+                onChange={(e) =>
+                  setCreateForm({ ...createForm, role: e.target.value as UserRole })
+                }
+                className="mt-1 w-full rounded bg-slate-950 border border-slate-700 px-3 py-2 text-white"
+              >
+                <option value="analyst">analyst</option>
+                <option value="admin">admin</option>
+              </select>
+            </label>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setCreateOpen(false);
+                  setCreateError(null);
+                }}
+                className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={createLoading}
+                className="px-4 py-2 text-sm bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 rounded font-medium"
+              >
+                {createLoading ? "Creando..." : "Crear"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {pwUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <form
+            onSubmit={handleChangePassword}
+            className="w-full max-w-sm bg-slate-900 border border-slate-700 rounded-lg shadow-xl p-6 space-y-4"
+          >
+            <h3 className="text-lg font-bold">Cambiar Contraseña</h3>
+            <p className="text-sm text-slate-400">
+              Usuario: <span className="text-slate-200">{pwUser.email}</span>
+            </p>
+            <p className="text-xs text-amber-400">
+              Tras el cambio, las sesiones activas del usuario quedan invalidadas.
+            </p>
+
+            {pwError && (
+              <div className="text-xs bg-rose-950 text-rose-300 p-2 rounded border border-rose-800">
+                {pwError}
+              </div>
+            )}
+
+            <label className="block text-sm">
+              <span className="text-slate-400">Nueva Contraseña</span>
+              <input
+                type="password"
+                required
+                minLength={8}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="mt-1 w-full rounded bg-slate-950 border border-slate-700 px-3 py-2 text-white"
+                placeholder="Mínimo 8 caracteres"
+              />
+            </label>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setPwUser(null);
+                  setNewPassword("");
+                  setPwError(null);
+                }}
+                className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={pwLoading}
+                className="px-4 py-2 text-sm bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 rounded font-medium"
+              >
+                {pwLoading ? "Guardando..." : "Guardar"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </main>
+  );
+}

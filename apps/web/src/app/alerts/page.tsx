@@ -1,32 +1,34 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
-import { UserBadge } from "@/components/AuthGate";
 import { ModelSelector } from "@/components/ModelSelector";
 import { MitreList, RiskBadge } from "@/components/RiskBadge";
 import { explainAlert, type ExplainResponse } from "@/lib/api";
 import { useRequireAuth } from "@/lib/auth";
 import { useModel } from "@/lib/useModel";
 
-const SAMPLES = {
-  "Brute-force SSH": `Apr 25 18:42:31 srv-01 sshd[2342]: Failed password for root from 91.234.56.78 port 41234 ssh2
-Apr 25 18:42:33 srv-01 sshd[2343]: Failed password for root from 91.234.56.78 port 41246 ssh2
-Apr 25 18:42:36 srv-01 sshd[2344]: Failed password for root from 91.234.56.78 port 41258 ssh2
-Apr 25 18:42:38 srv-01 sshd[2345]: Failed password for admin from 91.234.56.78 port 41260 ssh2`,
-  "Impossible travel": `User alice logged in successfully from 203.0.113.45 (Beijing, CN). Last known login: 2026-04-24 from 88.6.x.x (Madrid, ES).`,
-  "Benigno (apt)": `systemd[1]: Started Daily apt download activities.`,
-};
-
 export default function AlertsPage() {
-  const [log, setLog] = useState(SAMPLES["Brute-force SSH"]);
-  const [source, setSource] = useState("auth.log");
+  const searchParams = useSearchParams();
+  const [log, setLog] = useState("");
+  const [source, setSource] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ExplainResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { selected: model } = useModel();
-  useRequireAuth();
+  const auth = useRequireAuth();
+
+  useEffect(() => {
+    if (searchParams.get("import") === "true") {
+      const importedLog = sessionStorage.getItem("soc_copilot_imported_logs");
+      if (importedLog) {
+        setLog(importedLog);
+        setSource("imported_logs");
+      }
+    }
+  }, [searchParams]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -48,6 +50,10 @@ export default function AlertsPage() {
     }
   }
 
+  if (!auth.ready) {
+    return <main className="min-h-screen p-8 text-slate-500">Verificando sesión…</main>;
+  }
+
   return (
     <main className="min-h-screen max-w-5xl mx-auto p-8 space-y-6">
       <div className="flex items-baseline justify-between">
@@ -59,26 +65,11 @@ export default function AlertsPage() {
           </p>
         </div>
         <div className="flex flex-col items-end gap-1">
-          <UserBadge />
           <ModelSelector compact />
           <Link href="/history" className="text-sm text-sky-400 hover:underline">
             Histórico →
           </Link>
         </div>
-      </div>
-
-      <div className="flex flex-wrap gap-2 text-xs">
-        <span className="text-slate-500 self-center">Ejemplos:</span>
-        {Object.entries(SAMPLES).map(([name, value]) => (
-          <button
-            key={name}
-            type="button"
-            onClick={() => setLog(value)}
-            className="rounded border border-slate-700 px-2 py-1 hover:border-slate-500"
-          >
-            {name}
-          </button>
-        ))}
       </div>
 
       <form onSubmit={onSubmit} className="space-y-4">

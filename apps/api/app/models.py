@@ -1,10 +1,21 @@
 """SQLAlchemy ORM models."""
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from enum import Enum
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    LargeBinary,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -24,7 +35,19 @@ class User(Base):
     email: Mapped[str] = mapped_column(
         String(255), unique=True, nullable=False, index=True
     )
+    name: Mapped[str] = mapped_column(
+        String(100), nullable=False, server_default="Analista"
+    )
+    last_name: Mapped[str] = mapped_column(
+        String(100), nullable=False, server_default=""
+    )
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Bumped whenever the password is changed; embedded as `pv` in JWTs and
+    # re-checked on every authenticated request, so old tokens stop working
+    # after a reset (e.g. admin-forced password change).
+    password_version: Mapped[int] = mapped_column(
+        nullable=False, default=0, server_default="0"
+    )
     role: Mapped[UserRole] = mapped_column(
         SAEnum(UserRole, name="user_role"),
         nullable=False,
@@ -34,6 +57,34 @@ class User(Base):
         DateTime(timezone=True),
         server_default=func.now(),
         default=lambda: datetime.now(UTC),
+    )
+
+    # ── BYO Gemini key (optional) ───────────────────────────────────────
+    # Encrypted with Fernet (APP_ENCRYPTION_KEY). NULL = user is on the
+    # shared server key and subject to the daily quota below.
+    gemini_api_key_ciphertext: Mapped[bytes | None] = mapped_column(
+        LargeBinary, nullable=True
+    )
+    # Last 4 chars of the cleartext key, kept so the UI can show
+    # "•••••FpMpY" without ever round-tripping the secret.
+    gemini_key_last4: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    gemini_key_validated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Per-user default model; falls back to GEMINI_CHAT_MODEL when null.
+    # Validated against the server allowlist before saving.
+    preferred_chat_model: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+
+    # ── Server-key quota tracking ───────────────────────────────────────
+    # Counts only LLM calls that consumed the SHARED server key. Resets
+    # daily (UTC). When user has their own key these stay at 0.
+    server_llm_calls_today: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    server_llm_quota_date: Mapped[date | None] = mapped_column(
+        Date, nullable=True
     )
 
     alerts: Mapped[list[Alert]] = relationship(back_populates="user")
@@ -95,3 +146,60 @@ class Recommendation(Base):
     )
 
     alert: Mapped[Alert] = relationship(back_populates="recommendations")
+
+
+class AuditLog(Base):
+    """Append-only audit trail for admin actions.
+
+    Rows are written from helper `services.audit.log_audit`. We never delete
+    or update them; the table is treated as immutable. `actor_id` is nullable
+    so log entries survive after the actor account is deleted.
+    """
+
+    __tablename__ = "audit_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        default=lambda: datetime.now(UTC),
+        index=True,
+    )
+    actor_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    actor_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    action: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    target_type: Mapped[str | None] = mapped_column(String(32))
+    target_id: Mapped[int | None] = mapped_column()
+    target_label: Mapped[str | None] = mapped_column(String(255))
+    details: Mapped[dict | None] = mapped_column(JSONB)
+    ip: Mapped[str | None] = mapped_column(String(64))
+
+
+class RolePermission(Base):
+    """Per-role override of a permission key.
+
+    Rows are seeded on init_db from the static registry in
+    services.permissions. Admins flip them through PUT /api/admin/permissions.
+    Absence of a row means "fall back to the registry default", so the table
+    only stores deviations.
+    """
+
+    __tablename__ = "role_permissions"
+    __table_args__ = (
+        UniqueConstraint("role", "permission_key", name="uq_role_perm"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    role: Mapped[UserRole] = mapped_column(
+        SAEnum(UserRole, name="user_role"), nullable=False, index=True
+    )
+    permission_key: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    allowed: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )

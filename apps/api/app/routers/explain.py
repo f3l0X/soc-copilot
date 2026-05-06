@@ -22,7 +22,9 @@ def explain_alert(
     payload: ExplainRequest, db: DbSession, user: CurrentUser
 ) -> ExplainResponse:
     try:
-        result = explain(payload.log, payload.source, model=payload.model)
+        result = explain(
+            payload.log, payload.source, model=payload.model, user=user, db=db
+        )
     except LLMProviderError:
         logger.exception("LLM provider error in /explain")
         raise HTTPException(

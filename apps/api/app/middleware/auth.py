@@ -54,6 +54,13 @@ def get_current_user(request: Request, db: DbSession) -> User:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="user not found"
         )
+    # Reject tokens issued before the user's last password change.
+    token_pv = payload.get("pv", 0)
+    if token_pv != user.password_version:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="session invalidated, please log in again",
+        )
     return user
 
 

@@ -1,15 +1,36 @@
-# Hetzner production reverse proxy. Local dev uses ports 3000/8080 directly.
-# Replace example.com with the real domain once provisioned.
+# Hetzner production reverse proxy. Local dev hits ports 3000/8080 directly.
+# PUBLIC_DOMAIN and ACME_EMAIL come from the prod compose env.
 {
-    email admin@example.com
+    email {$ACME_EMAIL:admin@example.com}
+    servers {
+        # We're the only proxy hop and we terminate XFF for the API. The
+        # API trusts X-Forwarded-For only when running in production, so
+        # there's no client-spoof path.
+        trusted_proxies static private_ranges
+    }
 }
 
-example.com {
+{$PUBLIC_DOMAIN:localhost} {
     encode gzip zstd
+
+    # Defence-in-depth response headers. The API also sets these, but
+    # static assets served by Next.js benefit from belt-and-braces here.
+    header {
+        Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer"
+        Permissions-Policy "geolocation=(), microphone=(), camera=()"
+        # Hide the upstream stack so we don't advertise versions.
+        -Server
+        -X-Powered-By
+    }
+
     @api path /api/*
     handle @api {
         reverse_proxy api:8080
     }
+
     handle {
         reverse_proxy web:3000
     }

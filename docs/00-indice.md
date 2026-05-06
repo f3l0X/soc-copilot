@@ -1,20 +1,36 @@
 # Documentacion del proyecto SOC Copilot
 
-Este paquete contiene el estado actual del proyecto al cierre de la fase 2 y la informacion necesaria para que cualquier miembro del equipo pueda ejecutarlo localmente.
+Este paquete contiene el estado del proyecto al cierre del **ciclo de
+hardening post-fase-4** (admin avanzado, perfil, analizador de logs,
+auditoría, RBAC dinámico) y la informacion necesaria para que cualquier
+miembro del equipo pueda ejecutarlo y mantenerlo localmente.
 
 ## Orden recomendado de lectura
 
-1. [Instalacion local](01-instalacion-local.md)
-2. [Estado del proyecto y fases completadas](02-estado-fases.md)
-3. [Arquitectura tecnica](03-arquitectura.md)
-4. [Guia de trabajo para el equipo](04-guia-equipo.md)
-5. [Solucion de problemas](05-solucion-problemas.md)
-6. [Estado de seguridad y mitigaciones](security.md)
-7. [Roadmap de mejoras](roadmap.md)
+| # | Documento | Para qué |
+|---|-----------|----------|
+| 01 | [Instalacion local](01-instalacion-local.md) | Levantar el stack desde cero en Windows/macOS/Linux |
+| 02 | [Estado del proyecto y fases](02-estado-fases.md) | Qué está hecho y qué viene |
+| 03 | [Arquitectura tecnica](03-arquitectura.md) | Cómo encajan backend, frontend, DB y Chroma |
+| 04 | [Guia de trabajo del equipo](04-guia-equipo.md) | Convenciones, reparto de tareas, validación pre-entrega |
+| 05 | [Solucion de problemas](05-solucion-problemas.md) | Errores comunes y cómo desbloquearlos |
+| 06 | [Referencia de API](06-api-reference.md) | Todos los endpoints, schemas, auth y rate limit |
+| 07 | [Tests y CI](07-testing.md) | Suites unit / E2E, fixtures, GitHub Actions |
+| 08 | [Ingesta RAG (Chroma + MITRE + OWASP)](08-rag-ingestion.md) | Cómo poblar y mantener la base de conocimiento |
+| 09 | [Diagramas del sistema](09-diagramas.md) | ER, despliegue, secuencia (login/explain/chat/reset/logs), casos de uso, ciclo de vida, pipeline KB, resolución RBAC |
+| —  | [Estado de seguridad y mitigaciones](security.md) | Threats activas y residuales |
+| —  | [Roadmap](roadmap.md) | Plan por fases hasta entrega 25-mayo-2026 |
 
 ## Resumen rapido
 
-SOC Copilot es una aplicacion para analistas SOC junior. El backend analiza alertas con Gemini, persiste resultados en PostgreSQL y expone una API FastAPI. El frontend Next.js permite analizar logs, ver el historico y generar recomendaciones de respuesta.
+SOC Copilot es una aplicacion para analistas SOC junior. El backend FastAPI
+analiza alertas con Gemini, persiste resultados en PostgreSQL, indexa MITRE
+ATT&CK y OWASP Top 10 en ChromaDB para RAG, y expone una API protegida con
+JWT en cookie httpOnly invalidable por `password_version`. El frontend
+Next.js sirve dashboard, explainer, recommender, analizador de logs con
+filtros (IP/puerto/MAC/protocolo/tiempo), histórico, chat con citas, panel
+de administración (usuarios, roles, matriz de permisos editable, auditoría)
+y página de perfil de usuario.
 
-La fase 2 esta terminada. La fase 3 empieza con el modulo de Chat IA + RAG sobre conocimiento de ciberseguridad en ChromaDB.
-
+Fases 0–4 cerradas + ciclo de hardening admin completado. Fase 5 (despliegue
+Hetzner) y fase 6 (informe + demo) pendientes según roadmap.

@@ -3,8 +3,10 @@ suggest concrete actions a SOC analyst should take, with rationale.
 """
 from __future__ import annotations
 
+from sqlalchemy.orm import Session
+
 from app.schemas.alerts import RecommendResponse
-from app.services.llm import LLMAdapter, get_llm
+from app.services.llm import LLMAdapter, get_llm, get_llm_for_user
 
 LOG_BEGIN = "BEGIN_UNTRUSTED_LOG"
 LOG_END = "END_UNTRUSTED_LOG"
@@ -87,8 +89,14 @@ def recommend(
     risk_level: str | None = None,
     llm: LLMAdapter | None = None,
     model: str | None = None,
+    *,
+    user=None,
+    db: Session | None = None,
 ) -> RecommendResponse:
-    llm = llm or get_llm()
+    if llm is None:
+        llm = get_llm_for_user(user, db) if (user and db) else get_llm()
+    if model is None and user is not None:
+        model = getattr(user, "preferred_chat_model", None)
     user_prompt = build_user_prompt(log, source, explanation, risk_level)
     data = llm.generate_json(
         user_prompt,

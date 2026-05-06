@@ -28,13 +28,16 @@ def verify_password(plain: str, hashed: str) -> bool:
         return False
 
 
-def issue_token(*, user_id: int, role: str) -> tuple[str, datetime]:
+def issue_token(
+    *, user_id: int, role: str, password_version: int
+) -> tuple[str, datetime]:
     s = get_settings()
     now = datetime.now(UTC)
     exp = now + timedelta(seconds=s.jwt_ttl_seconds)
     payload: dict[str, Any] = {
         "sub": str(user_id),
         "role": role,
+        "pv": password_version,
         "iat": int(now.timestamp()),
         "exp": int(exp.timestamp()),
     }

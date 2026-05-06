@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { UserBadge } from "@/components/AuthGate";
 import { RiskBadge } from "@/components/RiskBadge";
 import { type AlertSummary, listAlerts } from "@/lib/api";
 import { useRequireAuth } from "@/lib/auth";
@@ -20,16 +19,17 @@ export default function HistoryPage() {
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
   }, [auth.user]);
 
+  if (!auth.ready) {
+    return <main className="min-h-screen p-8 text-slate-500">Verificando sesión…</main>;
+  }
+
   return (
     <main className="min-h-screen max-w-5xl mx-auto p-8 space-y-6">
       <div className="flex items-baseline justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Histórico</h1>
-        <div className="flex flex-col items-end gap-1">
-          <UserBadge />
-          <Link href="/alerts" className="text-sm text-sky-400 hover:underline">
-            + nueva alerta
-          </Link>
-        </div>
+        <Link href="/alerts" className="text-sm text-sky-400 hover:underline">
+          + nueva alerta
+        </Link>
       </div>
 
       {error && (

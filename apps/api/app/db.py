@@ -64,6 +64,71 @@ def init_db() -> None:
                     "ON alerts (user_id)"
                 )
             )
+            conn.execute(
+                text(
+                    "ALTER TABLE users "
+                    "ADD COLUMN IF NOT EXISTS name VARCHAR(100) "
+                    "DEFAULT 'Analista' NOT NULL"
+                )
+            )
+            conn.execute(
+                text(
+                    "ALTER TABLE users "
+                    "ADD COLUMN IF NOT EXISTS password_version INTEGER "
+                    "DEFAULT 0 NOT NULL"
+                )
+            )
+            conn.execute(
+                text(
+                    "ALTER TABLE users "
+                    "ADD COLUMN IF NOT EXISTS last_name VARCHAR(100) "
+                    "DEFAULT '' NOT NULL"
+                )
+            )
+            # Phase 5: per-user Gemini key (optional, BYO) + quota tracking
+            # against the shared server key.
+            conn.execute(
+                text(
+                    "ALTER TABLE users "
+                    "ADD COLUMN IF NOT EXISTS gemini_api_key_ciphertext BYTEA"
+                )
+            )
+            conn.execute(
+                text(
+                    "ALTER TABLE users "
+                    "ADD COLUMN IF NOT EXISTS gemini_key_last4 VARCHAR(8)"
+                )
+            )
+            conn.execute(
+                text(
+                    "ALTER TABLE users "
+                    "ADD COLUMN IF NOT EXISTS gemini_key_validated_at "
+                    "TIMESTAMP WITH TIME ZONE"
+                )
+            )
+            conn.execute(
+                text(
+                    "ALTER TABLE users "
+                    "ADD COLUMN IF NOT EXISTS preferred_chat_model VARCHAR(64)"
+                )
+            )
+            conn.execute(
+                text(
+                    "ALTER TABLE users "
+                    "ADD COLUMN IF NOT EXISTS server_llm_calls_today INTEGER "
+                    "DEFAULT 0 NOT NULL"
+                )
+            )
+            conn.execute(
+                text(
+                    "ALTER TABLE users "
+                    "ADD COLUMN IF NOT EXISTS server_llm_quota_date DATE"
+                )
+            )
+
+    # The first user to POST /api/auth/register becomes ADMIN automatically
+    # (see routers/auth.py). We deliberately do NOT seed a default admin here
+    # to avoid shipping known credentials in production.
 
 
 # FastAPI dependency alias — avoids `Depends(get_db)` in defaults (B008).

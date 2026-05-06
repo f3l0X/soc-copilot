@@ -3,8 +3,10 @@ suitable for a junior SOC analyst.
 """
 from __future__ import annotations
 
+from sqlalchemy.orm import Session
+
 from app.schemas.alerts import ExplainResponse
-from app.services.llm import LLMAdapter, get_llm
+from app.services.llm import LLMAdapter, get_llm, get_llm_for_user
 
 # Delimiters frame the user-supplied log so the model can distinguish trusted
 # instructions (in the system prompt) from untrusted data (between markers).
@@ -62,8 +64,15 @@ def explain(
     source: str | None = None,
     llm: LLMAdapter | None = None,
     model: str | None = None,
+    *,
+    user=None,
+    db: Session | None = None,
 ) -> ExplainResponse:
-    llm = llm or get_llm()
+    if llm is None:
+        llm = get_llm_for_user(user, db) if (user and db) else get_llm()
+    # Per-user preferred model wins when caller didn't pass one.
+    if model is None and user is not None:
+        model = getattr(user, "preferred_chat_model", None)
     user_prompt = build_user_prompt(log, source)
     data = llm.generate_json(
         user_prompt,

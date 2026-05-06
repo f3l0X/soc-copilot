@@ -56,17 +56,18 @@ def test_verify_returns_false_on_garbage():
 
 
 def test_issue_token_round_trip():
-    token, exp = issue_token(user_id=42, role="admin")
+    token, exp = issue_token(user_id=42, role="admin", password_version=0)
     assert isinstance(token, str)
     assert exp > datetime.now(exp.tzinfo)
     payload = decode_token(token)
     assert payload["sub"] == "42"
     assert payload["role"] == "admin"
+    assert payload["pv"] == 0
     assert "exp" in payload and "iat" in payload
 
 
 def test_decode_rejects_tampered_signature():
-    token, _ = issue_token(user_id=1, role="analyst")
+    token, _ = issue_token(user_id=1, role="analyst", password_version=0)
     parts = token.split(".")
     parts[2] = "tampered"
     bad = ".".join(parts)
@@ -152,8 +153,15 @@ def test_protected_endpoints_reject_expired_bearer():
 
 @pytest.mark.parametrize(
     "path",
-    ["/api/health", "/api/llm/models", "/", "/docs", "/openapi.json"],
+    ["/api/health", "/", "/docs", "/openapi.json"],
 )
 def test_public_endpoints_dont_require_auth(path):
     r = client.get(path)
     assert r.status_code == 200, (path, r.text)
+
+
+def test_llm_models_now_requires_auth():
+    # /api/llm/models used to be public. It leaks the model allowlist, so
+    # it's gated behind auth in Phase 5+.
+    r = client.get("/api/llm/models")
+    assert r.status_code == 401

@@ -11,8 +11,10 @@ Security model (extension of Phase 2 hardening):
 """
 from __future__ import annotations
 
+from sqlalchemy.orm import Session
+
 from app.schemas.alerts import ChatMessage, ChatResponse
-from app.services.llm import LLMAdapter, get_llm
+from app.services.llm import LLMAdapter, get_llm, get_llm_for_user
 from app.services.rag import KBDoc, Retriever
 
 KB_BEGIN = "BEGIN_UNTRUSTED_KB"
@@ -45,13 +47,31 @@ Estilo:
 """
 
 
+def _neutralise_delimiters(text: str) -> str:
+    """Strip our trust delimiters from untrusted content.
+
+    A poisoned KB document or attacker-supplied log could embed the exact
+    BEGIN/END markers we use to fence untrusted content, escaping the
+    sandbox and convincing the model that subsequent text is trusted
+    instructions. Replace any occurrence with a visible, harmless token.
+    """
+    out = text
+    for marker in (KB_BEGIN, KB_END, LOG_BEGIN, LOG_END):
+        out = out.replace(marker, marker.replace("_", "·"))
+    return out
+
+
 def _format_kb_block(docs: list[KBDoc]) -> str:
     if not docs:
         return ""
     lines = []
     for d in docs:
-        lines.append(f"[{d.id} | {d.source} | {d.name}]")
-        lines.append(d.text.strip())
+        lines.append(
+            f"[{_neutralise_delimiters(d.id)} | "
+            f"{_neutralise_delimiters(d.source)} | "
+            f"{_neutralise_delimiters(d.name)}]"
+        )
+        lines.append(_neutralise_delimiters(d.text.strip()))
         lines.append("")
     return f"{KB_BEGIN}\n" + "\n".join(lines).strip() + f"\n{KB_END}"
 
@@ -59,7 +79,7 @@ def _format_kb_block(docs: list[KBDoc]) -> str:
 def _format_log_block(log_context: str | None) -> str:
     if not log_context or not log_context.strip():
         return ""
-    return f"{LOG_BEGIN}\n{log_context.strip()}\n{LOG_END}"
+    return f"{LOG_BEGIN}\n{_neutralise_delimiters(log_context.strip())}\n{LOG_END}"
 
 
 def _format_history(messages: list[ChatMessage]) -> str:
@@ -78,10 +98,16 @@ def chat(
     retriever: Retriever | None = None,
     k: int = 5,
     model: str | None = None,
+    *,
+    user=None,
+    db: Session | None = None,
 ) -> ChatResponse:
     if not messages:
         raise ValueError("messages must contain at least one entry")
-    llm = llm or get_llm()
+    if llm is None:
+        llm = get_llm_for_user(user, db) if (user and db) else get_llm()
+    if model is None and user is not None:
+        model = getattr(user, "preferred_chat_model", None)
     retriever = retriever or Retriever(llm=llm)
 
     # Use the latest user message as the retrieval query. Fall back to the

@@ -1,12 +1,13 @@
 from fastapi import APIRouter
 
 from app.config import get_settings
+from app.middleware.auth import CurrentUser
 
 router = APIRouter(prefix="/llm", tags=["llm"])
 
 
 @router.get("/models")
-def list_models() -> dict[str, str | list[str]]:
+def list_models(_: CurrentUser) -> dict[str, str | list[str]]:
     """Available chat models for the frontend selector.
 
     Returned models are guaranteed to support JSON-mode structured output

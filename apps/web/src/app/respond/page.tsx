@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
-import { UserBadge } from "@/components/AuthGate";
 import { ModelSelector } from "@/components/ModelSelector";
 import { MitreList, RiskBadge } from "@/components/RiskBadge";
 import {
@@ -27,7 +26,7 @@ function RespondInner() {
   const [recommending, setRecommending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { selected: model } = useModel();
-  useRequireAuth();
+  const auth = useRequireAuth();
 
   useEffect(() => {
     if (!alertId) return;
@@ -68,6 +67,10 @@ function RespondInner() {
     }
   }
 
+  if (!auth.ready) {
+    return <main className="min-h-screen p-8 text-slate-500">Verificando sesión…</main>;
+  }
+
   if (!alertId) {
     return (
       <main className="min-h-screen max-w-5xl mx-auto p-8 space-y-4">
@@ -95,7 +98,6 @@ function RespondInner() {
           </p>
         </div>
         <div className="flex flex-col items-end gap-1">
-          <UserBadge />
           <ModelSelector compact />
           <Link href="/alerts" className="text-sm text-sky-400 hover:underline">
             ← nueva alerta

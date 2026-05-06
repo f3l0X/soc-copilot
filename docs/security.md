@@ -1,80 +1,225 @@
 # Seguridad — Estado actual
 
-## Mitigaciones aplicadas (Fase 2 hardening)
+## Resumen
+
+Cubre las mitigaciones aplicadas en fases 1–4 y los riesgos residuales que
+viajarán a fase 5 (despliegue Hetzner).
+
+## Mitigaciones aplicadas
 
 ### Errores LLM no fugan información
-- `LLMError` se subclasifica en `LLMProviderError` y `LLMResponseError`.
-- Los routers capturan la excepción, llaman a `logger.exception(...)` con
-  el detalle real, y devuelven al cliente:
-  - `502 AI provider error` cuando falla la llamada al proveedor.
-  - `502 AI response could not be processed` cuando la respuesta llegó
-    pero no se pudo parsear o validar.
-- Nunca se expone `str(exc)` en el body. La API key, el modelo, mensajes
-  de quota y stacks quedan únicamente en logs internos.
 
-### Prompt-injection mitigation
-- Los logs del usuario son **dato no confiable**. En `services/explainer.py`
-  y `services/recommender.py` se envuelven con:
-  ```
-  BEGIN_UNTRUSTED_LOG
-  <log>
-  END_UNTRUSTED_LOG
-  ```
-- Los `SYSTEM_PROMPT` instruyen al modelo a:
-  - Tratar todo lo que haya entre delimitadores como dato a analizar,
-    nunca como instrucción.
-  - Identificar y reportar cualquier intento de "ignora instrucciones
-    previas" como posible prompt injection.
-- El recommender añade reglas de seguridad: prioriza investigación y
-  contención reversible; cualquier acción destructiva debe llevar
-  prefijo `[REQUIERE APROBACIÓN HUMANA]`.
+- `LLMError` se subdivide en `LLMProviderError` y `LLMResponseError`.
+- Routers `/api/explain`, `/api/recommend`, `/api/chat` capturan ambas y
+  registran `logger.exception(...)` con el detalle real, devolviendo al
+  cliente:
+  - `502 AI provider error` si falló la llamada al proveedor.
+  - `502 AI response could not be processed` si la respuesta no se pudo
+    parsear/validar.
+- Verificado por tests `test_*_provider_error_returns_generic_502` que
+  inyectan errores con strings tipo `AIzaXXX`/`quota`/`internal-only` y
+  comprueban que ninguno aparece en el body de la respuesta.
 
-### Rate limiting
-- `app/middleware/ratelimit.py` implementa una ventana deslizante por IP,
-  en memoria, con lock para entornos multi-thread (ASGI workers).
-- Aplicado a `/api/explain` y `/api/recommend` vía
-  `dependencies=[Depends(rate_limit)]` en el router.
-- `/api/health`, `/api/alerts*` y `/api/chat` no están limitados.
-- Variables:
-  - `RATE_LIMIT_ENABLED` (default `true`)
-  - `RATE_LIMIT_REQUESTS` (default `20`)
-  - `RATE_LIMIT_WINDOW_SECONDS` (default `60`)
-- Limitación: in-memory ⇒ no compartido entre procesos. Para producción
-  multi-worker se sustituirá el backing store por Redis (Fase ≥4).
+### Mitigación de prompt injection
+
+- Logs del usuario se envuelven con `BEGIN_UNTRUSTED_LOG` / `END_UNTRUSTED_LOG`
+  en `services/explainer.py` y `services/recommender.py`.
+- Documentos recuperados del RAG se envuelven con `BEGIN_UNTRUSTED_KB` /
+  `END_UNTRUSTED_KB` en `services/chat.py` (mitigación de RAG poisoning).
+- Los `SYSTEM_PROMPT` instruyen explícitamente al modelo a:
+  - Tratar el contenido entre delimitadores como **dato a analizar**,
+    nunca como instrucciones a obedecer.
+  - Identificar y reportar intentos de «ignora instrucciones previas»
+    como posible prompt injection en el campo `reasoning`.
+- En `recommender`, regla extra contra acciones destructivas: cualquier
+  acción que toque firewall, IAM o borrado debe llevar prefijo
+  `[REQUIERE APROBACIÓN HUMANA]` en `detail`. Verificado por test.
 
 ### Validación de entrada
-- `ExplainRequest`: log 1..20 000, source max 200, rechazo whitespace.
-- `RecommendRequest`: `alert_id ≥ 1` o `log` no vacío (validador de modelo).
-- `ChatMessage`: role ∈ {user, assistant, system}; content 1..4000, no
-  whitespace.
-- `ChatRequest`: 1..30 mensajes; log_context max 20 000.
 
-### Secrets
-- `.env` en `.gitignore`. Solo `.env.example` con placeholders se versiona.
-- Verificado periódicamente que `git ls-files` no incluya secretos
-  (búsqueda por prefijo `AIza`).
+| Campo | Regla |
+|-------|-------|
+| `ExplainRequest.log` | 1..20000 chars, rechazo whitespace-only |
+| `ExplainRequest.source` | ≤200 chars |
+| `ExplainRequest.model` | Allowlist (server-side) |
+| `RecommendRequest.alert_id` | ≥1 si presente |
+| `RecommendRequest.log` | ≤20000, no whitespace-only si no hay alert_id |
+| `RecommendRequest.source` | ≤200 |
+| `RecommendRequest.model` | Allowlist |
+| `ChatMessage.role` | `Literal["user","assistant","system"]` |
+| `ChatMessage.content` | 1..4000, rechazo whitespace |
+| `ChatRequest.messages` | 1..30 mensajes |
+| `ChatRequest.log_context` | ≤20000 |
+| `ChatRequest.model` | Allowlist |
+| `RegisterRequest.password` | 8..128 chars |
+| `RegisterRequest.email` | `EmailStr` (validador RFC 5322 + DNS heuristics) |
 
-## Riesgos pendientes
+### Rate limiting
 
-| Fase | Riesgo |
-|------|--------|
-| 3 (Chat/RAG) | El contenido recuperado de Chroma se trata como **dato no confiable**: se envuelve en `BEGIN/END_UNTRUSTED_KB` y el system prompt instruye al modelo a no obedecer instrucciones que aparezcan dentro. Riesgo residual: si un futuro pipeline de ingestión externo permite escribir en la KB, validar la fuente antes de aceptarla (RAG poisoning). |
-| 4 (Auth) | Sin autenticación: cualquiera con acceso al puerto `8080` puede generar coste de Gemini. El rate limit por IP mitiga, pero no sustituye auth. NextAuth + JWT pendiente. |
-| 4 (RBAC) | Endpoints `/api/alerts/{id}` no comprueban ownership porque no hay usuarios todavía. |
-| 4 (Tests) | Suite es smoke + service-level con fakes; faltan tests E2E con DB real (testcontainers o pytest-postgresql). |
-| 5 (Deploy) | Hardening VPS no aplicado; Caddy real, certificados TLS, secrets manager (no `.env`), backups Postgres y rotación de logs son tareas de Fase 5. |
-| 5 (Rate limit) | Limitador en memoria → escalar a Redis con `slowapi` o equivalente cuando haya >1 worker. |
-| Cross | Reverse proxy en prod: añadir `ProxyHeaders` middleware para que `request.client.host` lea `X-Forwarded-For` del proxy, configurando `forwarded_allow_ips` correctamente. |
+- `app/middleware/ratelimit.py` implementa ventana deslizante por IP en
+  memoria, con lock para entornos multi-thread.
+- Aplicado a `/api/explain`, `/api/recommend`, `/api/chat`. NO afecta a
+  `/api/health`, `/api/auth/*`, `/api/kb/status`, `/api/llm/models`,
+  `/api/alerts*`.
+- Variables:
 
-## Cosas no verificadas (Fase 2 hardening)
+  | Variable | Default |
+  |----------|---------|
+  | `RATE_LIMIT_ENABLED` | `true` |
+  | `RATE_LIMIT_REQUESTS` | `20` |
+  | `RATE_LIMIT_WINDOW_SECONDS` | `60` |
 
-- npm audit reporta 2 moderate por `postcss <8.5.10` **dentro de
-  Next.js** (transitive). Nuestro top-level postcss es 8.5.11. El fix
-  oficial requiere `npm audit fix --force` que degrada Next a 9.x; se
-  acepta el aviso porque el postcss vendored solo procesa CSS del propio
-  bundle de Next, no entrada de usuario. Revisar al actualizar Next.
-- Comportamiento del rate limiter detrás de proxy: probado solo con
-  TestClient (host = "testclient"). En prod necesitará el header trust
-  setup mencionado arriba.
-- `docker-compose.prod.example.yml` no se ha desplegado todavía; es
-  plantilla para Fase 5.
+- Limitación: in-memory ⇒ no compartido entre procesos. En prod multi-worker
+  se sustituirá el backing store por Redis (fase ≥5).
+
+### Autenticación (fase 4)
+
+- Cookie httpOnly `soc_session` con JWT HS256 firmado con `JWT_SECRET`.
+- TTL configurable (`JWT_TTL_SECONDS`, default 3600s).
+- `SameSite=Lax`. `Secure` flag vía `COOKIE_SECURE` (off en dev, on en prod).
+- Aceptamos también `Authorization: Bearer <token>` para tests/clientes
+  API.
+- **JWT invalidable**: el token incluye claim `pv` (password_version del
+  usuario). El middleware compara contra el valor actual en BD; si no
+  coincide responde 401. El admin endpoint `users/{id}/password` y
+  `users/{id}/role` incrementan ese contador, así que un reset forzado
+  caduca todas las sesiones existentes del afectado en el siguiente
+  request.
+- **Auth state cross-tab** en frontend: `AuthProvider` escucha eventos
+  `storage` y `focus` y revalida con el backend, así un logout en una
+  pestaña se propaga al resto sin refresh manual.
+
+Variables (todas en `.env.example`):
+
+| Variable | Default | Notas |
+|----------|---------|-------|
+| `JWT_SECRET` | dev-only string | **Rotar antes de prod**: `openssl rand -base64 48` |
+| `JWT_TTL_SECONDS` | 3600 | Sesión de 1 hora |
+| `COOKIE_NAME` | `soc_session` | |
+| `COOKIE_SECURE` | `false` | Pasar a `true` detrás de Caddy/HTTPS |
+
+### Autorización (RBAC dinámico + ownership)
+
+- Dos roles: `analyst` (default) y `admin`.
+- **Primer usuario en registrarse** queda como admin. **Sin seed por
+  defecto** (eliminado el antiguo `admin@soc.local`/`admin` que se
+  creaba en `init_db`).
+- **Permisos granulares**: cada endpoint admin usa `require_perm("clave")`
+  consultando la tabla `role_permissions`. Si la tabla no tiene un
+  override para esa pareja `(role, key)`, cae al default de la registry
+  estática en `app/services/permissions.py`.
+- **Permission `permissions.manage` lockeada**: el backend rechaza
+  cualquier intento de cambiarla → un admin no puede quitarse a sí mismo
+  la capacidad de gestionar permisos.
+- Endpoints protegidos por sesión: `/api/explain`, `/api/recommend`,
+  `/api/chat`, `/api/alerts*`, `/api/auth/me`. Todos devuelven 401 sin
+  sesión.
+- Endpoints protegidos por permiso: `/api/admin/*`. Devuelven 403 si el
+  rol del actor no tiene la clave correspondiente.
+- Endpoints públicos: `/api/health`, `/api/kb/status`, `/api/llm/models`,
+  `/api/auth/{register,login,logout}`, `/api/docs`, `/api/openapi.json`.
+- Filtros de ownership en `app/routers/alerts.py`:
+  - Lista: `WHERE user_id = current_user.id` (admin sin filtro).
+  - Detalle: `404` para no-owner (no `403`, evitamos leak de existencia).
+- `/api/recommend` con `alert_id` ajeno: `404` para no-owner igualmente.
+
+### Auditoría
+
+- Tabla `audit_logs` append-only con FK `actor_id ON DELETE SET NULL`
+  para que el rastro sobreviva a la eliminación del actor.
+- Todas las acciones admin (create/delete/role-change/password-reset/
+  permissions-update) se registran con `actor_id`, `actor_email`,
+  `target_*`, IP del cliente y diff JSON en `details`.
+- Visible en la UI bajo `/admin` → pestaña Auditoría con filtros por
+  acción y actor. Read-only: no hay endpoint para borrar ni modificar
+  filas.
+
+### Allowlist de modelos LLM
+
+- `Settings.gemini_chat_models_allowlist` define qué modelos puede pedir
+  el cliente (default: `gemini-2.5-flash-lite, gemini-2.5-flash,
+  gemini-2.0-flash-lite`).
+- Pydantic valida `model` contra esa lista (422 si no).
+- `GeminiAdapter._resolve_chat_model` valida también, defense in depth:
+  si llega un modelo desconocido (bypass de validación), cae al default
+  y loggea warning.
+- `GET /api/llm/models` devuelve `{default, available}` para que el
+  frontend no hardcodee la lista.
+
+### Secretos no fugan
+
+- `.env` está en `.gitignore`. Solo `.env.example` con placeholders se
+  versiona.
+- Verificación periódica:
+
+  ```bash
+  git log --all -p | grep -c "AIzaSy"   # ⇒ 0
+  git ls-files | grep -E "(\.env$|secret|credential)"   # ⇒ vacío
+  ```
+
+- En contenedores los secretos viven en `Config.Env` (visible solo via
+  `docker inspect`, no via HTTP).
+
+## Riesgos pendientes por fase
+
+| Fase | Riesgo | Mitigación planeada |
+|------|--------|---------------------|
+| **5** (deploy) | Hardening VPS | SSH key only, ufw, fail2ban, auto-actualizaciones |
+| **5** | TLS / certificados | Caddy 2 + Let's Encrypt automático |
+| **5** | Secret management | Variables fuera del repo, gestor (Hetzner secrets / age / sops) |
+| **5** | Backups Postgres | `pg_dump` cron + offsite |
+| **5** | Rate limiter en multi-worker | Sustituir backing store por Redis (slowapi) |
+| **5** | Real client IP | `ProxyHeadersMiddleware` en uvicorn + `forwarded_allow_ips` apuntando al IP de Caddy |
+| **5** | Registro público + race condition | `AUTH_REGISTRATION_ENABLED=false` + admin seed CLI |
+| **5** | `JWT_SECRET` aún el de dev | Rotar a `openssl rand -base64 48` antes de exponer |
+| **5** | Chroma sin auth | En prod queda en red interna del compose, sin puertos expuestos |
+| **6** | Guion del informe + demo | Plantilla en `roadmap.md` |
+
+## Cosas no verificadas o aceptadas
+
+- `npm audit` devuelve 2 moderate por `postcss <8.5.10` que viene
+  vendored dentro de Next.js (`node_modules/next/node_modules/postcss`).
+  Nuestro top-level es 8.5.11. El fix oficial degrada Next a 9.x →
+  inaceptable. Riesgo real bajo: ese postcss procesa CSS del propio
+  bundle de Next, no input de usuario. Revisar al subir Next.
+- Rate limiter detrás de proxy: probado solo con TestClient (host =
+  "testclient"). En prod requiere `ProxyHeadersMiddleware` con
+  `forwarded_allow_ips` ajustado al IP de Caddy.
+- `docker-compose.prod.example.yml` validado por `docker compose
+  config` pero **no desplegado**; la prueba real es en Hetzner (fase 5).
+
+## Pruebas de seguridad recomendadas antes de cada release
+
+```bash
+# 1. Endpoints protegidos siguen exigiendo auth
+for ep in /api/explain /api/recommend /api/chat /api/alerts; do
+  code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST http://localhost:8080$ep -d '{}' -H "Content-Type: application/json")
+  [[ "$code" == "401" ]] || echo "FAIL $ep → $code"
+done
+
+# 2. Sanitización de errores LLM no fuga claves
+docker compose exec api python -c "
+import app.services.llm as m
+class P(m.LLMAdapter):
+    def generate_json(self,p,*,schema,system=None,temperature=0.2,model=None):
+        raise m.LLMProviderError('AIzaSy_FAKE quota internal')
+    def generate_text(self,p,*,system=None,temperature=0.2,model=None):
+        raise m.LLMProviderError('AIzaSy_FAKE')
+    def embed(self,t): return []
+m._singleton = P()
+from fastapi.testclient import TestClient
+from app.main import app
+from app.middleware.auth import get_current_user
+from app.models import User, UserRole
+app.dependency_overrides[get_current_user] = lambda: User(id=1,email='t@e.com',hashed_password='x',role=UserRole.ADMIN)
+r = TestClient(app).post('/api/explain', json={'log':'x'})
+assert 'AIza' not in r.text
+print('sanitization OK')
+"
+
+# 3. Allowlist de modelos rechaza valores fuera
+curl -sS -o /dev/null -w "model fuera → %{http_code}\n" \
+  -X POST http://localhost:8080/api/explain \
+  -H "Content-Type: application/json" \
+  -d '{"log":"x","model":"gemini-2.5-pro"}'    # → 422
+```

@@ -2,6 +2,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from app.db import DbSession
 from app.middleware.auth import CurrentUser
 from app.middleware.ratelimit import rate_limit
 from app.schemas.alerts import ChatRequest, ChatResponse
@@ -15,12 +16,14 @@ router = APIRouter(
 
 
 @router.post("", response_model=ChatResponse)
-def chat(payload: ChatRequest, _user: CurrentUser) -> ChatResponse:
-    # _user is unused inside the body — its sole purpose is to gate access
-    # via the auth dependency. FastAPI still resolves it.
+def chat(payload: ChatRequest, user: CurrentUser, db: DbSession) -> ChatResponse:
     try:
         return chat_service(
-            payload.messages, payload.log_context, model=payload.model
+            payload.messages,
+            payload.log_context,
+            model=payload.model,
+            user=user,
+            db=db,
         )
     except LLMProviderError:
         logger.exception("LLM provider error in /chat")

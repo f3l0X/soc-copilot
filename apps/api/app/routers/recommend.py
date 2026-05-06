@@ -56,7 +56,15 @@ def recommend_actions(
         )
 
     try:
-        result = recommend(log, source, explanation, risk_level, model=payload.model)
+        result = recommend(
+            log,
+            source,
+            explanation,
+            risk_level,
+            model=payload.model,
+            user=user,
+            db=db,
+        )
     except LLMProviderError:
         logger.exception("LLM provider error in /recommend")
         raise HTTPException(

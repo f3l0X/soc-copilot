@@ -25,7 +25,8 @@ services:
     env_file: ../.env
     ports:
       # Dev convenience: localhost:55432 → container 5432. Drop in prod.
-      - "55432:5432"
+      # Bind to 127.0.0.1 so Postgres is never exposed on the LAN.
+      - "127.0.0.1:55432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
@@ -42,8 +43,8 @@ services:
     restart: unless-stopped
     logging: *default-logging
     ports:
-      # Dev convenience. Drop in prod.
-      - "8001:8000"
+      # Dev convenience. Drop in prod. Bound to loopback only.
+      - "127.0.0.1:8001:8000"
     volumes:
       - chroma-data:/data
     environment:
@@ -61,10 +62,14 @@ services:
       POSTGRES_HOST: postgres
       CHROMA_HOST: chroma
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     volumes:
       # Live-reload backend code without rebuilding the image.
       - ../apps/api/app:/code/app
+      # Mount tests + scripts read-only so `docker compose exec api pytest`
+      # and `... python -m scripts.ingest_kb` work without bind-mount flags.
+      - ../apps/api/tests:/code/tests:ro
+      - ../apps/api/scripts:/code/scripts:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -84,7 +89,7 @@ services:
       WATCHPACK_POLLING: "true"
       CHOKIDAR_USEPOLLING: "true"
     ports:
-      - "13000:3000"
+      - "127.0.0.1:13000:3000"
     volumes:
       - ../apps/web/src:/app/src
       - ../apps/web/public:/app/public

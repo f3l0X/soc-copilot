@@ -2,18 +2,32 @@
 
 Currently wires Gemini via google-genai. Swappable to Claude/OpenAI/Ollama
 by adding a sibling adapter and selecting via settings.
+
+Phase 5 — Bring-your-own-key
+============================
+Each user can store their own Gemini API key (encrypted). When they have
+one we instantiate a per-user adapter and route their calls through it.
+Otherwise we fall back to the SHARED server key, throttled by a daily
+per-user quota so a single user can't burn the whole project's quota.
+``get_llm(user, db)`` is the new entry point. The old ``get_llm()`` with
+no args still works for code paths that don't have a user (KB ingestion
+scripts, tests).
 """
 from __future__ import annotations
 
 import json
 import logging
 from abc import ABC, abstractmethod
+from datetime import UTC, datetime
 from typing import Any
 
+from fastapi import HTTPException, status
 from google import genai
 from google.genai import types
+from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.services.secrets import DecryptionError, decrypt
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +42,10 @@ class LLMProviderError(LLMError):
 
 class LLMResponseError(LLMError):
     """The provider replied but the payload could not be parsed/validated."""
+
+
+class LLMQuotaExceeded(LLMError):
+    """The per-user quota on the SHARED server key is exhausted."""
 
 
 class LLMAdapter(ABC):
@@ -57,11 +75,12 @@ class LLMAdapter(ABC):
 
 
 class GeminiAdapter(LLMAdapter):
-    def __init__(self) -> None:
+    def __init__(self, api_key: str | None = None) -> None:
         settings = get_settings()
-        if not settings.gemini_api_key or settings.gemini_api_key == "replace_me":
+        key = api_key or settings.gemini_api_key
+        if not key or key in {"replace_me", "REPLACE_ME_WITH_FRESH_KEY"}:
             raise LLMProviderError("GEMINI_API_KEY is not configured")
-        self._client = genai.Client(api_key=settings.gemini_api_key)
+        self._client = genai.Client(api_key=key)
         self._default_chat_model = settings.gemini_chat_model
         self._embed_model = settings.gemini_embed_model
         self._allowlist = set(settings.chat_models_list)
@@ -106,10 +125,14 @@ class GeminiAdapter(LLMAdapter):
             logger.exception("Gemini provider call failed")
             raise LLMProviderError(str(exc)) from exc
 
+        text = getattr(response, "text", None)
+        if not text:
+            logger.error("Gemini returned empty payload: %r", response)
+            raise LLMResponseError("empty reply")
         try:
-            return json.loads(response.text)
+            return json.loads(text)
         except (TypeError, ValueError) as exc:
-            logger.exception("Gemini returned non-JSON payload: %r", response.text)
+            logger.exception("Gemini returned non-JSON payload: %r", text)
             raise LLMResponseError("non-json reply") from exc
 
     def generate_text(
@@ -147,11 +170,85 @@ class GeminiAdapter(LLMAdapter):
         return [e.values for e in response.embeddings]
 
 
+# ── Server-key singleton (used as fallback when user has no BYO key) ────
 _singleton: LLMAdapter | None = None
 
 
 def get_llm() -> LLMAdapter:
+    """Server-key adapter (no quota tracking).
+
+    Kept for non-user contexts: KB ingestion scripts, tests with the
+    dependency override, and the smoke suite.
+    """
     global _singleton
     if _singleton is None:
         _singleton = GeminiAdapter()
     return _singleton
+
+
+def reset_singleton() -> None:
+    """Test helper — drop the cached adapter."""
+    global _singleton
+    _singleton = None
+
+
+# ── Per-user adapter selection (BYO key + server-key quota) ─────────────
+
+
+def _today_utc():
+    return datetime.now(UTC).date()
+
+
+def _enforce_server_quota(user, db: Session) -> None:
+    """Track and enforce daily call budget for the SHARED server key.
+
+    Counter rolls forward at the next UTC day. Increments happen only
+    AFTER we decide to consume a call; rejecting before increment keeps
+    the count meaningful even when downstream raises.
+    """
+    settings = get_settings()
+    today = _today_utc()
+    if user.server_llm_quota_date != today:
+        user.server_llm_quota_date = today
+        user.server_llm_calls_today = 0
+    if user.server_llm_calls_today >= settings.server_llm_daily_quota:
+        # 429 surfaces nicely in the frontend.
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(
+                "Daily AI call quota exhausted on the shared server key. "
+                "Configure your own Gemini API key in Settings to keep going."
+            ),
+        )
+    user.server_llm_calls_today += 1
+    db.commit()
+
+
+def get_llm_for_user(user, db: Session) -> LLMAdapter:
+    """Return an adapter appropriate for ``user``.
+
+    - If they configured their own key: decrypt and use a per-call
+      adapter (no quota tracking, their own Google quota applies).
+    - Otherwise: use the shared server adapter, but increment + enforce
+      the daily per-user budget first.
+
+    The ``user`` argument is the SQLAlchemy ``User`` row; we mutate it
+    when bumping the quota counter and commit through ``db``.
+    """
+    if user is not None and user.gemini_api_key_ciphertext:
+        try:
+            api_key = decrypt(user.gemini_api_key_ciphertext)
+        except DecryptionError:
+            # Likely APP_ENCRYPTION_KEY rotated. Fall back to the server
+            # key rather than blocking the user — log loudly so an admin
+            # can prompt them to re-enter their key.
+            logger.error(
+                "user id=%s has unreadable Gemini ciphertext; falling back",
+                user.id,
+            )
+        else:
+            return GeminiAdapter(api_key=api_key)
+
+    if user is not None:
+        _enforce_server_quota(user, db)
+    return get_llm()

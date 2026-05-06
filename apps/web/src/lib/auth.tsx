@@ -12,6 +12,10 @@ import {
 
 import { ApiError, type UserMe, getMe, login, logout } from "@/lib/api";
 
+// Key used to broadcast auth changes across tabs. The value is just a
+// monotonically-increasing timestamp; listeners only care that it changed.
+const AUTH_SYNC_KEY = "soc_copilot_auth_event";
+
 interface AuthState {
   user: UserMe | null;
   loading: boolean;
@@ -46,14 +50,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void refresh();
   }, [refresh]);
 
+  // Cross-tab sync + revalidate on tab focus, so a logout in tab A bounces
+  // tab B without waiting for a manual refresh.
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === AUTH_SYNC_KEY) void refresh();
+    };
+    const onFocus = () => void refresh();
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [refresh]);
+
+  const broadcast = () => {
+    try {
+      localStorage.setItem(AUTH_SYNC_KEY, String(Date.now()));
+    } catch {
+      /* ignore — storage may be disabled */
+    }
+  };
+
   const signIn = useCallback(async (email: string, password: string) => {
     const res = await login(email, password);
     setUser(res.user);
+    broadcast();
   }, []);
 
   const signOut = useCallback(async () => {
     await logout();
     setUser(null);
+    broadcast();
   }, []);
 
   return (
@@ -69,7 +98,13 @@ export function useAuth(): AuthState {
   return ctx;
 }
 
-/** Wraps a page so unauthenticated users get bounced to /login. */
+/** Wraps a page so unauthenticated users get bounced to /login.
+ *
+ * Returns the auth state plus a `ready` flag. Pages should bail out of
+ * rendering interactive UI until `ready` is true; otherwise a logout in
+ * another tab leaves the form mounted and clickable until the redirect
+ * finishes resolving.
+ */
 export function useRequireAuth() {
   const auth = useAuth();
   const router = useRouter();
@@ -78,5 +113,5 @@ export function useRequireAuth() {
       router.replace("/login");
     }
   }, [auth.loading, auth.user, router]);
-  return auth;
+  return { ...auth, ready: !auth.loading && auth.user !== null };
 }

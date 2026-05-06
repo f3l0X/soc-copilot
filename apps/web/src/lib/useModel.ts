@@ -2,23 +2,37 @@
 
 import { useEffect, useState } from "react";
 
-import { type ModelsInfo, getModels } from "@/lib/api";
+import { type ModelsInfo, getLLMSettings, getModels } from "@/lib/api";
 
 const STORAGE_KEY = "soc:llm-model";
 
-/** Shared hook: fetches the allowlist once, exposes the selected model
- *  (persisted in localStorage) and a setter. The selected model is sent
- *  on every /explain, /recommend and /chat call so users can switch when
- *  the default hits a quota wall. */
+/** Shared hook: fetches the allowlist once, exposes the selected model and
+ *  a setter.
+ *
+ *  Resolution order for the initial selection:
+ *    1. User's server-side ``preferred_chat_model`` (set in /settings/llm).
+ *    2. localStorage cache (lets you flip per-tab without persisting).
+ *    3. Server default.
+ *
+ *  The selected model is sent on every /explain, /recommend and /chat call
+ *  so users can switch when a model hits a quota wall. */
 export function useModel() {
   const [info, setInfo] = useState<ModelsInfo | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getModels()
-      .then((m) => {
+    // Fetch allowlist + per-user preference in parallel. The settings
+    // call may legitimately fail for unauthenticated users (e.g. landing
+    // page); we tolerate that and fall back to localStorage.
+    Promise.all([getModels(), getLLMSettings().catch(() => null)])
+      .then(([m, s]) => {
         setInfo(m);
+        const preferred = s?.preferred_chat_model;
+        if (preferred && m.available.includes(preferred)) {
+          setSelected(preferred);
+          return;
+        }
         const stored =
           typeof window !== "undefined"
             ? window.localStorage.getItem(STORAGE_KEY)

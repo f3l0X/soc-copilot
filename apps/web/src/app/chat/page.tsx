@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-import { UserBadge } from "@/components/AuthGate";
 import { ModelSelector } from "@/components/ModelSelector";
 import {
   type ChatMessage,
@@ -55,7 +54,7 @@ export default function ChatPage() {
   const [kb, setKb] = useState<KBStatus | null>(null);
   const { selected: model } = useModel();
   const scrollRef = useRef<HTMLDivElement>(null);
-  useRequireAuth();
+  const auth = useRequireAuth();
 
   useEffect(() => {
     kbStatus()
@@ -94,6 +93,10 @@ export default function ChatPage() {
     }
   }
 
+  if (!auth.ready) {
+    return <main className="min-h-screen p-8 text-slate-500">Verificando sesión…</main>;
+  }
+
   return (
     <main className="min-h-screen max-w-4xl mx-auto p-8 flex flex-col gap-4">
       <div className="flex items-baseline justify-between">
@@ -104,7 +107,6 @@ export default function ChatPage() {
           </p>
         </div>
         <div className="flex flex-col items-end gap-1 text-xs">
-          <UserBadge />
           {kb ? (
             <span className="text-slate-400">
               KB: {kb.total} docs ({kb.mitre} MITRE · {kb.owasp} OWASP)

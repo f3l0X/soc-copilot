@@ -11,6 +11,7 @@ function LoginInner() {
   const params = useSearchParams();
   const next = params.get("next") || "/";
   const auth = useAuth();
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -27,7 +28,7 @@ function LoginInner() {
     setError(null);
     try {
       if (mode === "register") {
-        await register(email, password);
+        await register(email, password, name);
       }
       await auth.signIn(email, password);
       router.replace(next);
@@ -59,6 +60,20 @@ function LoginInner() {
               : "Crea una cuenta. El primer usuario es admin."}
           </p>
         </div>
+
+        {mode === "register" && (
+          <label className="block text-sm">
+            <span className="text-slate-400">Nombre</span>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              autoComplete="name"
+              className="mt-1 w-full rounded bg-slate-900 border border-slate-700 px-3 py-2"
+            />
+          </label>
+        )}
 
         <label className="block text-sm">
           <span className="text-slate-400">Email</span>

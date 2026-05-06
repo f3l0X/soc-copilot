@@ -67,12 +67,18 @@ Para parar: `docker compose down`. Para reiniciar limpio (borra datos): `docker 
 | `GET  /api/alerts/{id}` | Alerta + sus recomendaciones | ✅ Fase 2 |
 | `POST /api/chat` | Chat IA + RAG (MITRE + OWASP) | ✅ Fase 3 |
 | `GET  /api/kb/status` | Estado de la base de conocimiento | ✅ Fase 3 |
+| `GET  /api/llm/models` | Selector de modelos permitidos | ✅ Fase 3 |
+| `POST /api/auth/register` | Registro de usuario (admin/analyst) | ✅ Fase 4 |
+| `POST /api/auth/login` | Login con JWT cookie | ✅ Fase 4 |
+| `POST /api/auth/logout` | Cierre de sesión | ✅ Fase 4 |
+| `GET  /api/auth/me` | Perfil y sesión actual | ✅ Fase 4 |
 | `GET  /api/health` | Health check | ✅ |
 
 UI:
+- http://localhost:13000/login — Autenticación y registro
 - http://localhost:13000/alerts — Alert Explainer
 - http://localhost:13000/respond?alert_id=N — Next Step Recommender
-- http://localhost:13000/history — Histórico
+- http://localhost:13000/history — Histórico filtrado por analista/admin
 - http://localhost:13000/chat — Chat IA con citaciones MITRE/OWASP
 
 ## Knowledge base (RAG)

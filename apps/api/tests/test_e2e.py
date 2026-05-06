@@ -18,8 +18,9 @@ if os.environ.get("RUN_E2E") != "1":  # pragma: no cover
 
 
 # Importing main triggers init_db() against the live DB.
-from app.db import _engine, init_db  # noqa: E402
-from app.main import app  # noqa: E402
+from app.db import _engine, init_db
+from app.main import app
+from app.middleware import ratelimit
 
 client = TestClient(app)
 
@@ -33,6 +34,9 @@ def _prepare_db():
         conn.execute(text("DELETE FROM recommendations"))
         conn.execute(text("DELETE FROM alerts"))
         conn.execute(text("DELETE FROM users"))
+    # Auth bucket is module-global; clear so prior test's burst doesn't
+    # blow the strict 5/min auth quota in the next test.
+    ratelimit.reset()
     yield
 
 
@@ -47,7 +51,7 @@ def test_first_user_becomes_admin_and_full_flow():
     # Register → first user is admin
     r = client.post(
         "/api/auth/register",
-        json={"email": admin_email, "password": admin_pw},
+        json={"name": "Admin", "email": admin_email, "password": admin_pw},
     )
     assert r.status_code == 201, r.text
     assert r.json()["role"] == "admin"
@@ -82,7 +86,7 @@ def test_first_user_becomes_admin_and_full_flow():
     analyst_pw = "analystpass-xyz-9999"
     r = client.post(
         "/api/auth/register",
-        json={"email": analyst_email, "password": analyst_pw},
+        json={"name": "Analyst", "email": analyst_email, "password": analyst_pw},
     )
     assert r.status_code == 201
     assert r.json()["role"] == "analyst"
@@ -103,7 +107,8 @@ def test_ownership_isolation_between_users(monkeypatch):
     pw = "shared-strong-pw-1234"
     for email in [admin_email, a_email, b_email]:
         r = client.post(
-            "/api/auth/register", json={"email": email, "password": pw}
+            "/api/auth/register",
+            json={"name": "User", "email": email, "password": pw},
         )
         assert r.status_code == 201, r.text
 

@@ -178,21 +178,144 @@ export type UserRole = "analyst" | "admin";
 
 export interface UserMe {
   id: number;
+  name: string;
+  last_name: string;
   email: string;
   role: UserRole;
   created_at: string;
 }
+
+export interface UpdateProfilePayload {
+  name?: string;
+  last_name?: string;
+  email?: string;
+}
+
+export const updateProfile = (payload: UpdateProfilePayload & { current_password?: string }) =>
+  request<UserMe>("/api/auth/me", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+
+// ─── Per-user LLM settings (BYO Gemini key + preferred model) ─────────────
+
+export interface LLMSettings {
+  configured: boolean;
+  key_last4: string | null;
+  key_validated_at: string | null;
+  preferred_chat_model: string | null;
+  available_models: string[];
+  default_model: string;
+  server_quota_used: number;
+  server_quota_limit: number;
+}
+
+export const getLLMSettings = () =>
+  request<LLMSettings>("/api/auth/me/llm");
+
+export const updateLLMSettings = (payload: {
+  api_key?: string;
+  preferred_chat_model?: string;
+}) =>
+  request<LLMSettings>("/api/auth/me/llm", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+
+export const clearLLMKey = () =>
+  request<LLMSettings>("/api/auth/me/llm", { method: "DELETE" });
 
 export interface LoginResponse {
   user: UserMe;
   expires_at: string;
 }
 
-export const register = (email: string, password: string) =>
+export const register = (email: string, password: string, name: string) =>
   request<UserMe>("/api/auth/register", {
     method: "POST",
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, name }),
   });
+
+export const getAdminUsers = () => request<UserMe[]>("/api/admin/users");
+
+export const adminCreateUser = (payload: {
+  name: string;
+  email: string;
+  password: string;
+  role: UserRole;
+}) =>
+  request<UserMe>("/api/admin/users", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+export const adminChangePassword = (userId: number, new_password: string) =>
+  request<void>(`/api/admin/users/${userId}/password`, {
+    method: "PUT",
+    body: JSON.stringify({ new_password }),
+  });
+
+export const adminChangeRole = (userId: number, role: UserRole) =>
+  request<UserMe>(`/api/admin/users/${userId}/role`, {
+    method: "PUT",
+    body: JSON.stringify({ role }),
+  });
+
+export const adminDeleteUser = (userId: number) =>
+  request<void>(`/api/admin/users/${userId}`, { method: "DELETE" });
+
+export interface AuditLogEntry {
+  id: number;
+  created_at: string;
+  actor_id: number | null;
+  actor_email: string;
+  action: string;
+  target_type: string | null;
+  target_id: number | null;
+  target_label: string | null;
+  details: Record<string, unknown> | null;
+  ip: string | null;
+}
+
+export interface PermissionCell {
+  permission_key: string;
+  area: string;
+  action: string;
+  role: UserRole;
+  allowed: boolean;
+  locked: boolean;
+  default: boolean;
+}
+
+export interface PermissionChange {
+  role: UserRole;
+  permission_key: string;
+  allowed: boolean;
+}
+
+export const getPermissions = () =>
+  request<PermissionCell[]>("/api/admin/permissions");
+
+export const updatePermissions = (changes: PermissionChange[]) =>
+  request<PermissionCell[]>("/api/admin/permissions", {
+    method: "PUT",
+    body: JSON.stringify({ changes }),
+  });
+
+export const getAuditLog = (params: {
+  limit?: number;
+  offset?: number;
+  action?: string;
+  actor_email?: string;
+} = {}) => {
+  const qs = new URLSearchParams();
+  if (params.limit != null) qs.set("limit", String(params.limit));
+  if (params.offset != null) qs.set("offset", String(params.offset));
+  if (params.action) qs.set("action", params.action);
+  if (params.actor_email) qs.set("actor_email", params.actor_email);
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return request<AuditLogEntry[]>(`/api/admin/audit${suffix}`);
+};
 
 export const login = (email: string, password: string) =>
   request<LoginResponse>("/api/auth/login", {

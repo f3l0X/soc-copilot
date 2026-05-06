@@ -575,5 +575,5 @@ def test_gemini_adapter_falls_back_to_default_for_unknown_model(monkeypatch):
     assert a._resolve_chat_model(None) == a._default_chat_model
     assert a._resolve_chat_model("not-real") == a._default_chat_model
     # Allowlist members pass through.
-    allowed = list(a._allowlist)[0]
+    allowed = next(iter(a._allowlist))
     assert a._resolve_chat_model(allowed) == allowed

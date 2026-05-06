@@ -86,8 +86,10 @@ services:
     logging: *default-logging
     env_file: ../.env
     environment:
+      APP_ENV: production
       POSTGRES_HOST: postgres
       CHROMA_HOST: chroma
+      COOKIE_SECURE: "true"
     # No `ports:` — Caddy reaches it via the docker network.
     # Override the dev CMD so we don't run --reload in production.
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
