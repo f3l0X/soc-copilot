@@ -92,7 +92,7 @@ def is_allowed(db: Session, role: UserRole, key: str) -> bool:
 
 
 def list_effective(db: Session) -> list[dict]:
-    """Return every (role × permission) cell with its current effective value."""
+    """Return every (role x permission) cell with its current effective value."""
     out = []
     for p in REGISTRY:
         for role in UserRole:

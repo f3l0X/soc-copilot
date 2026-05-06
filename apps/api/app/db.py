@@ -1,12 +1,14 @@
 """SQLAlchemy session factory + Base.
 
-Tables are auto-created from models on app startup (see main.py). When the
-schema changes substantially, run `docker compose down -v` to recreate.
-For Phase 4 we'll introduce Alembic migrations.
+Schema is managed by Alembic. `init_db()` runs `alembic upgrade head` against
+the configured Postgres URL on startup. SQLite (used in some unit tests) keeps
+using `Base.metadata.create_all` since Alembic migrations contain Postgres-only
+types (JSONB, ARRAY, ENUM).
 """
 from __future__ import annotations
 
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends
@@ -20,6 +22,8 @@ _engine = create_engine(_settings.database_url, pool_pre_ping=True, future=True)
 _SessionLocal = sessionmaker(
     bind=_engine, autoflush=False, autocommit=False, future=True
 )
+
+_ALEMBIC_INI = Path(__file__).resolve().parent.parent / "alembic.ini"
 
 
 class Base(DeclarativeBase):
@@ -36,99 +40,37 @@ def get_db() -> Iterator[Session]:
 
 
 def init_db() -> None:
-    """Create tables that don't exist yet, then run idempotent in-place
-    column patches for schema evolutions we don't want to lose data over.
+    """Bring the DB schema up to head.
 
-    Phase 4 adds users + alerts.user_id; without Alembic we use IF NOT
-    EXISTS / ADD COLUMN IF NOT EXISTS so existing alert rows persist.
+    Postgres → run Alembic migrations (`alembic upgrade head`). All schema
+    changes from now on must ship as a new revision under `alembic/versions/`.
+
+    SQLite → fall back to `Base.metadata.create_all`. The Alembic scripts use
+    Postgres-only types and are not portable; SQLite is only used by offline
+    unit tests, where matching the production schema exactly is not required.
     """
-    from sqlalchemy import text
-
     from app import models  # noqa: F401  (registers tables on Base.metadata)
 
-    Base.metadata.create_all(bind=_engine)
+    if _engine.dialect.name == "postgresql":
+        from sqlalchemy import inspect
 
-    with _engine.begin() as conn:
-        # Postgres-only patches. SQLite (used in tests) skips these.
-        if conn.dialect.name == "postgresql":
-            conn.execute(
-                text(
-                    "ALTER TABLE alerts "
-                    "ADD COLUMN IF NOT EXISTS user_id INTEGER "
-                    "REFERENCES users(id) ON DELETE SET NULL"
-                )
-            )
-            conn.execute(
-                text(
-                    "CREATE INDEX IF NOT EXISTS ix_alerts_user_id "
-                    "ON alerts (user_id)"
-                )
-            )
-            conn.execute(
-                text(
-                    "ALTER TABLE users "
-                    "ADD COLUMN IF NOT EXISTS name VARCHAR(100) "
-                    "DEFAULT 'Analista' NOT NULL"
-                )
-            )
-            conn.execute(
-                text(
-                    "ALTER TABLE users "
-                    "ADD COLUMN IF NOT EXISTS password_version INTEGER "
-                    "DEFAULT 0 NOT NULL"
-                )
-            )
-            conn.execute(
-                text(
-                    "ALTER TABLE users "
-                    "ADD COLUMN IF NOT EXISTS last_name VARCHAR(100) "
-                    "DEFAULT '' NOT NULL"
-                )
-            )
-            # Phase 5: per-user Gemini key (optional, BYO) + quota tracking
-            # against the shared server key.
-            conn.execute(
-                text(
-                    "ALTER TABLE users "
-                    "ADD COLUMN IF NOT EXISTS gemini_api_key_ciphertext BYTEA"
-                )
-            )
-            conn.execute(
-                text(
-                    "ALTER TABLE users "
-                    "ADD COLUMN IF NOT EXISTS gemini_key_last4 VARCHAR(8)"
-                )
-            )
-            conn.execute(
-                text(
-                    "ALTER TABLE users "
-                    "ADD COLUMN IF NOT EXISTS gemini_key_validated_at "
-                    "TIMESTAMP WITH TIME ZONE"
-                )
-            )
-            conn.execute(
-                text(
-                    "ALTER TABLE users "
-                    "ADD COLUMN IF NOT EXISTS preferred_chat_model VARCHAR(64)"
-                )
-            )
-            conn.execute(
-                text(
-                    "ALTER TABLE users "
-                    "ADD COLUMN IF NOT EXISTS server_llm_calls_today INTEGER "
-                    "DEFAULT 0 NOT NULL"
-                )
-            )
-            conn.execute(
-                text(
-                    "ALTER TABLE users "
-                    "ADD COLUMN IF NOT EXISTS server_llm_quota_date DATE"
-                )
-            )
+        from alembic import command
+        from alembic.config import Config
 
-    # The first user to POST /api/auth/register becomes ADMIN automatically
-    # (see routers/auth.py). We deliberately do NOT seed a default admin here
-    # to avoid shipping known credentials in production.
+        cfg = Config(str(_ALEMBIC_INI))
+        cfg.set_main_option("sqlalchemy.url", _settings.database_url)
+
+        # Bridge for DBs that were created by the old `create_all + ALTER`
+        # path: tables exist but alembic_version doesn't. Stamp head so the
+        # next deploy starts tracking revisions instead of trying to recreate.
+        inspector = inspect(_engine)
+        existing = set(inspector.get_table_names())
+        if "users" in existing and "alembic_version" not in existing:
+            command.stamp(cfg, "head")
+        else:
+            command.upgrade(cfg, "head")
+    else:
+        Base.metadata.create_all(bind=_engine)
 
 
 # FastAPI dependency alias — avoids `Depends(get_db)` in defaults (B008).

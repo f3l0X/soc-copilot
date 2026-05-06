@@ -286,7 +286,7 @@ def get_permissions(
     db: DbSession,
     user: User = require_perm("permissions.manage"),
 ) -> list[dict]:
-    """Return the full role × permission matrix with current effective values."""
+    """Return the full role x permission matrix with current effective values."""
     return list_effective(db)
 
 

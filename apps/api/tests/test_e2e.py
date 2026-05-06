@@ -139,6 +139,11 @@ def test_ownership_isolation_between_users(monkeypatch):
         assert r.status_code == 200, r.text
         return c
 
+    # The 3 registers above already consumed most of the strict 5/min auth
+    # bucket. Reset before the 3 logins below so we don't trip the limiter
+    # mid-test (the autouse fixture only resets between tests).
+    ratelimit.reset()
+
     # Each analyst creates one alert
     ca = _login(a_email)
     rA = ca.post("/api/explain", json={"log": "alert A"}).json()

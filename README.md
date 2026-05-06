@@ -1,5 +1,8 @@
 # SOC Copilot
 
+[![CI](https://github.com/f3l0X/soc-copilot/actions/workflows/ci.yml/badge.svg)](https://github.com/f3l0X/soc-copilot/actions/workflows/ci.yml)
+[![E2E](https://github.com/f3l0X/soc-copilot/actions/workflows/e2e.yml/badge.svg)](https://github.com/f3l0X/soc-copilot/actions/workflows/e2e.yml)
+
 AI Copilot para Analistas SOC Junior — Práctica 1, Módulo Ciberseguridad Avanzada (Curso 2026).
 
 ## Stack

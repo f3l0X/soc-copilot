@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.db import init_db
-from app.routers import alerts, auth, chat, explain, health, kb, llm, recommend, admin
+from app.routers import admin, alerts, auth, chat, explain, health, kb, llm, recommend
 
 settings = get_settings()
 

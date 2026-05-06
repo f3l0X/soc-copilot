@@ -16,6 +16,9 @@ RUN pip install -r requirements.txt
 
 COPY app ./app
 COPY scripts ./scripts
+COPY alembic ./alembic
+COPY alembic.ini ./alembic.ini
+COPY ruff.toml ./ruff.toml
 
 EXPOSE 8080
 
