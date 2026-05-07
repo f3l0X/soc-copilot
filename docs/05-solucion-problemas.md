@@ -151,14 +151,17 @@ Detalle completo en [08-rag-ingestion.md](08-rag-ingestion.md).
 
 ## Migrar / resetear la DB local tras cambios
 
-El stack usa `init_db()` en startup que combina `create_all()` con
-`ALTER TABLE IF NOT EXISTS` para columnas nuevas. **No hace falta**
-`down -v` para la mayoría de cambios.
+El stack usa **Alembic**. `init_db()` ejecuta `alembic upgrade head` al
+arrancar el API y hace `alembic stamp head` sobre DBs legacy creadas con
+`create_all`. **No hace falta** `down -v` para la mayoría de cambios:
+basta con `docker compose up -d --build api` y la migración corre sola.
 
 Sí necesitas reset cuando:
 
-- Eliminamos columnas o tablas (no es el caso ahora).
-- Renombramos columnas (ídem).
+- Una migración falla a mitad y deja el schema inconsistente.
+- Renombramos columnas y la migración autogenerada las trataría como
+  drop + add (revisar siempre el archivo generado, ver
+  [RUNBOOK.md §3](RUNBOOK.md#3-migraciones-alembic)).
 - Pruebas E2E quieren DB limpia.
 
 ```bash

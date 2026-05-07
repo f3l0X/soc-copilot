@@ -327,6 +327,46 @@ no-owner (no leak de existencia).
 }
 ```
 
+## Dashboard analítico
+
+### `GET /api/stats`
+
+Agregados sobre las alertas y recomendaciones del scope del usuario.
+Analysts ven sólo lo suyo (`scope: "self"`); admins ven todo el sistema
+(`scope: "all"`) más conteo de usuarios y un breakdown por usuario.
+
+```json
+{
+  "scope": "self",
+  "totals": {
+    "alerts": 12,
+    "recommendations": 9,
+    "users": null
+  },
+  "by_risk": [
+    {"risk_level": "high", "count": 5},
+    {"risk_level": "medium", "count": 4},
+    {"risk_level": "low", "count": 3}
+  ],
+  "top_mitre": [
+    {"technique": "T1110", "count": 4},
+    {"technique": "T1059", "count": 3}
+  ],
+  "daily_last_30d": [
+    {"day": "2026-05-01", "count": 2},
+    {"day": "2026-05-02", "count": 5}
+  ],
+  "by_user": null
+}
+```
+
+Notas:
+
+- `daily_last_30d` agrupa por `date_trunc('day', created_at)` y sólo
+  devuelve días con al menos una alerta; el frontend rellena los huecos.
+- `top_mitre` usa `unnest(mitre_techniques)` (Postgres-only) y limita a 10.
+- `by_user` y `totals.users` sólo se pobla cuando `scope == "all"`.
+
 ## Administración (RBAC)
 
 Todos los endpoints `/api/admin/*` están gateados por

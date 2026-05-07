@@ -41,6 +41,12 @@ export default function Home() {
           — Histórico de alertas
         </li>
         <li>
+          <Link className="text-sky-400 hover:underline" href="/dashboard">
+            /dashboard
+          </Link>{" "}
+          — Métricas y comportamiento de los análisis
+        </li>
+        <li>
           <Link className="text-sky-400 hover:underline" href="/chat">
             /chat
           </Link>{" "}

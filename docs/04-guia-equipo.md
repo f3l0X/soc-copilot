@@ -109,11 +109,14 @@ viene vendored dentro de Next.js (documentado en
 - **Nunca subir claves reales de Gemini ni `.env` personales** al repo.
   `.env` está en `.gitignore`; verificar con `git status` antes de
   commit.
-- **Cambios de schema DB**: los nuevos campos van como columnas
-  `NULLABLE` o se añaden vía `ALTER TABLE IF NOT EXISTS` en
-  `db.init_db()`. Si rompes algo, `docker compose down -v` reinicia el
-  volumen pero tira las alertas guardadas y la base de conocimiento RAG
-  (re-ingerir con `python -m scripts.ingest_kb`).
+- **Cambios de schema DB**: se hacen vía Alembic. Generar la revisión
+  con `alembic revision --autogenerate -m "..."` desde `apps/api`
+  (o dentro del contenedor api). **Siempre revisar el archivo generado**
+  antes de aplicarlo: autogenerate trata renames como drop + add.
+  `init_db()` corre `alembic upgrade head` al arrancar. Si rompes algo,
+  `docker compose down -v` reinicia el volumen pero tira las alertas
+  guardadas y la KB RAG (re-ingerir con `python -m scripts.ingest_kb`).
+  Detalle en [RUNBOOK.md §3](RUNBOOK.md#3-migraciones-alembic).
 - **Tests**: si añades funcionalidad backend, el patrón es
   service-level con fakes (sin DB) en `test_smoke.py` o `test_auth.py`.
   Para flujos que necesitan DB real, en `test_e2e.py` (sólo se ejecuta
@@ -125,13 +128,19 @@ viene vendored dentro de Next.js (documentado en
 
 ## CI: qué se ejecuta en cada push
 
-Workflow en `.github/workflows/ci.yml`. Tres jobs en paralelo:
+Dos workflows:
+
+`.github/workflows/ci.yml` (en cada push y PR):
 
 | Job | Steps |
 |-----|-------|
 | `api` | `pip install`, `ruff check app tests`, smoke import, `pytest -q` |
-| `e2e` | `pip install`, `pytest tests/test_e2e.py` con servicio Postgres 16 |
 | `web` | `npm ci`, `npm audit --audit-level=high`, `npm run lint`, `npm run build` |
+| `infra` | `docker compose config` (valida sintaxis del compose) |
+
+`.github/workflows/e2e.yml` (push a `main` y `workflow_dispatch`): levanta
+Postgres 16, ejecuta `alembic upgrade head`, `alembic check` y la suite
+completa de E2E + migraciones.
 
 Todos deben pasar para que un PR se considere mergeable. Detalle en
 [07-testing.md](07-testing.md).

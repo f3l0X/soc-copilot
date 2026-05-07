@@ -48,8 +48,10 @@ Salida generada por la API:
 - `GET /api/alerts` paginado y `GET /api/alerts/{id}` con recomendaciones
   anidadas.
 - Modelos SQLAlchemy `Alert` y `Recommendation` (FK con `ON DELETE CASCADE`).
-- Auto-creación de tablas en arranque (`Base.metadata.create_all` +
-  `ALTER TABLE IF NOT EXISTS` para evolución incremental sin Alembic).
+- Migraciones gestionadas por **Alembic** (`apps/api/alembic/versions/`).
+  `init_db()` ejecuta `alembic upgrade head` en Postgres y hace
+  `alembic stamp head` sobre bases legacy creadas con `create_all` para
+  migrar sin pérdida. SQLite (sólo tests) sigue usando `create_all`.
 - UI `/respond` y `/history`.
 
 ## Fase 3: RAG + Chat IA · ✅ completada
@@ -187,6 +189,14 @@ Iteración de hardening y producto sin cambio de versión mayor de roadmap.
 
 ## Fases pendientes
 
+### Fase 4.5: dashboard analítico — pendiente
+
+Detalle en [roadmap.md](roadmap.md#fase-45--checklist-dashboard-analítico).
+Página `/dashboard` con KPIs, distribución por riesgo, serie temporal
+30d y top técnicas MITRE, alimentada por un nuevo `GET /api/stats` que
+respeta el ownership existente. Recharts en frontend. Suma al 15% de UX
+de la rúbrica y aporta material visual para la demo.
+
 ### Fase 5: despliegue Hetzner — pendiente
 
 Detalle en [roadmap.md](roadmap.md). Pasos clave:
@@ -213,8 +223,8 @@ Snapshot del último commit en `main`:
 
 | Métrica | Valor |
 |---------|-------|
-| Tests backend (unit) | 69 passed |
-| Tests backend (E2E con Postgres real) | 2 passed |
+| Tests backend (unit) | 67 passed (auth, byo_llm, logging, migrations, smoke) |
+| Tests backend (E2E con Postgres real) | 7 passed (e2e + e2e_quota + stats) |
 | ruff (`app` + `tests` + `scripts`) | clean |
 | ESLint flat config (frontend) | 0 errors / 0 warnings |
 | `npm audit --audit-level=high` | 0 critical, 0 high (2 moderate aceptados, ver security.md) |

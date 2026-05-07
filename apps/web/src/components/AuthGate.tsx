@@ -83,6 +83,13 @@ export function GlobalHeader() {
               <span>Inicio</span>
             </Link>
           )}
+          <Link
+            href="/dashboard"
+            className="text-xs text-slate-400 hover:text-sky-300 rounded border border-slate-700 hover:border-sky-500/50 px-2 py-1"
+            title="Métricas de los análisis"
+          >
+            Dashboard
+          </Link>
         </div>
         <UserBadge />
       </div>

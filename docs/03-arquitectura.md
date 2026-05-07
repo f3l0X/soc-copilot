@@ -62,7 +62,7 @@ Tecnologías:
 |---------|-----|
 | `app/main.py` | Construye la app FastAPI, registra routers, ejecuta `init_db()` en lifespan startup |
 | `app/config.py` | Settings tipadas (env). Define defaults seguros para dev y allowlist de modelos LLM |
-| `app/db.py` | Engine + sessionmaker + `init_db()` que combina `create_all()` con `ALTER TABLE IF NOT EXISTS` para evolución incremental sin Alembic |
+| `app/db.py` | Engine + sessionmaker + `init_db()` que ejecuta `alembic upgrade head` en Postgres (con bridge `alembic stamp head` para DBs legacy creadas vía `create_all`); SQLite cae a `create_all` para tests |
 | `app/models.py` | `User` (incluye `name`, `last_name`, `password_version`), `Alert`, `Recommendation`, `AuditLog`, `RolePermission` |
 | `app/services/llm.py` | `LLMAdapter` abstracto + `GeminiAdapter`. Errores se separan en `LLMProviderError` y `LLMResponseError`; routers los mapean a 502 genéricos |
 | `app/services/explainer.py` | Construye prompt con `BEGIN/END_UNTRUSTED_LOG` y schema JSON estricto |

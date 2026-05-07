@@ -152,6 +152,46 @@ export const sendChat = (payload: ChatRequest) =>
     body: JSON.stringify(payload),
   });
 
+// ─── Stats / Dashboard ────────────────────────────────────────────────────
+
+export interface StatsTotals {
+  alerts: number;
+  recommendations: number;
+  users: number | null;
+}
+
+export interface RiskBucket {
+  risk_level: string;
+  count: number;
+}
+
+export interface MitreBucket {
+  technique: string;
+  count: number;
+}
+
+export interface DailyPoint {
+  day: string; // YYYY-MM-DD
+  count: number;
+}
+
+export interface UserBucket {
+  user_id: number;
+  email: string;
+  alerts: number;
+}
+
+export interface StatsResponse {
+  scope: "self" | "all";
+  totals: StatsTotals;
+  by_risk: RiskBucket[];
+  top_mitre: MitreBucket[];
+  daily_last_30d: DailyPoint[];
+  by_user: UserBucket[] | null;
+}
+
+export const getStats = () => request<StatsResponse>("/api/stats");
+
 // ─── Knowledge Base ───────────────────────────────────────────────────────
 
 export interface KBStatus {
@@ -236,7 +276,28 @@ export const register = (email: string, password: string, name: string) =>
     body: JSON.stringify({ email, password, name }),
   });
 
-export const getAdminUsers = () => request<UserMe[]>("/api/admin/users");
+export interface AdminUserView {
+  id: number;
+  name: string;
+  last_name: string;
+  email: string;
+  role: UserRole;
+  created_at: string;
+  server_llm_calls_today: number;
+  server_llm_quota_date: string | null;
+  server_llm_quota_limit: number;
+  byo_key_configured: boolean;
+  gemini_key_last4: string | null;
+}
+
+export const getAdminUsers = () =>
+  request<AdminUserView[]>("/api/admin/users");
+
+export const adminResetLlmQuota = (userId: number) =>
+  request<{ status: string; user_id: number; previous_count: number }>(
+    `/api/admin/users/${userId}/reset-llm-quota`,
+    { method: "POST" },
+  );
 
 export const adminCreateUser = (payload: {
   name: string;

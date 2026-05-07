@@ -9,10 +9,55 @@
 | 2 | Next Step Recommender + persistencia Postgres | ✅ |
 | 3 | RAG + Chat IA (MITRE + OWASP en Chroma) | ✅ |
 | 4 | Auth (JWT cookie + bcrypt) + RBAC + tests E2E | ✅ |
+| 4.5 | Dashboard analítico (`/dashboard` + `GET /api/stats`) | ⏳ pendiente |
 | 5 | Despliegue Hetzner + dominio + HTTPS + CI/CD | ⏳ pendiente |
 | 6 | Informe PDF + presentación 10 min | ⏳ pendiente |
 
 Detalle de cada fase en [02-estado-fases.md](02-estado-fases.md).
+
+## Fase 4.5 — checklist dashboard analítico
+
+Página `/dashboard` que visualiza el comportamiento de los análisis ya
+persistidos en Postgres. Puntúa en el 15% de UX dashboard de la rúbrica
+y aporta material visual fuerte para la demo y el informe.
+
+### Backend
+
+- [ ] `GET /api/stats` (auth requerida) que devuelve agregados sobre las
+      alertas del usuario (analyst) o de todos (admin):
+  - `totals`: alertas, recomendaciones, sesiones de chat (si aplica).
+  - `by_risk`: conteo por `risk_level` (low / medium / high / critical).
+  - `top_mitre`: top 10 técnicas MITRE más frecuentes con `count` y
+        link a `attack.mitre.org`.
+  - `daily_last_30d`: serie temporal de alertas/día.
+  - `by_user` (sólo admin): alertas por analista.
+  - `model_usage`: distribución de modelos LLM usados.
+- [ ] Una sola query SQL por bloque, con `GROUP BY` + `date_trunc('day', …)`.
+      Cachear en memoria 60 s para evitar martillear Postgres en demo.
+- [ ] Tests unit con fixtures: ownership (analyst no ve datos de otros),
+      shape de la respuesta, agregaciones correctas.
+
+### Frontend
+
+- [ ] `/dashboard` protegida por `useRequireAuth`.
+- [ ] Recharts (~50 KB gz) como dep en `apps/web`.
+- [ ] 4-5 widgets:
+  1. KPIs en tarjetas (totales + variación 7d).
+  2. Donut/bar de distribución por `risk_level`.
+  3. Línea temporal alertas/día (30d).
+  4. Bar horizontal top técnicas MITRE.
+  5. (Admin) tabla por usuario.
+- [ ] Estado vacío amigable cuando no hay datos.
+- [ ] Botón export CSV de la tabla MITRE para reusar en el informe.
+- [ ] Link al dashboard desde el `GlobalHeader` (sólo si el usuario
+      tiene al menos 1 alerta, evita pantalla vacía recién registrado).
+
+### Verificación
+
+- [ ] Smoke: crear 5 alertas con riesgos mezclados → todas las gráficas
+      reflejan los conteos.
+- [ ] Tiempo de carga < 500 ms con DB de 1k alertas.
+- [ ] Captura del dashboard incluida en el informe PDF.
 
 ## Fase 5 — checklist operativa
 
