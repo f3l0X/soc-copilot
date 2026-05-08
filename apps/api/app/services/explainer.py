@@ -53,9 +53,10 @@ RESPONSE_SCHEMA = {
 
 
 def build_user_prompt(log: str, source: str | None) -> str:
+    sanitized_log = log.replace(LOG_END, "[REDACTED]").replace(LOG_BEGIN, "[REDACTED]")
     return (
         f"Fuente: {source or 'desconocida'}\n\n"
-        f"{LOG_BEGIN}\n{log}\n{LOG_END}\n"
+        f"{LOG_BEGIN}\n{sanitized_log}\n{LOG_END}\n"
     )
 
 

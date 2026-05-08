@@ -1,11 +1,14 @@
 import logging
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from sqlalchemy import func, select
 
+from app.config import get_settings
 from app.db import DbSession
 from app.models import AuditLog, User, UserRole
 from app.schemas.admin import (
+    AdminUserView,
     AuditLogEntry,
     ChangePasswordRequest,
     ChangeRoleRequest,
@@ -33,13 +36,42 @@ def _count_admins(db) -> int:
     ) or 0
 
 
-@router.get("/users", response_model=list[UserMe])
+def _to_admin_view(u: User, *, today, quota_limit: int) -> AdminUserView:
+    """Build an AdminUserView, normalising the daily counter to 0 when the
+    stored quota date isn't today (mirrors auth._llm_settings_response)."""
+    calls_today = (
+        u.server_llm_calls_today
+        if u.server_llm_quota_date and u.server_llm_quota_date == today
+        else 0
+    )
+    return AdminUserView(
+        id=u.id,
+        name=u.name,
+        last_name=u.last_name,
+        email=u.email,
+        role=u.role,
+        created_at=u.created_at,
+        server_llm_calls_today=calls_today,
+        server_llm_quota_date=u.server_llm_quota_date,
+        server_llm_quota_limit=quota_limit,
+        byo_key_configured=u.gemini_api_key_ciphertext is not None,
+        gemini_key_last4=u.gemini_key_last4,
+    )
+
+
+@router.get("/users", response_model=list[AdminUserView])
 def list_users(
     db: DbSession,
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     user: User = require_perm("users.list"),
-) -> list[User]:
-    """List all users."""
-    return list(db.scalars(select(User).order_by(User.id)))
+) -> list[AdminUserView]:
+    """List all users with admin-only quota and BYO-key metadata."""
+    settings = get_settings()
+    today = datetime.now(UTC).date()
+    quota_limit = settings.server_llm_daily_quota
+    rows = db.scalars(select(User).order_by(User.id).offset(offset).limit(limit))
+    return [_to_admin_view(u, today=today, quota_limit=quota_limit) for u in rows]
 
 
 @router.post("/users", response_model=UserMe, status_code=status.HTTP_201_CREATED)

@@ -119,6 +119,30 @@ docker exec soc-copilot-web-1 npx tsc --noEmit
 
 CI (GitHub Actions) corre ruff + pytest + `next build` en cada push a `main`.
 
+### E2E tests (Playwright)
+
+Los tests end-to-end de frontend viven en `apps/web/e2e/` y cubren los flujos
+principales (login/logout, crear alerta, chat con RAG, settings de IA, panel
+admin, quota wall). Asumen que el stack ya está levantado:
+
+```bash
+# Desde la raíz del repo
+docker compose -f infra/docker-compose.yml up -d
+
+# Ejecutar los tests
+cd apps/web
+npm run e2e            # headless
+npm run e2e:headed     # ver el navegador
+npm run e2e:ui         # modo interactivo
+```
+
+Si un test falla, Playwright deja el reporte HTML en
+`apps/web/playwright-report/`. Ábrelo con `npx playwright show-report`.
+
+En CI, el workflow `e2e.yml` añade el job `e2e-frontend` que levanta el stack
+con docker compose, siembra un admin y corre los tests sobre Chromium. Los
+artefactos del reporte se suben automáticamente cuando algo falla.
+
 ## Seguridad
 
 - **Errores LLM saneados** — el cliente recibe `AI provider error` o
@@ -139,6 +163,48 @@ CI (GitHub Actions) corre ruff + pytest + `next build` en cada push a `main`.
   Exceso → `HTTP 429 {"detail":"rate limit exceeded"}`.
 - **Validación estricta** — campos obligatorios, longitudes acotadas,
   rechazo de payloads whitespace-only y roles de chat restringidos.
+
+## Logs
+
+En producción (`APP_ENV=production`) el API emite **una línea JSON por
+evento** a stdout. En desarrollo se mantiene formato legible para no
+estorbar al hacer `docker compose logs`.
+
+Ejemplo de evento:
+
+```json
+{"timestamp":"2026-05-06T18:42:11.103+00:00","level":"INFO","logger":"app.services.llm","event":"llm.call","user_id":7,"model":"gemini-2.5-flash","byo":false,"latency_ms":824,"success":true}
+```
+
+Eventos estandarizados:
+
+| Evento | Campos |
+|--------|--------|
+| `auth.login` | `user_id`, `email`, `success`, `ip` |
+| `auth.register` | `user_id`, `email`, `role`, `is_first` |
+| `auth.logout` | `user_id` |
+| `auth.llm_settings_updated` | `user_id`, `key_changed`, `preferred_chat_model` |
+| `llm.call` | `user_id`, `model`, `byo`, `latency_ms`, `success` |
+| `llm.quota_exceeded` | `user_id`, `calls_today`, `limit` |
+| `llm.byo_decrypt_failed` | `user_id` |
+| `admin.action` | `actor_id`, `action`, `target_type`, `target_id` |
+| `alert.created` | `alert_id`, `user_id`, `risk_level`, `source` |
+
+Filtrado con `jq`:
+
+```bash
+# Llamadas LLM lentas (> 1s)
+docker compose logs api | jq 'select(.event=="llm.call" and .latency_ms > 1000)'
+
+# Logins fallidos
+docker compose logs api | jq 'select(.event=="auth.login" and .success==false)'
+
+# Auditoría de acciones admin
+docker compose logs api | jq 'select(.event=="admin.action")'
+```
+
+Operativa completa (rotación de secretos, backup, troubleshooting) en
+[`docs/RUNBOOK.md`](docs/RUNBOOK.md).
 
 ## Despliegue producción
 

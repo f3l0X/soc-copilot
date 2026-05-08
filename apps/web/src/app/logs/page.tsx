@@ -58,7 +58,7 @@ function parseLine(text: string): Omit<ParsedLine, "id" | "text" | "ts"> {
   let proto: string | null = null;
 
   const kv = text.match(
-    /SRC=(\d{1,3}(?:\.\d{1,3}){3}).*?DST=(\d{1,3}(?:\.\d{1,3}){3})/i,
+    /SRC=(\d{1,3}(?:\.\d{1,3}){3}).{0,150}?DST=(\d{1,3}(?:\.\d{1,3}){3})/i,
   );
   if (kv) {
     srcIp = kv[1];

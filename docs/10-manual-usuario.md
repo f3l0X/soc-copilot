@@ -1,0 +1,261 @@
+# Manual de usuario — SOC Copilot
+
+> Guía orientada a la persona que **usa** la aplicación (analista junior o
+> administrador). Para instalación, despliegue o detalles técnicos, ver
+> [01-instalacion-local.md](01-instalacion-local.md), [03-arquitectura.md](03-arquitectura.md)
+> y [RUNBOOK.md](RUNBOOK.md).
+
+---
+
+## 1. ¿Qué es SOC Copilot?
+
+SOC Copilot es un asistente con IA pensado para apoyar a **analistas SOC
+junior** durante la triage de alertas. Combina cuatro capacidades:
+
+1. **Alert Explainer** — pega un log o alerta y obtén un análisis claro:
+   resumen, severidad, técnica MITRE ATT&CK probable y siguientes pasos.
+2. **Next Step Recommender** — recomendaciones accionables sobre una alerta
+   ya analizada, con un *modo aprendizaje* que explica el porqué de cada paso.
+3. **Chat IA con RAG** — conversación con citas verificables sobre MITRE
+   ATT&CK Enterprise y OWASP Top 10 2021.
+4. **Histórico y panel admin** — trazabilidad por analista, gestión de
+   usuarios, roles y auditoría.
+
+La IA **no sustituye** al analista: propone hipótesis y referencias. La
+decisión final siempre es humana.
+
+---
+
+## 2. Acceso a la aplicación
+
+| Entorno | URL |
+|---------|-----|
+| Local (desarrollo) | <http://localhost:13000> |
+| Producción (Hetzner) | la que indique tu administrador |
+
+### 2.1 Crear cuenta
+
+1. Abre `/login` y pulsa **Registrarse**.
+2. Introduce nombre, email y contraseña (mínimo 8 caracteres).
+3. El **primer usuario** que se registra en una instalación nueva queda
+   automáticamente como `admin`. El resto son `analyst` por defecto.
+
+### 2.2 Iniciar / cerrar sesión
+
+- Login: email + contraseña. La sesión se mantiene en una cookie segura
+  (`httpOnly`); no necesitas copiar tokens.
+- Logout: menú superior derecho → **Cerrar sesión**. Cierra la sesión en
+  todos los dispositivos donde usases esa contraseña.
+
+### 2.3 Roles
+
+| Rol | Puede |
+|-----|-------|
+| `analyst` | Crear alertas, pedir recomendaciones, chatear, ver su histórico, editar su perfil. |
+| `admin` | Todo lo anterior + gestionar usuarios, roles, matriz de permisos, ver auditoría global y log analyzer completo. |
+
+---
+
+## 3. Flujo típico de trabajo
+
+```
+   Log/alerta cruda
+        │
+        ▼
+ [Alert Explainer] ──► alerta persistida ──► [Next Step Recommender]
+        │                                         │
+        ▼                                         ▼
+   [Chat IA] ◄────── dudas / contexto ──────► decisión del analista
+        │
+        ▼
+   [Histórico]  ──►  evidencia para el informe
+```
+
+---
+
+## 4. Módulos
+
+### 4.0 Centro de Operaciones (Dashboard)
+
+![SOC Copilot Dashboard](assets/dashboard_mockup.png)
+
+**Para qué.** Tener una visión integral y en tiempo real del SOC, visualizar el volumen de alertas mediante gráficas y observar la distribución de técnicas MITRE y la severidad global.
+
+**Cómo se usa.**
+1. Selecciona el **Dashboard** (Centro de operaciones) en el menú principal.
+2. Revisa los indicadores clave de rendimiento (KPIs) en la parte superior.
+3. Analiza las tendencias de alertas en la serie temporal para anticipar amenazas.
+
+### 4.1 Alert Explainer (`/alerts`)
+
+![Alert Explainer](assets/alert_explainer_mockup.png)
+
+**Para qué.** Convertir un log o alerta en lenguaje técnico bruto en una
+explicación estructurada.
+
+**Cómo se usa.**
+
+1. Ve a **Alertas** en el menú lateral.
+2. Pega el log en el cuadro de texto. Acepta líneas de syslog, JSON de SIEM,
+   eventos Windows, salida de IDS, etc.
+3. (Opcional) Indica `source` (ej. `Suricata`, `WindowsEventLog`) y notas.
+4. Pulsa **Analizar**.
+
+**Qué obtienes.**
+
+- Resumen ejecutivo (1–2 frases).
+- Nivel de riesgo: `low` / `medium` / `high` / `critical`.
+- Técnica MITRE ATT&CK más probable (con ID, ej. `T1059.001`).
+- Indicadores destacados (IPs, hashes, usuarios).
+- Siguientes pasos sugeridos.
+
+La alerta queda guardada con un `id`. Desde ahí puedes saltar al
+recomendador con un clic.
+
+**Buenas prácticas.**
+
+- No incluyas datos personales de clientes reales si la instancia es
+  compartida.
+- Si el log contiene texto que parezca una instrucción para el modelo
+  (*"ignora lo anterior y..."*), no pasa nada: el backend lo envuelve en
+  delimitadores `BEGIN_UNTRUSTED_LOG`/`END_UNTRUSTED_LOG`. Aun así, evita
+  pegar logs manipulados sin revisar.
+
+### 4.2 Next Step Recommender (`/respond?alert_id=N`)
+
+![Next Step Recommender](assets/next_step_recommender_mockup.png)
+
+**Para qué.** Obtener un plan de respuesta concreto sobre una alerta ya
+analizada.
+
+**Cómo se usa.**
+
+1. Desde el detalle de una alerta, pulsa **Recomendar siguiente paso**.
+2. Activa **Modo aprendizaje** si quieres que cada paso venga acompañado de
+   una explicación didáctica (recomendado para juniors).
+3. Revisa los pasos propuestos: contención, evidencia a recolectar,
+   escalado, comunicaciones.
+
+Cada recomendación se guarda asociada a la alerta, así que puedes volver y
+reconstruir la decisión más tarde.
+
+### 4.3 Chat IA (`/chat`)
+
+![Chat IA](assets/chat_ia_mockup.png)
+
+**Para qué.** Resolver dudas conceptuales o de contexto consultando MITRE
+ATT&CK y OWASP Top 10 con citas.
+
+**Cómo se usa.**
+
+1. Abre **Chat** en el menú.
+2. Escribe la pregunta en lenguaje natural. Ejemplos:
+   - *"¿Qué diferencia hay entre T1566.001 y T1566.002?"*
+   - *"¿Cómo mitigo Broken Access Control en una API REST?"*
+3. Cada respuesta incluye **citas** con la fuente (técnica MITRE u OWASP
+   item) que puedes desplegar para verificar.
+
+**Selector de modelo.** En el menú de ajustes puedes elegir entre los
+modelos permitidos por el administrador (Gemini 2.5 Flash, Flash-Lite,
+2.0 Flash-Lite). Flash-Lite es más rápido y barato; Flash da respuestas
+más elaboradas.
+
+**Bring Your Own Key (BYOK).** Si tienes tu propia clave de Gemini, ve a
+**Ajustes → IA → Mi clave** y pégala. La clave se cifra en BD; nunca se
+muestra de vuelta. Eso evita que tu cuota personal cuente contra la cuota
+compartida del grupo.
+
+### 4.4 Histórico (`/history`)
+
+- Como **analyst**, ves *tus* alertas y recomendaciones.
+- Como **admin**, ves todo el histórico con filtros por usuario, riesgo y
+  rango temporal.
+- Útil para preparar evidencia del informe y la demo.
+
+### 4.5 Analizador de logs
+
+Acepta volcados grandes y permite filtrar por **IP, puerto, MAC, protocolo
+y ventana temporal** antes de mandar al Explainer únicamente las líneas
+relevantes. Reduce ruido y ahorra cuota de IA.
+
+### 4.6 Perfil
+
+`/profile` permite cambiar nombre, contraseña y preferencias de IA
+(modelo por defecto, BYOK).
+
+> Cambiar la contraseña incrementa el `password_version` y **invalida
+> todas las sesiones previas**. Tendrás que volver a iniciar sesión.
+
+---
+
+## 5. Funciones de administrador
+
+Disponibles solo para rol `admin`, en `/admin`.
+
+| Sección | Qué hace |
+|---------|----------|
+| **Usuarios** | Listar, crear, suspender, cambiar rol. |
+| **Roles y permisos** | Matriz editable de permisos por rol (RBAC dinámico). |
+| **Auditoría** | Eventos de login, registros, cambios de ajustes IA, acciones admin, alertas creadas, errores de cuota. |
+| **Knowledge base** | Estado de la colección Chroma (`/api/kb/status`). |
+| **Modelos LLM** | Allowlist visible al usuario. |
+
+Todas las acciones administrativas quedan registradas con `actor_id`,
+`action`, `target_type` y `target_id`.
+
+---
+
+## 6. Límites y cuotas
+
+- **Rate limit** por IP en `/api/explain` y `/api/recommend`: 20
+  peticiones / 60 s por defecto. Si lo superas verás
+  *"Has alcanzado el límite, espera unos segundos"*.
+- **Cuota diaria por usuario** sobre la clave compartida del grupo. Cuando
+  se agota, la UI muestra el *quota wall* sugiriendo añadir una BYOK.
+- **Tamaño de log**: el Explainer trunca entradas excesivamente largas.
+  Para volúmenes grandes, usa antes el analizador de logs con filtros.
+
+---
+
+## 7. Seguridad y privacidad
+
+- La cookie de sesión es `httpOnly` + `Secure` (en HTTPS) + `SameSite=Lax`.
+  No se puede leer desde JavaScript del navegador.
+- Las claves BYOK se guardan **cifradas**; el admin no puede leerlas.
+- Los errores del proveedor LLM nunca exponen API key, modelo ni mensajes
+  internos: solo `AI provider error` o `AI response could not be processed`.
+- Revisa siempre las respuestas de la IA antes de actuar: el modelo puede
+  alucinar, especialmente en técnicas MITRE poco frecuentes.
+
+---
+
+## 8. Resolución de problemas frecuentes
+
+| Síntoma | Causa probable | Solución |
+|---------|----------------|----------|
+| *"AI provider error"* repetido | Cuota agotada o key inválida | Añade BYOK en perfil o avisa al admin. |
+| Login OK pero te saca al recargar | Cookie bloqueada por el navegador | Permite cookies del dominio o desactiva extensiones de privacidad. |
+| Chat responde sin citas | KB vacía | Pide al admin ejecutar la ingesta (`scripts.ingest_kb`). |
+| `429 rate limit exceeded` | Demasiadas peticiones seguidas | Espera 60 s o agrupa logs antes de analizar. |
+| Sesión cerrada de golpe en todos lados | Alguien cambió tu contraseña | Recupera acceso e investiga el evento `auth.login` en auditoría. |
+
+Más casos en [05-solucion-problemas.md](05-solucion-problemas.md).
+
+---
+
+## 9. Glosario
+
+- **MITRE ATT&CK** — Matriz pública de tácticas y técnicas adversarias.
+- **OWASP Top 10** — Top de riesgos en aplicaciones web (versión 2021).
+- **RAG** — *Retrieval-Augmented Generation*: el chat busca documentos
+  relevantes antes de responder, y cita las fuentes.
+- **BYOK** — *Bring Your Own Key*: usar tu propia clave de Gemini.
+- **RBAC** — Control de acceso basado en roles.
+- **Triage** — Clasificación inicial de alertas por prioridad.
+
+---
+
+## 10. Soporte
+
+- Issues: <https://github.com/f3l0X/soc-copilot/issues>
+- Para incidencias en producción, contacta al admin de la instancia.

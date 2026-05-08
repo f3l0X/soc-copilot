@@ -160,6 +160,15 @@ Variables (todas en `.env.example`):
 - En contenedores los secretos viven en `Config.Env` (visible solo via
   `docker inspect`, no via HTTP).
 
+## Parches Recientes (Remediación Post-Fase-4)
+
+Se han implementado correcciones específicas basadas en el reporte de vulnerabilidades:
+
+1. **Prompt Injection en Explainer**: Se agregó sanitización redundante (`.replace()`) para remover cualquier secuencia de delimitadores `BEGIN_UNTRUSTED_LOG` y `END_UNTRUSTED_LOG` que el usuario intente falsificar en el texto del log.
+2. **Timing Attacks en el Login**: Se estandarizó el tiempo de respuesta del endpoint `/api/auth/login`. Si el correo electrónico no existe en la BD, se ejecuta un hash bcrypt "dummy" con `hash_password(payload.password)` para igualar la carga de CPU, previniendo enumeración de usuarios.
+3. **Catastrophic Backtracking (ReDoS)**: El regex cliente en `/logs` que extraía IPs (SRC/DST) sustituyó los wildcards codiciosos `.*?` por límites controlados `.{0,150}?`. Esto evita bloqueos del navegador si se inyectan líneas de log malformadas gigantescas.
+4. **Denegación de Servicio por Paginación Nula**: El endpoint administrativo `/api/admin/users` fue fortificado con parámetros de paginación (`limit`, `offset`) para prevenir el colapso de memoria al listar conjuntos de datos extensos.
+
 ## Riesgos pendientes por fase
 
 | Fase | Riesgo | Mitigación planeada |

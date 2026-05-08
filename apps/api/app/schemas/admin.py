@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
@@ -39,6 +39,26 @@ class PermissionChange(BaseModel):
 
 class UpdatePermissionsRequest(BaseModel):
     changes: list[PermissionChange] = Field(..., min_length=1)
+
+
+class AdminUserView(BaseModel):
+    """Admin-facing view of a user — adds quota + BYO-key fields on top of UserMe.
+
+    Kept separate from UserMe so GET /api/auth/me doesn't leak internal counters
+    to non-admin sessions.
+    """
+
+    id: int
+    name: str
+    last_name: str
+    email: str
+    role: UserRole
+    created_at: datetime
+    server_llm_calls_today: int
+    server_llm_quota_date: date | None
+    server_llm_quota_limit: int
+    byo_key_configured: bool
+    gemini_key_last4: str | None
 
 
 class AuditLogEntry(BaseModel):

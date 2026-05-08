@@ -50,5 +50,14 @@ def explain_alert(
     db.commit()
     db.refresh(alert)
 
+    logger.info(
+        "alert.created",
+        extra={
+            "alert_id": alert.id,
+            "user_id": user.id,
+            "risk_level": alert.risk_level,
+            "source": alert.source,
+        },
+    )
     result.id = alert.id
     return result

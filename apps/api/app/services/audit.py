@@ -46,11 +46,13 @@ def log_audit(
     )
     db.add(entry)
     db.flush()
-    logger.warning(
-        "audit: %s actor_id=%d target=%s/%s",
-        action,
-        actor.id,
-        target_type,
-        target_id,
+    logger.info(
+        "admin.action",
+        extra={
+            "actor_id": actor.id,
+            "action": action,
+            "target_type": target_type,
+            "target_id": target_id,
+        },
     )
     return entry

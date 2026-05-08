@@ -186,16 +186,20 @@ Iteración de hardening y producto sin cambio de versión mayor de roadmap.
 | ESLint flat config (sustituye `next lint` deprecado) | 4 | ✅ |
 | `.env.example` documenta `JWT_*` y `COOKIE_*` | 4 | ✅ |
 | CI: `ruff check app tests` + `npm run lint` + `npm audit` | 4 | ✅ |
+| Mitigación de ReDoS (Regex wildcard cap) | post-fase-4 | ✅ |
+| Normalización de tiempos en Auth (Timing Attack) | post-fase-4 | ✅ |
+| Paginación forzada en lista de usuarios admin | post-fase-4 | ✅ |
+| Sanitización redundante contra Prompt Injection en Explainer | post-fase-4 | ✅ |
+
 
 ## Fases pendientes
 
-### Fase 4.5: dashboard analítico — pendiente
+### Fase 4.5: dashboard analítico — ✅ completada
 
 Detalle en [roadmap.md](roadmap.md#fase-45--checklist-dashboard-analítico).
 Página `/dashboard` con KPIs, distribución por riesgo, serie temporal
 30d y top técnicas MITRE, alimentada por un nuevo `GET /api/stats` que
-respeta el ownership existente. Recharts en frontend. Suma al 15% de UX
-de la rúbrica y aporta material visual para la demo.
+respeta el ownership existente. Recharts integrado y renderizando gráficas interactivas en frontend. Suma al 15% de UX de la rúbrica y aporta material visual para la demo.
 
 ### Fase 5: despliegue Hetzner — pendiente
 

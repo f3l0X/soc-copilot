@@ -44,6 +44,11 @@ chroma-data/
 *.sqlite
 *.db
 
+# Playwright
+apps/web/playwright-report/
+apps/web/test-results/
+apps/web/blob-report/
+
 # Coverage
 coverage/
 .coverage

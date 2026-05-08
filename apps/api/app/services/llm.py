@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime
 from typing import Any
@@ -212,6 +213,14 @@ def _enforce_server_quota(user, db: Session) -> None:
         user.server_llm_quota_date = today
         user.server_llm_calls_today = 0
     if user.server_llm_calls_today >= settings.server_llm_daily_quota:
+        logger.warning(
+            "llm.quota_exceeded",
+            extra={
+                "user_id": user.id,
+                "calls_today": user.server_llm_calls_today,
+                "limit": settings.server_llm_daily_quota,
+            },
+        )
         # 429 surfaces nicely in the frontend.
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -222,6 +231,54 @@ def _enforce_server_quota(user, db: Session) -> None:
         )
     user.server_llm_calls_today += 1
     db.commit()
+
+
+class _TimingAdapter(LLMAdapter):
+    """Wrap an adapter to emit structured ``llm.call`` events with latency."""
+
+    def __init__(self, inner: LLMAdapter, *, user_id: int | None, byo: bool) -> None:
+        self._inner = inner
+        self._user_id = user_id
+        self._byo = byo
+
+    def _emit(self, model: str | None, success: bool, started: float) -> None:
+        logger.info(
+            "llm.call",
+            extra={
+                "user_id": self._user_id,
+                "model": model,
+                "byo": self._byo,
+                "latency_ms": int((time.monotonic() - started) * 1000),
+                "success": success,
+            },
+        )
+
+    def generate_json(self, prompt, *, schema, system=None, temperature=0.2, model=None):
+        started = time.monotonic()
+        try:
+            result = self._inner.generate_json(
+                prompt, schema=schema, system=system, temperature=temperature, model=model
+            )
+        except Exception:
+            self._emit(model, False, started)
+            raise
+        self._emit(model, True, started)
+        return result
+
+    def generate_text(self, prompt, *, system=None, temperature=0.2, model=None):
+        started = time.monotonic()
+        try:
+            result = self._inner.generate_text(
+                prompt, system=system, temperature=temperature, model=model
+            )
+        except Exception:
+            self._emit(model, False, started)
+            raise
+        self._emit(model, True, started)
+        return result
+
+    def embed(self, texts):
+        return self._inner.embed(texts)
 
 
 def get_llm_for_user(user, db: Session) -> LLMAdapter:
@@ -235,6 +292,7 @@ def get_llm_for_user(user, db: Session) -> LLMAdapter:
     The ``user`` argument is the SQLAlchemy ``User`` row; we mutate it
     when bumping the quota counter and commit through ``db``.
     """
+    user_id = user.id if user is not None else None
     if user is not None and user.gemini_api_key_ciphertext:
         try:
             api_key = decrypt(user.gemini_api_key_ciphertext)
@@ -243,12 +301,14 @@ def get_llm_for_user(user, db: Session) -> LLMAdapter:
             # key rather than blocking the user — log loudly so an admin
             # can prompt them to re-enter their key.
             logger.error(
-                "user id=%s has unreadable Gemini ciphertext; falling back",
-                user.id,
+                "llm.byo_decrypt_failed",
+                extra={"user_id": user.id},
             )
         else:
-            return GeminiAdapter(api_key=api_key)
+            return _TimingAdapter(
+                GeminiAdapter(api_key=api_key), user_id=user_id, byo=True
+            )
 
     if user is not None:
         _enforce_server_quota(user, db)
-    return get_llm()
+    return _TimingAdapter(get_llm(), user_id=user_id, byo=False)

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { ModelSelector } from "@/components/ModelSelector";
@@ -10,7 +10,7 @@ import { explainAlert, type ExplainResponse } from "@/lib/api";
 import { useRequireAuth } from "@/lib/auth";
 import { useModel } from "@/lib/useModel";
 
-export default function AlertsPage() {
+function AlertsInner() {
   const searchParams = useSearchParams();
   const [log, setLog] = useState("");
   const [source, setSource] = useState("");
@@ -143,5 +143,13 @@ export default function AlertsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function AlertsPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-slate-500 text-sm">Cargando…</div>}>
+      <AlertsInner />
+    </Suspense>
   );
 }

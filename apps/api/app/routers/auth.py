@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 
 from app.config import get_settings
@@ -78,7 +78,15 @@ def register(payload: RegisterRequest, db: DbSession) -> User:
     db.add(user)
     db.commit()
     db.refresh(user)
-    logger.info("registered user id=%d role=%s", user.id, user.role.value)
+    logger.info(
+        "auth.register",
+        extra={
+            "user_id": user.id,
+            "email": user.email,
+            "role": user.role.value,
+            "is_first": is_first,
+        },
+    )
     return user
 
 
@@ -87,9 +95,26 @@ def register(payload: RegisterRequest, db: DbSession) -> User:
     response_model=LoginResponse,
     dependencies=[Depends(auth_rate_limit)],
 )
-def login(payload: LoginRequest, db: DbSession, response: Response) -> LoginResponse:
+def login(payload: LoginRequest, db: DbSession, response: Response, request: Request) -> LoginResponse:
     user = db.scalar(select(User).where(User.email == payload.email))
-    if user is None or not verify_password(payload.password, user.hashed_password):
+
+    if user is None:
+        hash_password(payload.password)
+        valid_password = False
+    else:
+        valid_password = verify_password(payload.password, user.hashed_password)
+
+    if not valid_password:
+        ip = request.client.host if request.client else None
+        logger.info(
+            "auth.login",
+            extra={
+                "user_id": user.id if user else None,
+                "email": payload.email,
+                "success": False,
+                "ip": ip,
+            },
+        )
         # Don't leak which step failed.
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid credentials"
@@ -99,13 +124,36 @@ def login(payload: LoginRequest, db: DbSession, response: Response) -> LoginResp
         user_id=user.id, role=user.role.value, password_version=user.password_version
     )
     _set_session_cookie(response, token)
+    ip = request.client.host if request.client else None
+    logger.info(
+        "auth.login",
+        extra={
+            "user_id": user.id,
+            "email": user.email,
+            "success": True,
+            "ip": ip,
+        },
+    )
     return LoginResponse(user=UserMe.model_validate(user), expires_at=exp)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-def logout(response: Response) -> None:
+def logout(request: Request, response: Response) -> None:
     s = get_settings()
     response.delete_cookie(key=s.cookie_name, path="/")
+    # Best-effort identify the user for the audit trail; logout never fails
+    # auth even if the cookie is missing or stale.
+    user_id: int | None = None
+    cookie = request.cookies.get(s.cookie_name)
+    if cookie:
+        try:
+            from app.services.auth import decode_token
+
+            payload = decode_token(cookie)
+            user_id = int(payload.get("sub")) if payload.get("sub") else None
+        except Exception:
+            user_id = None
+    logger.info("auth.logout", extra={"user_id": user_id})
 
 
 @router.get("/me", response_model=UserMe)
@@ -218,7 +266,10 @@ def update_llm_settings(
             # auth works without burning quota.
             probe.generate_text("ping", temperature=0.0)
         except LLMProviderError as exc:
-            logger.warning("user-supplied Gemini key failed validation: %s", exc)
+            logger.warning(
+                "auth.byo_key_validation_failed",
+                extra={"user_id": user.id, "reason": str(exc)},
+            )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Gemini rejected this key — check the value",
@@ -239,10 +290,12 @@ def update_llm_settings(
     db.commit()
     db.refresh(user)
     logger.info(
-        "user id=%d updated llm settings (key=%s, model=%s)",
-        user.id,
-        "set" if payload.api_key else "unchanged",
-        user.preferred_chat_model,
+        "auth.llm_settings_updated",
+        extra={
+            "user_id": user.id,
+            "key_changed": payload.api_key is not None,
+            "preferred_chat_model": user.preferred_chat_model,
+        },
     )
     return _llm_settings_response(user)
 
@@ -256,5 +309,5 @@ def clear_llm_key(user: CurrentUser, db: DbSession) -> LLMSettingsResponse:
     user.gemini_key_validated_at = None
     db.commit()
     db.refresh(user)
-    logger.info("user id=%d cleared their BYO Gemini key", user.id)
+    logger.info("auth.llm_key_cleared", extra={"user_id": user.id})
     return _llm_settings_response(user)
