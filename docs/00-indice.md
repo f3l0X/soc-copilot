@@ -19,6 +19,7 @@ miembro del equipo pueda ejecutarlo y mantenerlo localmente.
 | 08 | [Ingesta RAG (Chroma + MITRE + OWASP)](08-rag-ingestion.md) | Cómo poblar y mantener la base de conocimiento |
 | 09 | [Diagramas del sistema](09-diagramas.md) | ER, despliegue, secuencia (login/explain/chat/reset/logs), casos de uso, ciclo de vida, pipeline KB, resolución RBAC |
 | 10 | [Manual de usuario](10-manual-usuario.md) | Guía para analista/admin: módulos, flujo de trabajo, cuotas, troubleshooting |
+| 11 | [Módulo de Auditoría](11-modulo-auditoria.md) | Detalles técnicos y funcionamiento del registro de eventos inmutable |
 | —  | [Estado de seguridad y mitigaciones](security.md) | Threats activas y residuales |
 | —  | [Reporte de Vulnerabilidades](vulnerability_report.md) | Informe de la auditoría y parches de remediación |
 | —  | [Roadmap](roadmap.md) | Plan por fases hasta entrega 25-mayo-2026 |

@@ -18,6 +18,7 @@ from app.schemas.auth import (
     UserMe,
 )
 from app.services.auth import hash_password, issue_token, verify_password
+from app.services.audit import log_audit
 from app.services.llm import GeminiAdapter, LLMProviderError
 from app.services.secrets import EncryptionDisabled, encrypt, last4
 
@@ -44,7 +45,7 @@ def _set_session_cookie(response: Response, token: str) -> None:
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(auth_rate_limit)],
 )
-def register(payload: RegisterRequest, db: DbSession) -> User:
+def register(payload: RegisterRequest, db: DbSession, request: Request) -> User:
     """Bootstrap or invitation-style registration.
 
     The very first user to register becomes ADMIN; everyone after is an
@@ -78,15 +79,17 @@ def register(payload: RegisterRequest, db: DbSession) -> User:
     db.add(user)
     db.commit()
     db.refresh(user)
-    logger.info(
-        "auth.register",
-        extra={
-            "user_id": user.id,
-            "email": user.email,
-            "role": user.role.value,
-            "is_first": is_first,
-        },
+    log_audit(
+        db,
+        actor=user,
+        action="auth.register",
+        target_type="user",
+        target_id=user.id,
+        target_label=user.email,
+        details={"role": user.role.value, "is_first": is_first},
+        request=request,
     )
+    db.commit()
     return user
 
 
@@ -105,16 +108,18 @@ def login(payload: LoginRequest, db: DbSession, response: Response, request: Req
         valid_password = verify_password(payload.password, user.hashed_password)
 
     if not valid_password:
-        ip = request.client.host if request.client else None
-        logger.info(
-            "auth.login",
-            extra={
-                "user_id": user.id if user else None,
-                "email": payload.email,
-                "success": False,
-                "ip": ip,
-            },
+        log_audit(
+            db,
+            actor_id=user.id if user else None,
+            actor_email=user.email if user else payload.email,
+            action="auth.login_failed",
+            target_type="user",
+            target_id=user.id if user else None,
+            target_label=payload.email,
+            details={"success": False},
+            request=request,
         )
+        db.commit()
         # Don't leak which step failed.
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid credentials"
@@ -124,26 +129,28 @@ def login(payload: LoginRequest, db: DbSession, response: Response, request: Req
         user_id=user.id, role=user.role.value, password_version=user.password_version
     )
     _set_session_cookie(response, token)
-    ip = request.client.host if request.client else None
-    logger.info(
-        "auth.login",
-        extra={
-            "user_id": user.id,
-            "email": user.email,
-            "success": True,
-            "ip": ip,
-        },
+    log_audit(
+        db,
+        actor=user,
+        action="auth.login",
+        target_type="user",
+        target_id=user.id,
+        target_label=user.email,
+        details={"success": True},
+        request=request,
     )
+    db.commit()
     return LoginResponse(user=UserMe.model_validate(user), expires_at=exp)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-def logout(request: Request, response: Response) -> None:
+def logout(request: Request, response: Response, db: DbSession) -> None:
     s = get_settings()
     response.delete_cookie(key=s.cookie_name, path="/")
     # Best-effort identify the user for the audit trail; logout never fails
     # auth even if the cookie is missing or stale.
     user_id: int | None = None
+    user_email: str = "system"
     cookie = request.cookies.get(s.cookie_name)
     if cookie:
         try:
@@ -151,9 +158,21 @@ def logout(request: Request, response: Response) -> None:
 
             payload = decode_token(cookie)
             user_id = int(payload.get("sub")) if payload.get("sub") else None
+            if user_id:
+                user = db.scalar(select(User).where(User.id == user_id))
+                if user:
+                    user_email = user.email
         except Exception:
             user_id = None
-    logger.info("auth.logout", extra={"user_id": user_id})
+
+    log_audit(
+        db,
+        actor_id=user_id,
+        actor_email=user_email,
+        action="auth.logout",
+        request=request,
+    )
+    db.commit()
 
 
 @router.get("/me", response_model=UserMe)
@@ -194,6 +213,16 @@ def update_me(
         user.last_name = payload.last_name
     db.commit()
     db.refresh(user)
+    log_audit(
+        db,
+        actor=user,
+        action="auth.update_profile",
+        target_type="user",
+        target_id=user.id,
+        target_label=user.email,
+        details={"email_changed": email_changing},
+    )
+    db.commit()
     return UserMe.model_validate(user)
 
 
@@ -289,14 +318,19 @@ def update_llm_settings(
 
     db.commit()
     db.refresh(user)
-    logger.info(
-        "auth.llm_settings_updated",
-        extra={
-            "user_id": user.id,
+    log_audit(
+        db,
+        actor=user,
+        action="auth.llm_settings_updated",
+        target_type="user",
+        target_id=user.id,
+        target_label=user.email,
+        details={
             "key_changed": payload.api_key is not None,
             "preferred_chat_model": user.preferred_chat_model,
         },
     )
+    db.commit()
     return _llm_settings_response(user)
 
 
@@ -309,5 +343,13 @@ def clear_llm_key(user: CurrentUser, db: DbSession) -> LLMSettingsResponse:
     user.gemini_key_validated_at = None
     db.commit()
     db.refresh(user)
-    logger.info("auth.llm_key_cleared", extra={"user_id": user.id})
+    log_audit(
+        db,
+        actor=user,
+        action="auth.llm_key_cleared",
+        target_type="user",
+        target_id=user.id,
+        target_label=user.email,
+    )
+    db.commit()
     return _llm_settings_response(user)

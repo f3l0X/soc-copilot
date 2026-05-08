@@ -10,6 +10,7 @@ from app.models import Alert
 from app.schemas.alerts import ExplainRequest, ExplainResponse
 from app.services.explainer import explain
 from app.services.llm import LLMProviderError, LLMResponseError
+from app.services.audit import log_audit
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -50,14 +51,17 @@ def explain_alert(
     db.commit()
     db.refresh(alert)
 
-    logger.info(
-        "alert.created",
-        extra={
-            "alert_id": alert.id,
-            "user_id": user.id,
+    log_audit(
+        db,
+        actor=user,
+        action="explain.alert",
+        target_type="alert",
+        target_id=alert.id,
+        details={
             "risk_level": alert.risk_level,
             "source": alert.source,
         },
     )
+    db.commit()
     result.id = alert.id
     return result

@@ -8,6 +8,7 @@ from app.middleware.ratelimit import rate_limit
 from app.schemas.alerts import ChatRequest, ChatResponse
 from app.services.chat import chat as chat_service
 from app.services.llm import LLMProviderError, LLMResponseError
+from app.services.audit import log_audit
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -18,13 +19,21 @@ router = APIRouter(
 @router.post("", response_model=ChatResponse)
 def chat(payload: ChatRequest, user: CurrentUser, db: DbSession) -> ChatResponse:
     try:
-        return chat_service(
+        response = chat_service(
             payload.messages,
             payload.log_context,
             model=payload.model,
             user=user,
             db=db,
         )
+        log_audit(
+            db,
+            actor=user,
+            action="chat.message",
+            details={"model": payload.model},
+        )
+        db.commit()
+        return response
     except LLMProviderError:
         logger.exception("LLM provider error in /chat")
         raise HTTPException(

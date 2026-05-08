@@ -10,6 +10,7 @@ from app.models import Alert, Recommendation, UserRole
 from app.schemas.alerts import RecommendRequest, RecommendResponse
 from app.services.llm import LLMProviderError, LLMResponseError
 from app.services.recommender import recommend
+from app.services.audit import log_audit
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -89,5 +90,14 @@ def recommend_actions(
         db.refresh(rec)
         result.id = rec.id
         result.alert_id = alert.id
+
+    log_audit(
+        db,
+        actor=user,
+        action="recommend.actions",
+        target_type="alert" if alert else None,
+        target_id=alert.id if alert else None,
+    )
+    db.commit()
 
     return result

@@ -22,7 +22,9 @@ logger = logging.getLogger(__name__)
 def log_audit(
     db: Session,
     *,
-    actor: User,
+    actor: User | None = None,
+    actor_id: int | None = None,
+    actor_email: str | None = None,
     action: str,
     target_type: str | None = None,
     target_id: int | None = None,
@@ -34,9 +36,12 @@ def log_audit(
     if request is not None and request.client is not None:
         ip = request.client.host
 
+    final_actor_id = actor.id if actor else actor_id
+    final_actor_email = actor.email if actor else (actor_email or "system")
+
     entry = AuditLog(
-        actor_id=actor.id,
-        actor_email=actor.email,
+        actor_id=final_actor_id,
+        actor_email=final_actor_email,
         action=action,
         target_type=target_type,
         target_id=target_id,
@@ -47,9 +52,9 @@ def log_audit(
     db.add(entry)
     db.flush()
     logger.info(
-        "admin.action",
+        action,
         extra={
-            "actor_id": actor.id,
+            "actor_id": final_actor_id,
             "action": action,
             "target_type": target_type,
             "target_id": target_id,
