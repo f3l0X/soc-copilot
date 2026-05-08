@@ -75,9 +75,7 @@ def _user(**over) -> User:
         server_llm_quota_date=None,
     )
     base.update(over)
-    u = User.__new__(User)
-    for k, v in base.items():
-        setattr(u, k, v)
+    u = User(**base)
     return u
 
 
@@ -98,6 +96,9 @@ class FakeDb:
         pass
 
     def add(self, _obj):
+        pass
+
+    def flush(self):
         pass
 
 
@@ -191,8 +192,8 @@ def test_get_llm_for_user_uses_byo_key_when_configured(monkeypatch):
     user = _user(gemini_api_key_ciphertext=encrypt("USER-BYO-KEY-12345"))
     db = FakeDb()
     adapter = get_llm_for_user(user, db)
-    assert isinstance(adapter, _FakeAdapter)
-    assert adapter.api_key == "USER-BYO-KEY-12345"
+    assert isinstance(adapter._inner, _FakeAdapter)
+    assert adapter._inner.api_key == "USER-BYO-KEY-12345"
     # No quota consumed when using their own key.
     assert user.server_llm_calls_today == 0
 
@@ -204,7 +205,7 @@ def test_get_llm_for_user_falls_back_to_server_with_quota(monkeypatch):
     user = _user()  # no BYO key
     db = FakeDb()
     adapter = get_llm_for_user(user, db)
-    assert adapter is server_singleton
+    assert adapter._inner is server_singleton
     assert user.server_llm_calls_today == 1
     assert db.commits == 1
 
@@ -219,7 +220,7 @@ def test_get_llm_for_user_unreadable_ciphertext_falls_back(monkeypatch):
     user = _user(gemini_api_key_ciphertext=b"gAAAAAB-not-a-valid-token")
     db = FakeDb()
     adapter = get_llm_for_user(user, db)
-    assert adapter is server_singleton  # graceful fallback
+    assert adapter._inner is server_singleton  # graceful fallback
     assert user.server_llm_calls_today == 1
 
 
@@ -375,5 +376,8 @@ def test_llm_endpoints_require_auth():
     for verb, path in [("get", "/api/auth/me/llm"),
                        ("put", "/api/auth/me/llm"),
                        ("delete", "/api/auth/me/llm")]:
-        r = getattr(client, verb)(path, json={})
+        if verb in ("put", "post"):
+            r = getattr(client, verb)(path, json={})
+        else:
+            r = getattr(client, verb)(path)
         assert r.status_code == 401, (verb, path, r.text)
