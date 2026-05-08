@@ -4,10 +4,8 @@ import { useRequireAuth } from "@/lib/auth";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-// ─── Heurísticos de extracción ─────────────────────────────────────────────
 const IP_REGEX_G = /\b(?:\d{1,3}\.){3}\d{1,3}\b/g;
 const MAC_REGEX = /\b(?:[0-9A-Fa-f]{2}[:-]){5}(?:[0-9A-Fa-f]{2})\b/;
-// Protocolos típicos en logs (mayúsculas como token aislado).
 const PROTO_TOKENS = ["TCP", "UDP", "ICMP", "HTTPS", "HTTP", "SSH", "DNS", "FTP", "SMTP", "TLS", "ARP"];
 const PROTO_REGEX = new RegExp(`\\b(${PROTO_TOKENS.join("|")})\\b`);
 
@@ -52,15 +50,6 @@ function toPort(raw: string | undefined | null): number | null {
   return Number.isFinite(n) && n >= 0 && n <= 65535 ? n : null;
 }
 
-/**
- * Heurística de extracción de src/dst IP+puerto y protocolo. Cubre tres
- * formatos comunes; si ninguno casa, deja a null y los filtros lo descartan.
- *
- *  1. iptables / pf: SRC=1.2.3.4 DST=5.6.7.8 SPT=12345 DPT=80 PROTO=TCP
- *  2. flecha:        1.2.3.4:12345 -> 5.6.7.8:80 (TCP)
- *  3. sshd estilo:   "from 1.2.3.4 port 12345" → solo origen
- *  4. fallback:      primera IP = origen, segunda = destino
- */
 function parseLine(text: string): Omit<ParsedLine, "id" | "text" | "ts"> {
   let srcIp: string | null = null;
   let dstIp: string | null = null;
@@ -68,9 +57,8 @@ function parseLine(text: string): Omit<ParsedLine, "id" | "text" | "ts"> {
   let dstPort: number | null = null;
   let proto: string | null = null;
 
-  // 1. key=value (iptables y similares, case-insensitive)
   const kv = text.match(
-    /SRC=(\d{1,3}(?:\.\d{1,3}){3}).*?DST=(\d{1,3}(?:\.\d{1,3}){3})/i
+    /SRC=(\d{1,3}(?:\.\d{1,3}){3}).*?DST=(\d{1,3}(?:\.\d{1,3}){3})/i,
   );
   if (kv) {
     srcIp = kv[1];
@@ -83,10 +71,9 @@ function parseLine(text: string): Omit<ParsedLine, "id" | "text" | "ts"> {
   const protoKv = text.match(/PROTO=([A-Za-z]+)/i);
   if (protoKv) proto = protoKv[1].toUpperCase();
 
-  // 2. flecha IP:port -> IP:port
   if (!srcIp || !dstIp) {
     const arrow = text.match(
-      /(\d{1,3}(?:\.\d{1,3}){3})(?::(\d{1,5}))?\s*(?:->|→|=>)\s*(\d{1,3}(?:\.\d{1,3}){3})(?::(\d{1,5}))?/
+      /(\d{1,3}(?:\.\d{1,3}){3})(?::(\d{1,5}))?\s*(?:->|→|=>)\s*(\d{1,3}(?:\.\d{1,3}){3})(?::(\d{1,5}))?/,
     );
     if (arrow) {
       srcIp = srcIp ?? arrow[1];
@@ -96,7 +83,6 @@ function parseLine(text: string): Omit<ParsedLine, "id" | "text" | "ts"> {
     }
   }
 
-  // 3. "from <ip> port <n>" típico de sshd
   if (!srcIp) {
     const sshd = text.match(/from\s+(\d{1,3}(?:\.\d{1,3}){3})(?:\s+port\s+(\d{1,5}))?/i);
     if (sshd) {
@@ -105,14 +91,12 @@ function parseLine(text: string): Omit<ParsedLine, "id" | "text" | "ts"> {
     }
   }
 
-  // 4. Fallback: primera IP = origen, segunda = destino
   if (!srcIp || !dstIp) {
     const ips = text.match(IP_REGEX_G) ?? [];
     if (!srcIp && ips[0]) srcIp = ips[0];
     if (!dstIp && ips[1]) dstIp = ips[1];
   }
 
-  // Protocolo por token suelto si no vino en key=value
   if (!proto) {
     const m = text.match(PROTO_REGEX);
     if (m) proto = m[1].toUpperCase();
@@ -134,6 +118,31 @@ const PAGE_SIZE_OPTIONS = [10, 50, 100, 150] as const;
 const DEFAULT_PAGE_SIZE = 50;
 const PROTO_OPTIONS = ["", ...PROTO_TOKENS];
 
+const inputCls =
+  "w-full bg-ink-950 border border-ink-700 rounded-md px-2.5 py-1.5 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-500/60 focus:ring-1 focus:ring-cyan-500/20 transition";
+
+function StepHeader({ n, title, action }: { n: number; title: string; action?: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center gap-2">
+        <span className="w-5 h-5 grid place-items-center rounded bg-cyan-500/10 text-cyan-300 text-[10px] font-mono border border-cyan-500/20">
+          {n}
+        </span>
+        <h2 className="text-sm font-semibold text-slate-100">{title}</h2>
+      </div>
+      {action}
+    </div>
+  );
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="block text-[10px] uppercase tracking-widest text-slate-500 mb-1">
+      {children}
+    </span>
+  );
+}
+
 export default function LogsAnalyzerPage() {
   const auth = useRequireAuth();
   const router = useRouter();
@@ -141,7 +150,6 @@ export default function LogsAnalyzerPage() {
   const [filename, setFilename] = useState<string | null>(null);
   const [lines, setLines] = useState<ParsedLine[]>([]);
 
-  // Filtros
   const [searchTermInput, setSearchTermInput] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [srcIpFilter, setSrcIpFilter] = useState("");
@@ -155,11 +163,9 @@ export default function LogsAnalyzerPage() {
   const [timeFrom, setTimeFrom] = useState("");
   const [timeTo, setTimeTo] = useState("");
 
-  // Paginación
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
 
-  // Selección
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
@@ -303,111 +309,140 @@ export default function LogsAnalyzerPage() {
   const allPageSelected =
     paginatedLines.length > 0 && paginatedLines.every((l) => selectedIds.has(l.id));
 
+  const startIdx = (currentPage - 1) * pageSize;
+
   if (!auth.ready) {
-    return <main className="min-h-screen p-8 text-slate-500">Verificando sesión…</main>;
+    return <div className="p-8 text-slate-500 text-sm">Verificando sesión…</div>;
   }
 
   return (
-    <main className="min-h-screen p-8 max-w-7xl mx-auto space-y-6">
-      <header>
-        <h1 className="text-3xl font-bold tracking-tight">Analizador de Logs</h1>
-        <p className="text-slate-400 mt-2">
-          Carga un archivo local, filtra las líneas de interés y envíalas al Alert Explainer.
-        </p>
+    <div className="p-6 max-w-[1600px] mx-auto space-y-6">
+      <header className="flex items-end justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-100">
+            Analizador de Logs
+          </h1>
+          <p className="text-sm text-slate-400 mt-1">
+            Carga un archivo local, filtra y envía las líneas relevantes al
+            Alert Explainer.
+          </p>
+        </div>
+        <div className="text-right text-xs">
+          <div className="text-slate-500">
+            Total{" "}
+            <span className="font-mono text-slate-300">{lines.length}</span> ·
+            tras filtros{" "}
+            <span className="font-mono text-cyan-300">{filteredLines.length}</span>
+          </div>
+          <div className="text-slate-500">
+            Seleccionadas{" "}
+            <span className="font-mono text-cyan-300">{selectedIds.size}</span>
+          </div>
+        </div>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        {/* Panel Izquierdo: Filtros y Subida */}
-        <div className="space-y-6">
-          <section className="bg-slate-900/40 p-4 rounded-lg border border-slate-800 space-y-4">
-            <h2 className="font-semibold text-lg">1. Cargar Archivo</h2>
-            <label className="block w-full border-2 border-dashed border-slate-700 hover:border-slate-500 rounded p-6 text-center cursor-pointer transition-colors">
-              <span className="text-sm text-slate-400">
-                {filename ? filename : "Haz clic para subir un .log o .txt"}
+      <div className="grid grid-cols-1 xl:grid-cols-[300px_minmax(0,1fr)] gap-4">
+        <aside className="space-y-4">
+          <section className="rounded-xl border border-ink-700 bg-ink-900/60 p-4">
+            <StepHeader n={1} title="Cargar archivo" />
+            <label className="block w-full border-2 border-dashed border-ink-700 hover:border-cyan-500/40 rounded-lg p-5 text-center cursor-pointer transition group">
+              <div className="text-cyan-300/80 text-2xl mb-1">⬆</div>
+              <span className="text-xs text-slate-400 group-hover:text-slate-300 break-all">
+                {filename ? filename : "Click para subir .log / .txt / .csv"}
               </span>
-              <input type="file" accept=".log,.txt,.csv" onChange={handleFileUpload} className="hidden" />
+              <input
+                type="file"
+                accept=".log,.txt,.csv"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
             </label>
             {lines.length > 0 && (
-              <p className="text-xs text-sky-400">{lines.length} líneas procesadas.</p>
+              <p className="mt-3 text-[11px] font-mono text-cyan-400">
+                {lines.length} líneas procesadas
+              </p>
             )}
           </section>
 
-          <section className="bg-slate-900/40 p-4 rounded-lg border border-slate-800 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-lg">2. Filtros de Red</h2>
-              <button
-                onClick={handleClearFilters}
-                className="text-xs text-slate-400 hover:text-white underline"
-              >
-                Limpiar
-              </button>
-            </div>
+          <section className="rounded-xl border border-ink-700 bg-ink-900/60 p-4 space-y-3">
+            <StepHeader
+              n={2}
+              title="Filtros de red"
+              action={
+                <button
+                  onClick={handleClearFilters}
+                  className="text-[11px] text-slate-500 hover:text-cyan-300 transition"
+                >
+                  Limpiar
+                </button>
+              }
+            />
 
-            <label className="block text-xs">
-              <span className="text-slate-400">IP origen (substring)</span>
+            <label className="block">
+              <FieldLabel>IP origen</FieldLabel>
               <input
                 type="text"
                 value={srcIpFilter}
                 onChange={(e) => setSrcIpFilter(e.target.value)}
-                className="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white"
-                placeholder="Ej: 192.168.1"
+                className={`${inputCls} font-mono`}
+                placeholder="192.168.1"
               />
             </label>
-            <label className="block text-xs">
-              <span className="text-slate-400">IP destino (substring)</span>
+            <label className="block">
+              <FieldLabel>IP destino</FieldLabel>
               <input
                 type="text"
                 value={dstIpFilter}
                 onChange={(e) => setDstIpFilter(e.target.value)}
-                className="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white"
-                placeholder="Ej: 10.0.0.5"
+                className={`${inputCls} font-mono`}
+                placeholder="10.0.0.5"
               />
             </label>
 
             <div className="grid grid-cols-2 gap-2">
-              <label className="block text-xs">
-                <span className="text-slate-400">Puerto origen</span>
+              <label>
+                <FieldLabel>Puerto orig.</FieldLabel>
                 <input
                   type="number"
                   min={0}
                   max={65535}
                   value={srcPortFilter}
                   onChange={(e) => setSrcPortFilter(e.target.value)}
-                  className="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white"
-                  placeholder="Ej: 41234"
+                  className={`${inputCls} font-mono`}
+                  placeholder="41234"
                 />
               </label>
-              <label className="block text-xs">
-                <span className="text-slate-400">Puerto destino</span>
+              <label>
+                <FieldLabel>Puerto dest.</FieldLabel>
                 <input
                   type="number"
                   min={0}
                   max={65535}
                   value={dstPortFilter}
                   onChange={(e) => setDstPortFilter(e.target.value)}
-                  className="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white"
-                  placeholder="Ej: 22"
+                  className={`${inputCls} font-mono`}
+                  placeholder="22"
                 />
               </label>
             </div>
 
-            <label className="block text-xs">
-              <span className="text-slate-400">Dirección MAC (substring)</span>
+            <label className="block">
+              <FieldLabel>MAC</FieldLabel>
               <input
                 type="text"
                 value={macFilter}
                 onChange={(e) => setMacFilter(e.target.value)}
-                className="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white font-mono"
-                placeholder="Ej: aa:bb:cc"
+                className={`${inputCls} font-mono`}
+                placeholder="aa:bb:cc"
               />
             </label>
 
-            <label className="block text-xs">
-              <span className="text-slate-400">Protocolo</span>
+            <label className="block">
+              <FieldLabel>Protocolo</FieldLabel>
               <select
                 value={protoFilter}
                 onChange={(e) => setProtoFilter(e.target.value)}
-                className="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white"
+                className={inputCls}
               >
                 {PROTO_OPTIONS.map((p) => (
                   <option key={p} value={p}>
@@ -418,99 +453,97 @@ export default function LogsAnalyzerPage() {
             </label>
           </section>
 
-          <section className="bg-slate-900/40 p-4 rounded-lg border border-slate-800 space-y-4">
-            <h2 className="font-semibold text-lg">3. Otros filtros</h2>
+          <section className="rounded-xl border border-ink-700 bg-ink-900/60 p-4 space-y-3">
+            <StepHeader n={3} title="Otros filtros" />
 
-            <label className="block text-sm">
-              <span className="text-slate-400">Buscar texto</span>
+            <label className="block">
+              <FieldLabel>Texto libre</FieldLabel>
               <input
                 type="text"
                 value={searchTermInput}
                 onChange={(e) => setSearchTermInput(e.target.value)}
-                className="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-white"
-                placeholder="Ej: sshd, root, failed"
+                className={inputCls}
+                placeholder="sshd, root, failed…"
               />
             </label>
 
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 text-sm text-slate-300">
+            <div className="space-y-2 pt-1">
+              <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer hover:text-slate-100">
                 <input
                   type="checkbox"
                   checked={requireAuthFailure}
                   onChange={(e) => setRequireAuthFailure(e.target.checked)}
-                  className="rounded bg-slate-950 border-slate-700"
+                  className="rounded bg-ink-950 border-ink-700 accent-cyan-500"
                 />
-                Errores de Autenticación
+                Errores de autenticación
               </label>
-              <label className="flex items-center gap-2 text-sm text-slate-300">
+              <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer hover:text-slate-100">
                 <input
                   type="checkbox"
                   checked={requireHTTPError}
                   onChange={(e) => setRequireHTTPError(e.target.checked)}
-                  className="rounded bg-slate-950 border-slate-700"
+                  className="rounded bg-ink-950 border-ink-700 accent-cyan-500"
                 />
-                Errores HTTP (4xx/5xx)
+                HTTP 4xx / 5xx
               </label>
             </div>
 
-            <div className="pt-4 border-t border-slate-800">
-              <span className="text-sm text-slate-400 block mb-2">Periodo de tiempo (heurístico)</span>
-              <div className="space-y-2">
-                <label className="block text-xs">
-                  Desde
-                  <input
-                    type="datetime-local"
-                    value={timeFrom}
-                    onChange={(e) => setTimeFrom(e.target.value)}
-                    className="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white"
-                  />
-                </label>
-                <label className="block text-xs">
-                  Hasta
-                  <input
-                    type="datetime-local"
-                    value={timeTo}
-                    onChange={(e) => setTimeTo(e.target.value)}
-                    className="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white"
-                  />
-                </label>
-              </div>
+            <div className="pt-3 border-t border-ink-700 space-y-2">
+              <FieldLabel>Periodo (heurístico)</FieldLabel>
+              <input
+                type="datetime-local"
+                value={timeFrom}
+                onChange={(e) => setTimeFrom(e.target.value)}
+                className={`${inputCls} font-mono`}
+              />
+              <input
+                type="datetime-local"
+                value={timeTo}
+                onChange={(e) => setTimeTo(e.target.value)}
+                className={`${inputCls} font-mono`}
+              />
             </div>
           </section>
 
-          <section className="bg-slate-900/40 p-4 rounded-lg border border-slate-800 space-y-4">
-            <h2 className="font-semibold text-lg">4. Analizar</h2>
-            <p className="text-xs text-slate-400">Líneas seleccionadas: {selectedIds.size}</p>
+          <section className="rounded-xl border border-ink-700 bg-ink-900/60 p-4 space-y-3 sticky bottom-4">
+            <StepHeader n={4} title="Analizar" />
+            <p className="text-xs text-slate-400">
+              Líneas seleccionadas:{" "}
+              <span className="font-mono text-cyan-300">
+                {selectedIds.size}
+              </span>
+            </p>
             <button
               onClick={handleAnalyze}
               disabled={selectedIds.size === 0}
-              className="w-full bg-sky-600 hover:bg-sky-500 disabled:bg-slate-800 text-white font-medium py-2 rounded transition-colors"
+              className="w-full py-2 rounded-md text-xs font-medium bg-cyan-500 text-ink-950 hover:bg-cyan-400 disabled:bg-ink-700 disabled:text-slate-500 disabled:cursor-not-allowed transition"
             >
-              Enviar a Alert Explainer
+              Enviar a Alert Explainer →
             </button>
           </section>
-        </div>
+        </aside>
 
-        {/* Panel Derecho: Visor de Logs */}
-        <div className="md:col-span-3 bg-slate-900/60 border border-slate-800 rounded-lg flex flex-col overflow-hidden">
-          <div className="p-3 border-b border-slate-800 bg-slate-900 flex justify-between items-center gap-4">
-            <label className="flex items-center gap-2 text-sm">
+        <section className="rounded-xl border border-ink-700 bg-ink-900/60 flex flex-col overflow-hidden min-h-[600px]">
+          <div className="px-4 py-3 border-b border-ink-700 bg-ink-850 flex justify-between items-center gap-4">
+            <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
               <input
                 type="checkbox"
                 checked={allPageSelected}
                 onChange={handleToggleSelectAll}
                 disabled={paginatedLines.length === 0}
-                className="rounded bg-slate-950 border-slate-700"
+                className="rounded bg-ink-950 border-ink-700 accent-cyan-500"
               />
-              Seleccionar Visibles en Página ({paginatedLines.length})
+              <span>
+                Seleccionar página ({paginatedLines.length})
+              </span>
             </label>
-            <div className="flex items-center gap-3 text-xs text-slate-500">
+            <div className="flex items-center gap-3 text-[11px] text-slate-500">
               <label className="flex items-center gap-2">
-                <span>Por página:</span>
+                <span>Por página</span>
                 <select
                   value={pageSize}
                   onChange={(e) => setPageSize(Number(e.target.value))}
-                  className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-slate-200"
+                  className="bg-ink-950 border border-ink-700 rounded px-2 py-1 text-slate-200 text-xs"
                 >
                   {PAGE_SIZE_OPTIONS.map((n) => (
                     <option key={n} value={n}>
@@ -519,92 +552,123 @@ export default function LogsAnalyzerPage() {
                   ))}
                 </select>
               </label>
-              <span>{filteredLines.length} coincidencias totales</span>
+              <span className="font-mono">
+                {filteredLines.length} hits
+              </span>
             </div>
           </div>
 
-          <div className="flex-1 overflow-auto p-4 bg-slate-950">
+          <div className="flex-1 overflow-auto bg-ink-950 font-mono text-xs">
             {lines.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-slate-500">
-                Sube un archivo de logs para comenzar.
+              <div className="h-full min-h-[400px] flex flex-col items-center justify-center gap-2 text-slate-500">
+                <div className="text-3xl text-slate-700">≡</div>
+                <span>Sube un archivo de logs para comenzar.</span>
               </div>
             ) : paginatedLines.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-slate-500">
+              <div className="h-full min-h-[400px] flex items-center justify-center text-slate-500">
                 Ninguna línea coincide con los filtros en esta página.
               </div>
             ) : (
-              <div className="font-mono text-xs space-y-1">
-                {paginatedLines.map((line) => (
-                  <label key={line.id} className="flex gap-3 p-1 hover:bg-slate-800/50 rounded cursor-pointer group">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.has(line.id)}
-                      onChange={() => handleToggleLine(line.id)}
-                      className="mt-0.5 rounded bg-slate-900 border-slate-600"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div
-                        className={`break-all ${
-                          selectedIds.has(line.id) ? "text-sky-300" : "text-slate-300"
-                        }`}
-                      >
-                        {line.text}
-                      </div>
-                      {(line.srcIp || line.dstIp || line.proto || line.mac) && (
-                        <div className="mt-0.5 flex flex-wrap gap-2 text-[10px] text-slate-500">
-                          {line.srcIp && (
-                            <span>
-                              src: <span className="text-slate-300">{line.srcIp}{line.srcPort != null && `:${line.srcPort}`}</span>
-                            </span>
-                          )}
-                          {line.dstIp && (
-                            <span>
-                              dst: <span className="text-slate-300">{line.dstIp}{line.dstPort != null && `:${line.dstPort}`}</span>
-                            </span>
-                          )}
-                          {line.proto && (
-                            <span>
-                              proto: <span className="text-slate-300">{line.proto}</span>
-                            </span>
-                          )}
-                          {line.mac && (
-                            <span>
-                              mac: <span className="text-slate-300">{line.mac}</span>
-                            </span>
-                          )}
+              <div className="divide-y divide-ink-800/60">
+                {paginatedLines.map((line, i) => {
+                  const selected = selectedIds.has(line.id);
+                  return (
+                    <label
+                      key={line.id}
+                      className={
+                        "grid grid-cols-[24px_44px_1fr] gap-2 px-3 py-1.5 cursor-pointer transition " +
+                        (selected
+                          ? "bg-cyan-500/5 hover:bg-cyan-500/10"
+                          : "hover:bg-ink-900/60")
+                      }
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={() => handleToggleLine(line.id)}
+                        className="mt-0.5 rounded bg-ink-900 border-ink-700 accent-cyan-500"
+                      />
+                      <span className="text-[10px] text-slate-600 select-none pt-0.5 text-right">
+                        {String(startIdx + i + 1).padStart(4, "0")}
+                      </span>
+                      <div className="min-w-0">
+                        <div
+                          className={
+                            "break-all leading-relaxed " +
+                            (selected ? "text-cyan-200" : "text-slate-300")
+                          }
+                        >
+                          {line.text}
                         </div>
-                      )}
-                    </div>
-                  </label>
-                ))}
+                        {(line.srcIp || line.dstIp || line.proto || line.mac) && (
+                          <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-slate-500">
+                            {line.srcIp && (
+                              <span>
+                                src{" "}
+                                <span className="text-slate-300">
+                                  {line.srcIp}
+                                  {line.srcPort != null && `:${line.srcPort}`}
+                                </span>
+                              </span>
+                            )}
+                            {line.dstIp && (
+                              <span>
+                                dst{" "}
+                                <span className="text-slate-300">
+                                  {line.dstIp}
+                                  {line.dstPort != null && `:${line.dstPort}`}
+                                </span>
+                              </span>
+                            )}
+                            {line.proto && (
+                              <span>
+                                proto{" "}
+                                <span className="text-cyan-300">
+                                  {line.proto}
+                                </span>
+                              </span>
+                            )}
+                            {line.mac && (
+                              <span>
+                                mac{" "}
+                                <span className="text-slate-300">
+                                  {line.mac}
+                                </span>
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                  );
+                })}
               </div>
             )}
           </div>
 
-          {/* Footer de Paginación */}
           {totalPages > 1 && (
-            <div className="p-3 border-t border-slate-800 bg-slate-900 flex justify-between items-center text-sm">
+            <div className="px-4 py-3 border-t border-ink-700 bg-ink-850 flex justify-between items-center text-xs">
               <button
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                className="px-3 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 rounded"
+                className="px-3 py-1.5 bg-ink-900 border border-ink-700 hover:border-cyan-500/40 disabled:opacity-40 disabled:cursor-not-allowed rounded-md text-slate-300"
               >
-                Anterior
+                ← Anterior
               </button>
-              <span className="text-slate-400">
-                Página {currentPage} de {totalPages}
+              <span className="text-slate-400 font-mono">
+                Página {currentPage} / {totalPages}
               </span>
               <button
                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages}
-                className="px-3 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 rounded"
+                className="px-3 py-1.5 bg-ink-900 border border-ink-700 hover:border-cyan-500/40 disabled:opacity-40 disabled:cursor-not-allowed rounded-md text-slate-300"
               >
-                Siguiente
+                Siguiente →
               </button>
             </div>
           )}
-        </div>
+        </section>
       </div>
-    </main>
+    </div>
   );
 }

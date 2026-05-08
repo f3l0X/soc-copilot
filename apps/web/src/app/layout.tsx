@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { GlobalHeader } from "@/components/AuthGate";
+import { AppShell } from "@/components/AppShell";
 import { AuthProvider } from "@/lib/auth";
 
 export const metadata: Metadata = {
@@ -17,8 +17,7 @@ export default function RootLayout({
     <html lang="es">
       <body>
         <AuthProvider>
-          <GlobalHeader />
-          {children}
+          <AppShell>{children}</AppShell>
         </AuthProvider>
       </body>
     </html>

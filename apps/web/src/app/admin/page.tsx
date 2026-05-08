@@ -3,16 +3,17 @@
 import { useEffect, useState } from "react";
 
 import {
+  AdminUserView,
   ApiError,
   AuditLogEntry,
   PermissionCell,
   PermissionChange,
-  UserMe,
   UserRole,
   adminChangePassword,
   adminChangeRole,
   adminCreateUser,
   adminDeleteUser,
+  adminResetLlmQuota,
   getAdminUsers,
   getAuditLog,
   getPermissions,
@@ -57,12 +58,12 @@ const BASELINE_CAPS: { area: string; action: string }[] = [
 export default function AdminPage() {
   const auth = useAuth();
   const [tab, setTab] = useState<Tab>("usuarios");
-  const [users, setUsers] = useState<UserMe[]>([]);
+  const [users, setUsers] = useState<AdminUserView[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Password modal
-  const [pwUser, setPwUser] = useState<UserMe | null>(null);
+  const [pwUser, setPwUser] = useState<AdminUserView | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [pwLoading, setPwLoading] = useState(false);
   const [pwError, setPwError] = useState<string | null>(null);
@@ -70,6 +71,9 @@ export default function AdminPage() {
   // Per-row inline action state
   const [busyId, setBusyId] = useState<number | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
+  const [rowNotice, setRowNotice] = useState<string | null>(null);
+  // Inline confirmation state for the "Resetear cuota" action.
+  const [confirmResetId, setConfirmResetId] = useState<number | null>(null);
 
   // Permisos tab
   const [perms, setPerms] = useState<PermissionCell[]>([]);
@@ -219,13 +223,14 @@ export default function AdminPage() {
     }
   }
 
-  async function handleRoleChange(target: UserMe, role: UserRole) {
+  async function handleRoleChange(target: AdminUserView, role: UserRole) {
     if (target.role === role) return;
     setBusyId(target.id);
     setRowError(null);
     try {
-      const updated = await adminChangeRole(target.id, role);
-      setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+      await adminChangeRole(target.id, role);
+      // Refetch so quota fields stay in sync (adminChangeRole returns UserMe).
+      await loadUsers();
     } catch (err) {
       setRowError(
         err instanceof ApiError ? err.detail : "No se pudo cambiar el rol"
@@ -240,8 +245,8 @@ export default function AdminPage() {
     setCreateLoading(true);
     setCreateError(null);
     try {
-      const created = await adminCreateUser(createForm);
-      setUsers((prev) => [...prev, created]);
+      await adminCreateUser(createForm);
+      await loadUsers();
       setCreateOpen(false);
       setCreateForm({ name: "", email: "", password: "", role: "analyst" });
     } catch (err) {
@@ -253,7 +258,27 @@ export default function AdminPage() {
     }
   }
 
-  async function handleDelete(target: UserMe) {
+  async function handleResetQuota(target: AdminUserView) {
+    setBusyId(target.id);
+    setRowError(null);
+    setRowNotice(null);
+    try {
+      const result = await adminResetLlmQuota(target.id);
+      setRowNotice(
+        `Cuota reseteada para ${target.email} (previo: ${result.previous_count}).`,
+      );
+      await loadUsers();
+    } catch (err) {
+      setRowError(
+        err instanceof ApiError ? err.detail : "No se pudo resetear la cuota",
+      );
+    } finally {
+      setConfirmResetId(null);
+      setBusyId(null);
+    }
+  }
+
+  async function handleDelete(target: AdminUserView) {
     if (!confirm(`¿Eliminar a ${target.email}? Esta acción no se puede deshacer.`)) {
       return;
     }
@@ -274,24 +299,35 @@ export default function AdminPage() {
   const meId = auth.user?.id ?? -1;
 
   return (
-    <main className="min-h-screen p-8 max-w-6xl mx-auto space-y-6">
-      <header>
-        <h1 className="text-3xl font-bold tracking-tight">Administración</h1>
-        <p className="text-slate-400 mt-2">
-          Gestión de usuarios, roles y permisos del sistema.
-        </p>
+    <div className="p-6 max-w-[1600px] mx-auto space-y-6">
+      <header className="flex items-end justify-between">
+        <div>
+          <div className="text-[11px] uppercase tracking-widest text-rose-300/80 mb-1">
+            Zona de administración
+          </div>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-100">
+            Administración
+          </h1>
+          <p className="text-sm text-slate-400 mt-1">
+            Gestión de usuarios, roles y permisos del sistema.
+          </p>
+        </div>
+        <div className="text-xs font-mono text-slate-500 text-right">
+          {users.length} cuentas
+        </div>
       </header>
 
-      <nav className="flex gap-2 border-b border-slate-800">
+      <nav className="inline-flex gap-1 p-1 rounded-lg border border-ink-700 bg-ink-900/60">
         {(["usuarios", "roles", "permisos", "auditoria"] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm capitalize border-b-2 -mb-px transition-colors ${
-              tab === t
-                ? "border-sky-400 text-sky-300"
-                : "border-transparent text-slate-400 hover:text-slate-200"
-            }`}
+            className={
+              "px-4 py-1.5 text-xs capitalize rounded-md transition " +
+              (tab === t
+                ? "bg-cyan-500/15 text-cyan-300 border border-cyan-500/30"
+                : "text-slate-400 hover:text-slate-200 border border-transparent")
+            }
           >
             {t}
           </button>
@@ -299,14 +335,14 @@ export default function AdminPage() {
       </nav>
 
       {error && (
-        <div className="bg-rose-950/40 border border-rose-800 text-rose-300 p-4 rounded">
+        <div className="bg-rose-500/10 border border-rose-500/30 text-rose-300 p-4 rounded">
           {error}
         </div>
       )}
 
       {tab === "usuarios" && (
-        <section className="bg-slate-900/40 border border-slate-800 rounded-lg overflow-hidden">
-          <div className="p-4 border-b border-slate-800 bg-slate-900/60 flex justify-between items-center">
+        <section className="bg-ink-900/60 border border-ink-700 rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-ink-700 bg-ink-900/60 flex justify-between items-center">
             <div className="flex items-baseline gap-3">
               <h2 className="text-xl font-semibold">Usuarios Registrados</h2>
               <span className="text-xs text-slate-500">{users.length} cuentas</span>
@@ -316,15 +352,27 @@ export default function AdminPage() {
                 setCreateOpen(true);
                 setCreateError(null);
               }}
-              className="px-3 py-1.5 text-sm bg-sky-600 hover:bg-sky-500 rounded font-medium"
+              className="px-3 py-1.5 text-sm bg-cyan-500 text-ink-950 hover:bg-cyan-400 rounded-md font-medium"
             >
               + Crear usuario
             </button>
           </div>
 
           {rowError && (
-            <div className="px-4 py-2 bg-rose-950/30 border-b border-rose-900 text-rose-300 text-sm">
+            <div className="px-4 py-2 bg-rose-500/10 border-b border-rose-500/30 text-rose-300 text-sm">
               {rowError}
+            </div>
+          )}
+
+          {rowNotice && (
+            <div className="px-4 py-2 bg-emerald-500/10 border-b border-emerald-500/30 text-emerald-300 text-sm flex justify-between items-center">
+              <span>{rowNotice}</span>
+              <button
+                onClick={() => setRowNotice(null)}
+                className="text-xs text-emerald-300 hover:text-emerald-200"
+              >
+                cerrar
+              </button>
             </div>
           )}
 
@@ -333,26 +381,41 @@ export default function AdminPage() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm whitespace-nowrap">
-                <thead className="bg-slate-900/80 text-slate-400">
+                <thead className="bg-ink-850 text-slate-400">
                   <tr>
                     <th className="px-4 py-3 font-medium">ID</th>
                     <th className="px-4 py-3 font-medium">Nombre</th>
                     <th className="px-4 py-3 font-medium">Email</th>
                     <th className="px-4 py-3 font-medium">Rol</th>
+                    <th className="px-4 py-3 font-medium">Cuota hoy</th>
                     <th className="px-4 py-3 font-medium text-right">Acciones</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/50">
+                <tbody className="divide-y divide-ink-700/60">
                   {users.map((u) => {
                     const isSelf = u.id === meId;
                     const busy = busyId === u.id;
+                    const used = u.server_llm_calls_today;
+                    const limit = u.server_llm_quota_limit;
+                    const ratio = limit > 0 ? used / limit : 0;
+                    let quotaTone = "bg-ink-800/40 text-slate-300 border-ink-700";
+                    if (!u.byo_key_configured) {
+                      if (used >= limit) {
+                        quotaTone =
+                          "bg-rose-500/15 text-rose-300 border-rose-500/30";
+                      } else if (ratio >= 0.8) {
+                        quotaTone =
+                          "bg-amber-500/15 text-amber-300 border-amber-500/30";
+                      }
+                    }
+                    const confirmingReset = confirmResetId === u.id;
                     return (
-                      <tr key={u.id} className="hover:bg-slate-800/30">
+                      <tr key={u.id} className="hover:bg-ink-800/40">
                         <td className="px-4 py-3 text-slate-400">{u.id}</td>
                         <td className="px-4 py-3 font-medium text-slate-200">
                           {u.name}
                           {isSelf && (
-                            <span className="ml-2 text-xs text-sky-400">(tú)</span>
+                            <span className="ml-2 text-xs text-cyan-400">(tú)</span>
                           )}
                         </td>
                         <td className="px-4 py-3 text-slate-400">{u.email}</td>
@@ -363,13 +426,71 @@ export default function AdminPage() {
                             onChange={(e) =>
                               handleRoleChange(u, e.target.value as UserRole)
                             }
-                            className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs disabled:opacity-50"
+                            className="bg-ink-950 border border-ink-700 rounded px-2 py-1 text-xs disabled:opacity-50"
                           >
                             <option value="analyst">analyst</option>
                             <option value="admin">admin</option>
                           </select>
                         </td>
+                        <td className="px-4 py-3">
+                          {u.byo_key_configured ? (
+                            <span
+                              className="px-2 py-0.5 rounded border text-xs bg-cyan-500/10 text-cyan-300 border-cyan-500/30"
+                              title="Usuario con BYO key — no consume cuota del servidor"
+                            >
+                              BYO
+                            </span>
+                          ) : (
+                            <span
+                              className={`px-2 py-0.5 rounded border text-xs font-mono ${quotaTone}`}
+                            >
+                              {used}/{limit}
+                            </span>
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-right space-x-3">
+                          {confirmingReset ? (
+                            <>
+                              <span className="text-xs text-amber-300">
+                                ¿Resetear?
+                              </span>
+                              <button
+                                disabled={busy}
+                                onClick={() => handleResetQuota(u)}
+                                className="text-emerald-300 hover:text-emerald-300 underline disabled:opacity-50"
+                              >
+                                Sí
+                              </button>
+                              <button
+                                disabled={busy}
+                                onClick={() => setConfirmResetId(null)}
+                                className="text-slate-400 hover:text-slate-200 underline disabled:opacity-50"
+                              >
+                                No
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              disabled={
+                                busy || u.byo_key_configured || used === 0
+                              }
+                              onClick={() => {
+                                setRowNotice(null);
+                                setRowError(null);
+                                setConfirmResetId(u.id);
+                              }}
+                              className="text-amber-400 hover:text-amber-300 underline disabled:opacity-30 disabled:no-underline"
+                              title={
+                                u.byo_key_configured
+                                  ? "El usuario tiene BYO key — la cuota del servidor no aplica"
+                                  : used === 0
+                                    ? "Sin consumo hoy — nada que resetear"
+                                    : "Pone el contador del día a 0"
+                              }
+                            >
+                              Resetear cuota
+                            </button>
+                          )}
                           <button
                             disabled={busy}
                             onClick={() => {
@@ -377,7 +498,7 @@ export default function AdminPage() {
                               setNewPassword("");
                               setPwError(null);
                             }}
-                            className="text-sky-400 hover:text-sky-300 underline disabled:opacity-50"
+                            className="text-cyan-400 hover:text-cyan-300 underline disabled:opacity-50"
                           >
                             Password
                           </button>
@@ -407,7 +528,7 @@ export default function AdminPage() {
               return (
                 <article
                   key={role}
-                  className="bg-slate-900/40 border border-slate-800 rounded-lg p-5 space-y-3"
+                  className="bg-ink-900/60 border border-ink-700 rounded-xl p-5 space-y-3"
                 >
                   <header className="flex items-center justify-between">
                     <h3 className="text-lg font-semibold">{info.title}</h3>
@@ -415,7 +536,7 @@ export default function AdminPage() {
                       className={`px-2 py-1 rounded text-xs font-medium ${
                         role === "admin"
                           ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
-                          : "bg-sky-500/20 text-sky-300 border border-sky-500/30"
+                          : "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
                       }`}
                     >
                       {role}
@@ -438,8 +559,8 @@ export default function AdminPage() {
       )}
 
       {tab === "permisos" && (
-        <section className="bg-slate-900/40 border border-slate-800 rounded-lg overflow-hidden">
-          <div className="p-4 border-b border-slate-800 bg-slate-900/60 flex flex-wrap items-center justify-between gap-3">
+        <section className="bg-ink-900/60 border border-ink-700 rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-ink-700 bg-ink-900/60 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-xl font-semibold">Matriz de Permisos</h2>
               <p className="text-xs text-slate-500 mt-1">
@@ -454,14 +575,14 @@ export default function AdminPage() {
               <button
                 onClick={resetPermsDraft}
                 disabled={permsSaving || permsLoading}
-                className="px-3 py-1.5 text-sm bg-slate-800 hover:bg-slate-700 disabled:opacity-50 rounded"
+                className="px-3 py-1.5 text-sm bg-ink-900 border border-ink-700 hover:border-cyan-500/40 disabled:opacity-50 rounded-md"
               >
                 Descartar
               </button>
               <button
                 onClick={() => void savePermissions()}
                 disabled={permsSaving || permsLoading}
-                className="px-3 py-1.5 text-sm bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 rounded font-medium"
+                className="px-3 py-1.5 text-sm bg-cyan-500 text-ink-950 hover:bg-cyan-400 disabled:bg-ink-800 disabled:text-slate-500 rounded-md font-medium"
               >
                 {permsSaving ? "Guardando..." : "Guardar cambios"}
               </button>
@@ -469,7 +590,7 @@ export default function AdminPage() {
           </div>
 
           {permsError && (
-            <div className="px-4 py-2 bg-rose-950/30 border-b border-rose-900 text-rose-300 text-sm">
+            <div className="px-4 py-2 bg-rose-500/10 border-b border-rose-500/30 text-rose-300 text-sm">
               {permsError}
             </div>
           )}
@@ -479,7 +600,7 @@ export default function AdminPage() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
-                <thead className="bg-slate-900/80 text-slate-400">
+                <thead className="bg-ink-850 text-slate-400">
                   <tr>
                     <th className="px-4 py-3 font-medium">Área</th>
                     <th className="px-4 py-3 font-medium">Acción</th>
@@ -487,17 +608,17 @@ export default function AdminPage() {
                     <th className="px-4 py-3 font-medium text-center">Admin</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/50">
+                <tbody className="divide-y divide-ink-700/60">
                   {/* Baseline (informativo) */}
                   {BASELINE_CAPS.map((cap, i) => (
-                    <tr key={`base-${i}`} className="hover:bg-slate-800/30 opacity-70">
+                    <tr key={`base-${i}`} className="hover:bg-ink-800/40 opacity-70">
                       <td className="px-4 py-3 text-slate-400">{cap.area}</td>
                       <td className="px-4 py-3 text-slate-200">
                         {cap.action}
                         <span className="ml-2 text-[10px] text-slate-500">(baseline)</span>
                       </td>
-                      <td className="px-4 py-3 text-center text-emerald-400">✓</td>
-                      <td className="px-4 py-3 text-center text-emerald-400">✓</td>
+                      <td className="px-4 py-3 text-center text-emerald-300">✓</td>
+                      <td className="px-4 py-3 text-center text-emerald-300">✓</td>
                     </tr>
                   ))}
 
@@ -513,7 +634,7 @@ export default function AdminPage() {
                     );
                     if (!analyst || !admin) return null;
                     return (
-                      <tr key={key} className="hover:bg-slate-800/30">
+                      <tr key={key} className="hover:bg-ink-800/40">
                         <td className="px-4 py-3 text-slate-400">{analyst.area}</td>
                         <td className="px-4 py-3 text-slate-200">
                           {analyst.action}
@@ -538,7 +659,7 @@ export default function AdminPage() {
                                   [cellKey(cell.role, cell.permission_key)]: e.target.checked,
                                 }))
                               }
-                              className="rounded bg-slate-950 border-slate-700 disabled:opacity-40"
+                              className="rounded bg-ink-950 border-ink-700 disabled:opacity-40"
                             />
                           </td>
                         ))}
@@ -553,8 +674,8 @@ export default function AdminPage() {
       )}
 
       {tab === "auditoria" && (
-        <section className="bg-slate-900/40 border border-slate-800 rounded-lg overflow-hidden">
-          <div className="p-4 border-b border-slate-800 bg-slate-900/60 flex flex-wrap gap-3 items-end justify-between">
+        <section className="bg-ink-900/60 border border-ink-700 rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-ink-700 bg-ink-900/60 flex flex-wrap gap-3 items-end justify-between">
             <div>
               <h2 className="text-xl font-semibold">Registro de Auditoría</h2>
               <p className="text-xs text-slate-500 mt-1">
@@ -568,7 +689,7 @@ export default function AdminPage() {
                 <select
                   value={auditAction}
                   onChange={(e) => setAuditAction(e.target.value)}
-                  className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-slate-200 text-sm"
+                  className="bg-ink-950 border border-ink-700 rounded px-2 py-1 text-slate-200 text-sm"
                 >
                   {ACTION_OPTIONS.map((a) => (
                     <option key={a} value={a}>
@@ -587,12 +708,12 @@ export default function AdminPage() {
                     if (e.key === "Enter") void loadAudit(0);
                   }}
                   placeholder="substring"
-                  className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-slate-200 text-sm"
+                  className="bg-ink-950 border border-ink-700 rounded px-2 py-1 text-slate-200 text-sm"
                 />
               </label>
               <button
                 onClick={() => void loadAudit(0)}
-                className="px-3 py-1.5 text-sm bg-sky-600 hover:bg-sky-500 rounded font-medium"
+                className="px-3 py-1.5 text-sm bg-cyan-500 text-ink-950 hover:bg-cyan-400 rounded-md font-medium"
               >
                 Aplicar
               </button>
@@ -600,7 +721,7 @@ export default function AdminPage() {
           </div>
 
           {auditError && (
-            <div className="px-4 py-2 bg-rose-950/30 border-b border-rose-900 text-rose-300 text-sm">
+            <div className="px-4 py-2 bg-rose-500/10 border-b border-rose-500/30 text-rose-300 text-sm">
               {auditError}
             </div>
           )}
@@ -614,7 +735,7 @@ export default function AdminPage() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="bg-slate-900/80 text-slate-400">
+                <thead className="bg-ink-850 text-slate-400">
                   <tr>
                     <th className="px-3 py-2 font-medium whitespace-nowrap">Fecha</th>
                     <th className="px-3 py-2 font-medium">Actor</th>
@@ -624,9 +745,9 @@ export default function AdminPage() {
                     <th className="px-3 py-2 font-medium">IP</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/50 font-mono">
+                <tbody className="divide-y divide-ink-700/60 font-mono">
                   {audit.map((e) => (
-                    <tr key={e.id} className="hover:bg-slate-800/30 align-top">
+                    <tr key={e.id} className="hover:bg-ink-800/40 align-top">
                       <td className="px-3 py-2 text-slate-400 whitespace-nowrap">
                         {new Date(e.created_at).toLocaleString()}
                       </td>
@@ -635,7 +756,7 @@ export default function AdminPage() {
                         <span className="text-slate-500"> #{e.actor_id ?? "—"}</span>
                       </td>
                       <td className="px-3 py-2">
-                        <span className="px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-300 border border-sky-500/30">
+                        <span className="px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">
                           {e.action}
                         </span>
                       </td>
@@ -666,11 +787,11 @@ export default function AdminPage() {
             </div>
           )}
 
-          <div className="p-3 border-t border-slate-800 bg-slate-900 flex justify-between items-center text-sm">
+          <div className="p-3 border-t border-ink-700 bg-ink-850 flex justify-between items-center text-sm">
             <button
               onClick={() => void loadAudit(Math.max(0, auditOffset - AUDIT_PAGE_SIZE))}
               disabled={auditOffset === 0 || auditLoading}
-              className="px-3 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 rounded"
+              className="px-3 py-1 bg-ink-900 border border-ink-700 hover:border-cyan-500/40 disabled:opacity-50 rounded-md"
             >
               Anterior
             </button>
@@ -680,7 +801,7 @@ export default function AdminPage() {
             <button
               onClick={() => void loadAudit(auditOffset + AUDIT_PAGE_SIZE)}
               disabled={!auditHasMore || auditLoading}
-              className="px-3 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 rounded"
+              className="px-3 py-1 bg-ink-900 border border-ink-700 hover:border-cyan-500/40 disabled:opacity-50 rounded-md"
             >
               Siguiente
             </button>
@@ -692,12 +813,12 @@ export default function AdminPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <form
             onSubmit={handleCreateUser}
-            className="w-full max-w-sm bg-slate-900 border border-slate-700 rounded-lg shadow-xl p-6 space-y-4"
+            className="w-full max-w-sm bg-ink-900 border border-ink-700 rounded-xl shadow-xl p-6 space-y-4"
           >
             <h3 className="text-lg font-bold">Crear Usuario</h3>
 
             {createError && (
-              <div className="text-xs bg-rose-950 text-rose-300 p-2 rounded border border-rose-800">
+              <div className="text-xs bg-rose-500/10 text-rose-300 p-2 rounded border border-rose-500/30">
                 {createError}
               </div>
             )}
@@ -711,7 +832,7 @@ export default function AdminPage() {
                 maxLength={100}
                 value={createForm.name}
                 onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-                className="mt-1 w-full rounded bg-slate-950 border border-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-white"
               />
             </label>
 
@@ -722,7 +843,7 @@ export default function AdminPage() {
                 required
                 value={createForm.email}
                 onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
-                className="mt-1 w-full rounded bg-slate-950 border border-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-white"
               />
             </label>
 
@@ -734,7 +855,7 @@ export default function AdminPage() {
                 minLength={8}
                 value={createForm.password}
                 onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
-                className="mt-1 w-full rounded bg-slate-950 border border-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-white"
                 placeholder="Mínimo 8 caracteres"
               />
             </label>
@@ -746,7 +867,7 @@ export default function AdminPage() {
                 onChange={(e) =>
                   setCreateForm({ ...createForm, role: e.target.value as UserRole })
                 }
-                className="mt-1 w-full rounded bg-slate-950 border border-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-white"
               >
                 <option value="analyst">analyst</option>
                 <option value="admin">admin</option>
@@ -767,7 +888,7 @@ export default function AdminPage() {
               <button
                 type="submit"
                 disabled={createLoading}
-                className="px-4 py-2 text-sm bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 rounded font-medium"
+                className="px-4 py-2 text-sm bg-cyan-500 text-ink-950 hover:bg-cyan-400 disabled:bg-ink-800 disabled:text-slate-500 rounded-md font-medium"
               >
                 {createLoading ? "Creando..." : "Crear"}
               </button>
@@ -780,7 +901,7 @@ export default function AdminPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <form
             onSubmit={handleChangePassword}
-            className="w-full max-w-sm bg-slate-900 border border-slate-700 rounded-lg shadow-xl p-6 space-y-4"
+            className="w-full max-w-sm bg-ink-900 border border-ink-700 rounded-xl shadow-xl p-6 space-y-4"
           >
             <h3 className="text-lg font-bold">Cambiar Contraseña</h3>
             <p className="text-sm text-slate-400">
@@ -791,7 +912,7 @@ export default function AdminPage() {
             </p>
 
             {pwError && (
-              <div className="text-xs bg-rose-950 text-rose-300 p-2 rounded border border-rose-800">
+              <div className="text-xs bg-rose-500/10 text-rose-300 p-2 rounded border border-rose-500/30">
                 {pwError}
               </div>
             )}
@@ -804,7 +925,7 @@ export default function AdminPage() {
                 minLength={8}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                className="mt-1 w-full rounded bg-slate-950 border border-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-white"
                 placeholder="Mínimo 8 caracteres"
               />
             </label>
@@ -824,7 +945,7 @@ export default function AdminPage() {
               <button
                 type="submit"
                 disabled={pwLoading}
-                className="px-4 py-2 text-sm bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 rounded font-medium"
+                className="px-4 py-2 text-sm bg-cyan-500 text-ink-950 hover:bg-cyan-400 disabled:bg-ink-800 disabled:text-slate-500 rounded-md font-medium"
               >
                 {pwLoading ? "Guardando..." : "Guardar"}
               </button>
@@ -832,6 +953,6 @@ export default function AdminPage() {
           </form>
         </div>
       )}
-    </main>
+    </div>
   );
 }

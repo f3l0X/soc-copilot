@@ -19,7 +19,7 @@ export default function AdminLayout({
   }, [auth.loading, auth.user, router]);
 
   if (auth.loading || !auth.user || auth.user.role !== "admin") {
-    return <main className="min-h-screen p-8 text-slate-400">Verificando permisos...</main>;
+    return <div className="p-8 text-slate-400 text-sm">Verificando permisos...</div>;
   }
 
   return <>{children}</>;

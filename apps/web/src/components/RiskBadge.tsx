@@ -32,7 +32,7 @@ export function MitreList({ techniques }: { techniques: string[] | null }) {
           href={`https://attack.mitre.org/techniques/${t.replace(".", "/")}/`}
           target="_blank"
           rel="noopener noreferrer"
-          className="rounded border border-sky-700 bg-sky-950/40 px-2 py-1 text-xs text-sky-300 hover:bg-sky-900/40"
+          className="rounded border border-sky-700 bg-sky-950/40 px-2 py-1 text-xs text-cyan-300 hover:bg-sky-900/40"
         >
           {t} ↗
         </a>

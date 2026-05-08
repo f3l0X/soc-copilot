@@ -50,7 +50,7 @@ export default function ProfilePage() {
   }
 
   if (!auth.ready) {
-    return <main className="min-h-screen p-8 text-slate-500">Verificando sesión…</main>;
+    return <div className="p-8 text-slate-500 text-sm">Verificando sesión…</div>;
   }
 
   const u = auth.user!;
@@ -58,7 +58,7 @@ export default function ProfilePage() {
     name !== u.name || lastName !== (u.last_name ?? "") || email !== u.email;
 
   return (
-    <main className="min-h-screen max-w-xl mx-auto p-8 space-y-6">
+    <div className="p-6 max-w-xl mx-auto space-y-6">
       <header>
         <h1 className="text-3xl font-bold tracking-tight">Mi Perfil</h1>
         <p className="text-slate-400 mt-2">
@@ -67,7 +67,7 @@ export default function ProfilePage() {
         </p>
       </header>
 
-      <section className="bg-slate-900/40 border border-slate-800 rounded-lg p-6 space-y-4">
+      <section className="bg-ink-900/60 border border-ink-700 rounded-lg p-6 space-y-4">
         {error && (
           <div className="text-sm bg-rose-950/40 border border-rose-800 text-rose-300 p-3 rounded">
             {error}
@@ -152,13 +152,13 @@ export default function ProfilePage() {
             <button
               type="submit"
               disabled={!dirty || saving}
-              className="px-4 py-2 text-sm bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 rounded font-medium"
+              className="px-4 py-2 text-sm bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-700 rounded font-medium"
             >
               {saving ? "Guardando..." : "Guardar cambios"}
             </button>
           </div>
         </form>
       </section>
-    </main>
+    </div>
   );
 }

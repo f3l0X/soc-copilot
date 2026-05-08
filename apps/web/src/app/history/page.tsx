@@ -20,14 +20,14 @@ export default function HistoryPage() {
   }, [auth.user]);
 
   if (!auth.ready) {
-    return <main className="min-h-screen p-8 text-slate-500">Verificando sesión…</main>;
+    return <div className="p-8 text-slate-500 text-sm">Verificando sesión…</div>;
   }
 
   return (
-    <main className="min-h-screen max-w-5xl mx-auto p-8 space-y-6">
+    <div className="p-6 max-w-5xl mx-auto space-y-6">
       <div className="flex items-baseline justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Histórico</h1>
-        <Link href="/alerts" className="text-sm text-sky-400 hover:underline">
+        <Link href="/alerts" className="text-sm text-cyan-400 hover:underline">
           + nueva alerta
         </Link>
       </div>
@@ -43,7 +43,7 @@ export default function HistoryPage() {
       {alerts && alerts.length === 0 && (
         <p className="text-slate-400">
           Sin alertas todavía. Empieza en{" "}
-          <Link href="/alerts" className="text-sky-400 hover:underline">
+          <Link href="/alerts" className="text-cyan-400 hover:underline">
             /alerts
           </Link>
           .
@@ -65,7 +65,7 @@ export default function HistoryPage() {
           </thead>
           <tbody>
             {alerts.map((a) => (
-              <tr key={a.id} className="border-t border-slate-800">
+              <tr key={a.id} className="border-t border-ink-700">
                 <td className="px-3 py-2 text-slate-500">{a.id}</td>
                 <td className="px-3 py-2 text-slate-400">
                   {new Date(a.created_at).toLocaleString()}
@@ -83,7 +83,7 @@ export default function HistoryPage() {
                 <td className="px-3 py-2">
                   <Link
                     href={`/respond?alert_id=${a.id}`}
-                    className="text-xs text-sky-400 hover:underline"
+                    className="text-xs text-cyan-400 hover:underline"
                   >
                     abrir →
                   </Link>
@@ -93,6 +93,6 @@ export default function HistoryPage() {
           </tbody>
         </table>
       )}
-    </main>
+    </div>
   );
 }

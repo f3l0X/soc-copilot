@@ -51,11 +51,11 @@ export default function AlertsPage() {
   }
 
   if (!auth.ready) {
-    return <main className="min-h-screen p-8 text-slate-500">Verificando sesión…</main>;
+    return <div className="p-8 text-slate-500 text-sm">Verificando sesión…</div>;
   }
 
   return (
-    <main className="min-h-screen max-w-5xl mx-auto p-8 space-y-6">
+    <div className="p-6 max-w-[1280px] mx-auto space-y-6">
       <div className="flex items-baseline justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Alert Explainer</h1>
@@ -66,7 +66,7 @@ export default function AlertsPage() {
         </div>
         <div className="flex flex-col items-end gap-1">
           <ModelSelector compact />
-          <Link href="/history" className="text-sm text-sky-400 hover:underline">
+          <Link href="/history" className="text-sm text-cyan-400 hover:underline">
             Histórico →
           </Link>
         </div>
@@ -89,7 +89,7 @@ export default function AlertsPage() {
         <button
           type="submit"
           disabled={loading || !log.trim()}
-          className="rounded bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 px-4 py-2 text-sm font-medium"
+          className="rounded bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-700 px-4 py-2 text-sm font-medium"
         >
           {loading ? "Analizando…" : "Analizar"}
         </button>
@@ -102,7 +102,7 @@ export default function AlertsPage() {
       )}
 
       {result && (
-        <div className="space-y-4 rounded-lg border border-slate-800 bg-slate-900/40 p-6">
+        <div className="space-y-4 rounded-lg border border-ink-700 bg-ink-900/60 p-6">
           <div className="flex items-start justify-between gap-4">
             <h2 className="text-lg font-semibold">
               Resumen{" "}
@@ -142,6 +142,6 @@ export default function AlertsPage() {
           )}
         </div>
       )}
-    </main>
+    </div>
   );
 }

@@ -29,7 +29,7 @@ function SourcePill({ id }: { id: string }) {
         : "#";
   const color =
     kind === "mitre"
-      ? "border-sky-700 bg-sky-950/40 text-sky-300"
+      ? "border-sky-700 bg-sky-950/40 text-cyan-300"
       : "border-emerald-700 bg-emerald-950/40 text-emerald-300";
   return (
     <a
@@ -94,11 +94,11 @@ export default function ChatPage() {
   }
 
   if (!auth.ready) {
-    return <main className="min-h-screen p-8 text-slate-500">Verificando sesión…</main>;
+    return <div className="p-8 text-slate-500 text-sm">Verificando sesión…</div>;
   }
 
   return (
-    <main className="min-h-screen max-w-4xl mx-auto p-8 flex flex-col gap-4">
+    <div className="p-6 max-w-4xl mx-auto flex flex-col gap-4">
       <div className="flex items-baseline justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Chat IA</h1>
@@ -115,7 +115,7 @@ export default function ChatPage() {
             <span className="text-amber-400">KB no disponible</span>
           )}
           <ModelSelector compact />
-          <Link href="/alerts" className="text-sky-400 hover:underline">
+          <Link href="/alerts" className="text-cyan-400 hover:underline">
             ← alertas
           </Link>
         </div>
@@ -141,7 +141,7 @@ export default function ChatPage() {
 
       <div
         ref={scrollRef}
-        className="flex-1 min-h-[300px] overflow-y-auto space-y-3 rounded-lg border border-slate-800 bg-slate-950/40 p-4"
+        className="flex-1 min-h-[300px] overflow-y-auto space-y-3 rounded-lg border border-ink-700 bg-slate-950/40 p-4"
       >
         {messages.map((m, i) => (
           <div
@@ -212,12 +212,12 @@ export default function ChatPage() {
           <button
             type="submit"
             disabled={loading || !input.trim()}
-            className="rounded bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 px-4 text-sm font-medium"
+            className="rounded bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-700 px-4 text-sm font-medium"
           >
             Enviar
           </button>
         </form>
       </div>
-    </main>
+    </div>
   );
 }

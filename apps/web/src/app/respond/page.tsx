@@ -68,26 +68,26 @@ function RespondInner() {
   }
 
   if (!auth.ready) {
-    return <main className="min-h-screen p-8 text-slate-500">Verificando sesión…</main>;
+    return <div className="p-8 text-slate-500 text-sm">Verificando sesión…</div>;
   }
 
   if (!alertId) {
     return (
-      <main className="min-h-screen max-w-5xl mx-auto p-8 space-y-4">
+      <div className="p-6 max-w-5xl mx-auto space-y-4">
         <h1 className="text-3xl font-bold tracking-tight">Next Step Recommender</h1>
         <p className="text-slate-400">
           Llega aquí desde una alerta. Empieza analizando un log en{" "}
-          <Link href="/alerts" className="text-sky-400 hover:underline">
+          <Link href="/alerts" className="text-cyan-400 hover:underline">
             /alerts
           </Link>
           .
         </p>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen max-w-5xl mx-auto p-8 space-y-6">
+    <div className="p-6 max-w-5xl mx-auto space-y-6">
       <div className="flex items-baseline justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">
@@ -99,7 +99,7 @@ function RespondInner() {
         </div>
         <div className="flex flex-col items-end gap-1">
           <ModelSelector compact />
-          <Link href="/alerts" className="text-sm text-sky-400 hover:underline">
+          <Link href="/alerts" className="text-sm text-cyan-400 hover:underline">
             ← nueva alerta
           </Link>
         </div>
@@ -114,7 +114,7 @@ function RespondInner() {
       )}
 
       {alert && (
-        <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-6 space-y-3">
+        <div className="rounded-lg border border-ink-700 bg-ink-900/60 p-6 space-y-3">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold">
@@ -151,7 +151,7 @@ function RespondInner() {
       )}
 
       {rec && (
-        <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-6 space-y-4">
+        <div className="rounded-lg border border-ink-700 bg-ink-900/60 p-6 space-y-4">
           <div className="flex items-baseline justify-between">
             <h2 className="text-lg font-semibold">
               Recomendación{" "}
@@ -166,7 +166,7 @@ function RespondInner() {
             {rec.actions.map((a, i) => (
               <li
                 key={i}
-                className="rounded border border-slate-800 bg-slate-950/40 p-4"
+                className="rounded border border-ink-700 bg-slate-950/40 p-4"
               >
                 <div className="font-semibold text-slate-100">
                   {i + 1}. {a.title}
@@ -183,7 +183,7 @@ function RespondInner() {
 
           {rec.learning_notes && (
             <div className="rounded border border-sky-800 bg-sky-950/30 p-4 text-sm">
-              <h3 className="font-semibold text-sky-300 mb-1">
+              <h3 className="font-semibold text-cyan-300 mb-1">
                 Modo aprendizaje
               </h3>
               <p className="text-slate-300 whitespace-pre-line">
@@ -193,7 +193,7 @@ function RespondInner() {
           )}
         </div>
       )}
-    </main>
+    </div>
   );
 }
 
@@ -201,9 +201,9 @@ export default function RespondPage() {
   return (
     <Suspense
       fallback={
-        <main className="min-h-screen max-w-5xl mx-auto p-8">
+        <div className="p-6 max-w-5xl mx-auto">
           <p className="text-slate-400">Cargando…</p>
-        </main>
+        </div>
       }
     >
       <RespondInner />

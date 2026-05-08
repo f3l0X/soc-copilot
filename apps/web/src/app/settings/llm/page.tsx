@@ -103,13 +103,13 @@ export default function LLMSettingsPage() {
   }
 
   if (!auth.ready) {
-    return <main className="min-h-screen p-8 text-slate-500">Verificando sesión…</main>;
+    return <div className="p-8 text-slate-500 text-sm">Verificando sesión…</div>;
   }
   if (!settings) {
     return (
-      <main className="min-h-screen p-8 text-slate-500">
+      <div className="p-8 text-slate-500 text-sm">
         {error ?? "Cargando…"}
-      </main>
+      </div>
     );
   }
 
@@ -119,7 +119,7 @@ export default function LLMSettingsPage() {
   );
 
   return (
-    <main className="min-h-screen max-w-2xl mx-auto p-8 space-y-6">
+    <div className="p-6 max-w-2xl mx-auto space-y-6">
       <header>
         <h1 className="text-3xl font-bold tracking-tight">Configuración de IA</h1>
         <p className="text-slate-400 mt-2">
@@ -140,7 +140,7 @@ export default function LLMSettingsPage() {
       )}
 
       {/* ── Model ─────────────────────────────────────────────────────── */}
-      <section className="bg-slate-900/40 border border-slate-800 rounded-lg p-6 space-y-4">
+      <section className="bg-ink-900/60 border border-ink-700 rounded-lg p-6 space-y-4">
         <div>
           <h2 className="text-lg font-semibold">Modelo predeterminado</h2>
           <p className="text-sm text-slate-400 mt-1">
@@ -164,7 +164,7 @@ export default function LLMSettingsPage() {
             type="button"
             disabled={busy || model === (settings.preferred_chat_model ?? settings.default_model)}
             onClick={onSaveModel}
-            className="px-4 py-2 text-sm bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 rounded font-medium"
+            className="px-4 py-2 text-sm bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-700 rounded font-medium"
           >
             Guardar modelo
           </button>
@@ -172,7 +172,7 @@ export default function LLMSettingsPage() {
       </section>
 
       {/* ── API key ───────────────────────────────────────────────────── */}
-      <section className="bg-slate-900/40 border border-slate-800 rounded-lg p-6 space-y-4">
+      <section className="bg-ink-900/60 border border-ink-700 rounded-lg p-6 space-y-4">
         <div>
           <h2 className="text-lg font-semibold">Tu API key de Gemini</h2>
           <p className="text-sm text-slate-400 mt-1">
@@ -183,7 +183,7 @@ export default function LLMSettingsPage() {
               href="https://aistudio.google.com/app/apikey"
               target="_blank"
               rel="noreferrer"
-              className="text-sky-400 hover:underline"
+              className="text-cyan-400 hover:underline"
             >
               Google AI Studio
             </a>
@@ -192,7 +192,7 @@ export default function LLMSettingsPage() {
         </div>
 
         {settings.configured ? (
-          <div className="flex items-center justify-between bg-slate-950 border border-slate-800 rounded p-3">
+          <div className="flex items-center justify-between bg-slate-950 border border-ink-700 rounded p-3">
             <div className="text-sm">
               <div className="text-slate-300">
                 Clave configurada: <span className="font-mono">••••{settings.key_last4}</span>
@@ -261,13 +261,13 @@ export default function LLMSettingsPage() {
             <button
               type="submit"
               disabled={busy || apiKey.trim().length < 10}
-              className="px-4 py-2 text-sm bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 rounded font-medium"
+              className="px-4 py-2 text-sm bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-700 rounded font-medium"
             >
               {busy ? "Validando…" : "Validar y guardar"}
             </button>
           </div>
         </form>
       </section>
-    </main>
+    </div>
   );
 }
