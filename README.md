@@ -51,7 +51,7 @@ docker compose up --build -d
 docker compose logs -f   # opcional: ver logs en vivo
 
 # 4. Servicios
-# Frontend:  http://localhost:13000
+# Frontend:  http://localhost:13500
 # API:       http://localhost:8080
 # API docs:  http://localhost:8080/docs
 # Postgres:  localhost:55432  (puerto cambiado: 5432–5757 reservados por Windows/Hyper-V)
@@ -78,11 +78,11 @@ Para parar: `docker compose down`. Para reiniciar limpio (borra datos): `docker 
 | `GET  /api/health` | Health check | ✅ |
 
 UI:
-- http://localhost:13000/login — Autenticación y registro
-- http://localhost:13000/alerts — Alert Explainer
-- http://localhost:13000/respond?alert_id=N — Next Step Recommender
-- http://localhost:13000/history — Histórico filtrado por analista/admin
-- http://localhost:13000/chat — Chat IA con citaciones MITRE/OWASP
+- http://localhost:13500/login — Autenticación y registro
+- http://localhost:13500/alerts — Alert Explainer
+- http://localhost:13500/respond?alert_id=N — Next Step Recommender
+- http://localhost:13500/history — Histórico filtrado por analista/admin
+- http://localhost:13500/chat — Chat IA con citaciones MITRE/OWASP
 
 ## Knowledge base (RAG)
 

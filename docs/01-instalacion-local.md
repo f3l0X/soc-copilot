@@ -15,7 +15,7 @@ Docker. El stack levanta todo en contenedores.
 
 | Servicio | URL local | Puerto host |
 |----------|-----------|-------------|
-| Frontend Next.js | <http://localhost:13000> | 13000 |
+| Frontend Next.js | <http://localhost:13500> | 13500 |
 | API FastAPI | <http://localhost:8080> | 8080 |
 | Swagger API | <http://localhost:8080/docs> | 8080 |
 | PostgreSQL | localhost:55432 | 55432 |
@@ -23,7 +23,7 @@ Docker. El stack levanta todo en contenedores.
 
 > Nota Windows: 5432 (Postgres por defecto) y 3000 (Next por defecto) suelen
 > estar en el rango excluido por Hyper-V en Windows 11. Por eso usamos
-> 55432 y 13000. Ver [Solucion de problemas](05-solucion-problemas.md).
+> 55432 y 13500. Ver [Solucion de problemas](05-solucion-problemas.md).
 
 ## Pasos de instalacion
 
@@ -86,18 +86,18 @@ Docker. El stack levanta todo en contenedores.
 
 7. Crear el usuario admin desde el frontend:
 
-   - Abrir <http://localhost:13000>.
+   - Abrir <http://localhost:13500>.
    - Te redirige a `/login`. Pulsar **«¿No tienes cuenta? Regístrate»**.
    - El primer email registrado queda como **admin**. Los siguientes son
      **analyst**. Detalle en [docs/security.md](security.md).
 
 8. Abrir la aplicacion:
 
-   - Frontend: <http://localhost:13000>
-   - Alert Explainer: <http://localhost:13000/alerts>
-   - Next Step Recommender: <http://localhost:13000/respond?alert_id=N>
-   - Histórico: <http://localhost:13000/history>
-   - Chat IA: <http://localhost:13000/chat>
+   - Frontend: <http://localhost:13500>
+   - Alert Explainer: <http://localhost:13500/alerts>
+   - Next Step Recommender: <http://localhost:13500/respond?alert_id=N>
+   - Histórico: <http://localhost:13500/history>
+   - Chat IA: <http://localhost:13500/chat>
    - API docs: <http://localhost:8080/docs>
 
 ## Comandos utiles
@@ -115,7 +115,7 @@ Docker. El stack levanta todo en contenedores.
 
 ## Pruebas basicas (smoke manual)
 
-1. Login con tu usuario en <http://localhost:13000/login>.
+1. Login con tu usuario en <http://localhost:13500/login>.
 2. Ir a `/alerts`, usar uno de los ejemplos, pulsar **Analizar**.
 3. Confirmar resumen + riesgo + técnicas MITRE + razonamiento.
 4. Pulsar **Siguiente paso**: aparecen acciones recomendadas.

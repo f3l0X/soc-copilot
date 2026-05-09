@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     chroma_host: str = "chroma"
     chroma_port: int = 8000
 
-    api_cors_origins: str = "http://localhost:13000"
+    api_cors_origins: str = "http://localhost:13500"
 
     rate_limit_enabled: bool = True
     rate_limit_requests: int = 20

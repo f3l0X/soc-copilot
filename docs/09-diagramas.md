@@ -62,7 +62,7 @@ graph LR
             PG[(postgres:16<br>:5432)]
             CH[(chroma:0.5.23<br>:8000)]
         end
-        WEB -. host:13000 .-> WEB
+        WEB -. host:13500 .-> WEB
         API -. host:8080 .-> API
         PG -. host:55432 .-> PG
         CH -. host:8001 .-> CH
@@ -71,7 +71,7 @@ graph LR
     BROWSER[Browser]
     GEMINI[(Gemini API)]
 
-    BROWSER -->|http://localhost:13000| WEB
+    BROWSER -->|http://localhost:13500| WEB
     WEB -->|/api/* fetch SSR or CSR| API
     API --> PG
     API --> CH

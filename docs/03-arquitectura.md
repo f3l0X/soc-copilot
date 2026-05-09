@@ -4,7 +4,7 @@
 
 ```mermaid
 flowchart LR
-    U["Usuario"] -->|cookie httpOnly| W["Frontend Next.js 15<br>13000"]
+    U["Usuario"] -->|cookie httpOnly| W["Frontend Next.js 15<br>13500"]
     W -->|/api/* + credentials| A["API FastAPI<br>8080"]
     A -->|chat / embed| G["Gemini API"]
     A -->|users / alerts / recs| P["PostgreSQL 16<br>55432"]
@@ -153,7 +153,7 @@ Servicios de `infra/docker-compose.yml`:
 | `postgres` | `postgres:16-alpine` | 55432 → 5432 | `pg_isready` |
 | `chroma` | `chromadb/chroma:0.5.23` | 8001 → 8000 | (sin) |
 | `api` | build local Python 3.12 | 8080 → 8080 | curl `/api/health` |
-| `web` | build local Node 22 (target dev) | 13000 → 3000 | wget `/` |
+| `web` | build local Node 22 (target dev) | 13500 → 3000 | wget `/` |
 
 Volúmenes persistentes: `postgres-data`, `chroma-data`.
 

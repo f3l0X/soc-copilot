@@ -28,7 +28,7 @@ Puertos por defecto:
 
 | Servicio | Host | Container |
 |----------|------|-----------|
-| Frontend | 13000 | 3000 |
+| Frontend | 13500 | 3000 |
 | API | 8080 | 8080 |
 | Postgres | 55432 | 5432 |
 | Chroma | 8001 | 8000 |
@@ -109,7 +109,7 @@ Comprobar `.env`:
 
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:8080
-API_CORS_ORIGINS=http://localhost:13000
+API_CORS_ORIGINS=http://localhost:13500
 ```
 
 ## Cambios en frontend no aparecen

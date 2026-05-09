@@ -30,7 +30,7 @@ decisión final siempre es humana.
 
 | Entorno | URL |
 |---------|-----|
-| Local (desarrollo) | <http://localhost:13000> |
+| Local (desarrollo) | <http://localhost:13500> |
 | Producción (Hetzner) | la que indique tu administrador |
 
 ### 2.1 Crear cuenta

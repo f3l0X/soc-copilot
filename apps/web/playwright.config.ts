@@ -19,7 +19,7 @@ export default defineConfig({
   expect: { timeout: 5_000 },
   reporter: isCI ? [["list"]] : [["html", { open: "never" }]],
   use: {
-    baseURL: process.env.E2E_WEB_URL ?? "http://localhost:13000",
+    baseURL: process.env.E2E_WEB_URL ?? "http://localhost:13500",
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
