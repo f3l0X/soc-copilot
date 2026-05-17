@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 -- ============================================================
 -- SECURITY LOG ANALYZER — PostgreSQL Schema (mejorado)
 -- Idempotente / apto para Docker init y DBeaver
@@ -412,7 +411,6 @@ ORDER BY
         WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5
     END,
     i.opened_at;
-=======
 -- ============================================================
 -- SECURITY LOG ANALYZER — PostgreSQL Schema (mejorado)
 -- Idempotente / apto para Docker init y DBeaver
@@ -826,4 +824,3 @@ ORDER BY
         WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5
     END,
     i.opened_at;
->>>>>>> e2df3ae2738aa0ac0a55b3341da6176b503af12e
