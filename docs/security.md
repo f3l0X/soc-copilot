@@ -51,8 +51,10 @@ viajarán a fase 5 (despliegue Hetzner).
 | `ChatRequest.messages` | 1..30 mensajes |
 | `ChatRequest.log_context` | ≤20000 |
 | `ChatRequest.model` | Allowlist |
-| `RegisterRequest.password` | 8..128 chars |
+| `RegisterRequest.password` | 10..128 chars + política `check_password` (mayús, minús, dígito, símbolo, zxcvbn ≥ 2). |
 | `RegisterRequest.email` | `EmailStr` (validador RFC 5322 + DNS heuristics) |
+| `ChangePasswordRequest.new_password` | Misma política que `RegisterRequest.password` (admin reset). |
+| `CreateUserRequest.password` | Misma política que `RegisterRequest.password` (admin create). |
 
 ### Rate limiting
 

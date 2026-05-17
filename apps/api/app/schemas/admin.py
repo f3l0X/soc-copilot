@@ -1,13 +1,28 @@
 from datetime import date, datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.models import UserLevel, UserRole
+from app.services.password import MAX_LENGTH, MIN_LENGTH, check_password
+
+
+def _enforce_password_policy(v: str) -> str:
+    # Same rules as RegisterRequest so admin-side flows (reset password,
+    # create user) cannot bypass the strength policy that the UI enforces.
+    result = check_password(v)
+    if not result.ok:
+        raise ValueError(result.first_error())
+    return v
 
 
 class ChangePasswordRequest(BaseModel):
-    new_password: str = Field(..., min_length=8, max_length=128)
+    new_password: str = Field(..., min_length=MIN_LENGTH, max_length=MAX_LENGTH)
+
+    @field_validator("new_password")
+    @classmethod
+    def _strong_password(cls, v: str) -> str:
+        return _enforce_password_policy(v)
 
 
 class ChangeRoleRequest(BaseModel):
@@ -17,9 +32,14 @@ class ChangeRoleRequest(BaseModel):
 class CreateUserRequest(BaseModel):
     name: str = Field(..., min_length=2, max_length=100)
     email: EmailStr
-    password: str = Field(..., min_length=8, max_length=128)
+    password: str = Field(..., min_length=MIN_LENGTH, max_length=MAX_LENGTH)
     role: UserRole = UserRole.ANALYST
     level: UserLevel = UserLevel.L1
+
+    @field_validator("password")
+    @classmethod
+    def _strong_password(cls, v: str) -> str:
+        return _enforce_password_policy(v)
 
 
 class PermissionCell(BaseModel):

@@ -36,9 +36,18 @@ decisión final siempre es humana.
 ### 2.1 Crear cuenta
 
 1. Abre `/login` y pulsa **Registrarse**.
-2. Introduce nombre, email y contraseña (mínimo 8 caracteres).
+2. Introduce nombre, email y contraseña. La contraseña debe cumplir
+   **todas** las reglas siguientes:
+   - Al menos **10 caracteres**.
+   - Incluye **mayúscula**, **minúscula**, **dígito** y **símbolo**.
+   - Fortaleza zxcvbn ≥ *Aceptable* (puntuación 2/4). Se muestra una
+     barra de fortaleza en tiempo real con sugerencias para mejorarla.
+   - Debes confirmarla en el campo "Confirmar contraseña".
 3. El **primer usuario** que se registra en una instalación nueva queda
    automáticamente como `admin`. El resto son `analyst` por defecto.
+
+> La misma política se aplica cuando un admin resetea la contraseña de
+> otro usuario desde `/admin → Usuarios`.
 
 ### 2.2 Iniciar / cerrar sesión
 
@@ -194,11 +203,16 @@ Disponibles solo para rol `admin`, en `/admin`.
 
 | Sección | Qué hace |
 |---------|----------|
-| **Usuarios** | Listar, crear, suspender, cambiar rol. |
+| **Usuarios** | Listar, crear, cambiar rol, **resetear cuota** diaria de LLM, **resetear contraseña** y **eliminar** cuentas. Las acciones críticas (resetear cuota y eliminar) piden confirmación inline en la propia fila (¿Resetear? / ¿Eliminar? **Sí / No**) para evitar borrados accidentales. |
 | **Roles y permisos** | Matriz editable de permisos por rol (RBAC dinámico). |
 | **Auditoría** | Eventos de login, registros, cambios de ajustes IA, acciones admin, alertas creadas, errores de cuota. |
 | **Knowledge base** | Estado de la colección Chroma (`/api/kb/status`). |
 | **Modelos LLM** | Allowlist visible al usuario. |
+
+> El reseteo de contraseña abre un modal con la **misma política de
+> seguridad que el registro** (10+ caracteres, mayús/minús/dígito/símbolo,
+> zxcvbn ≥ 2 y confirmación). Tras guardar se invalidan todas las
+> sesiones activas del usuario afectado.
 
 Todas las acciones administrativas quedan registradas con `actor_id`,
 `action`, `target_type` y `target_id`.

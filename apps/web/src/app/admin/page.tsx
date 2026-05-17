@@ -944,11 +944,12 @@ export default function AdminPage() {
               <input
                 type="password"
                 required
-                minLength={8}
+                minLength={10}
+                autoComplete="new-password"
                 value={createForm.password}
                 onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
                 className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-white"
-                placeholder="Mínimo 8 caracteres"
+                placeholder="Mín. 10 chars · mayús/minús/dígito/símbolo"
               />
             </label>
 

@@ -1,5 +1,108 @@
 # Changelog de UI/UX
 
+## [17/05/2026] - Política de contraseñas unificada en reseteo admin
+
+El modal "Resetear contraseña" del panel `/admin → Usuarios` ahora aplica
+exactamente la misma política que el registro de cuenta: mínimo 10
+caracteres, mayúscula, minúscula, dígito, símbolo, puntuación zxcvbn ≥ 2
+y campo de confirmación con verificación de coincidencia en vivo. El
+botón Guardar queda deshabilitado hasta que se cumplen todos los
+criterios. Se extrajo la política a un módulo compartido para evitar
+divergencia entre flujos.
+
+**Archivos modificados:**
+- `apps/web/src/lib/password.ts` (nuevo): reglas, loader perezoso de
+  zxcvbn-ts, constantes de fortaleza, helper `evaluatePassword`.
+- `apps/web/src/app/login/page.tsx`: refactor para consumir el módulo
+  compartido (sin cambios funcionales).
+- `apps/web/src/app/admin/page.tsx`: el modal `pwUser` añade campo
+  Confirmar contraseña, barra de fortaleza, checklist de reglas y
+  validación de submit; el título pasa a "Resetear contraseña".
+- `apps/api/app/schemas/admin.py`: `ChangePasswordRequest` y
+  `CreateUserRequest` pasan de `min_length=8` a `min_length=MIN_LENGTH`
+  (10) y aplican el validador `check_password` (mismas reglas que
+  `RegisterRequest`). Cierra el bypass por llamada directa a la API.
+- `docs/security.md`: tabla de validación de schemas refleja la nueva
+  política en los 3 endpoints (register, admin reset, admin create).
+
+**Impacto:**
+- Un admin ya no puede establecer contraseñas débiles (≥ 8 caracteres
+  sin clases ni fortaleza mínima) al resetear cuentas ajenas, ni vía UI
+  ni vía API directa.
+- Tras un reseteo exitoso, las sesiones activas del usuario afectado se
+  invalidan automáticamente (comportamiento ya existente).
+
+## [17/05/2026] - Confirmación inline para eliminar usuario
+
+El botón **Eliminar** de la tabla de usuarios en `/admin` ya no usa
+`window.confirm()`. Pasa a una confirmación inline ¿Eliminar? Sí / No
+con el mismo patrón visual que la confirmación de "Resetear cuota"
+(botones emerald/slate, texto rose para la pregunta).
+
+**Archivos modificados:**
+- `apps/web/src/app/admin/page.tsx`: nuevo estado `confirmDeleteId`,
+  `handleDelete` ya no abre el diálogo nativo, render condicional del
+  botón rojo o de los botones Sí/No.
+
+**Impacto:**
+- UX consistente con el resto de acciones críticas del panel.
+- Sin dependencia del prompt nativo del navegador (mejor accesibilidad
+  y testeabilidad).
+
+## [17/05/2026] - Acciones del panel de usuarios como botones
+
+Las acciones de cada fila en `/admin → Usuarios` (Resetear cuota,
+Password, Eliminar) pasan de enlaces subrayados a botones con borde,
+fondo translúcido y estado hover/disabled. La acción "Password" se
+renombra a **"Resetear contraseña"**. Layout flex con `gap-2 flex-wrap`
+para pantallas estrechas.
+
+**Archivos modificados:**
+- `apps/web/src/app/admin/page.tsx`: estilos de la celda de acciones,
+  texto del botón.
+
+**Impacto:**
+- Visualmente más reconocibles como controles interactivos.
+- Etiqueta más explícita sobre lo que hace la acción.
+
+## [17/05/2026] - Migración OWASP Top 10 2021 → 2025
+
+Se actualiza el dataset RAG y todas las referencias de la app a la
+edición 2025 del OWASP Top 10 (publicada en 2025). Cambios estructurales
+respecto a 2021:
+
+- A01 absorbe SSRF (antes A10).
+- A02 Security Misconfiguration sube de #5 a #2.
+- A03 Software Supply Chain Failures (nueva, reemplaza/amplía la antigua
+  A06 Vulnerable & Outdated Components).
+- A07 renombrada a "Authentication Failures".
+- A09 renombrada a "Security Logging & Alerting Failures".
+- A10 Mishandling of Exceptional Conditions (nueva).
+
+**Archivos modificados:**
+- `apps/api/scripts/owasp_top10.py`: dataset reescrito con `A##:2025`,
+  descripciones curadas y tags. Alias `OWASP_TOP_10_2021 =
+  OWASP_TOP_10_2025` para compatibilidad temporal.
+- `apps/api/scripts/ingest_kb.py`: imports y logs apuntan a la lista
+  2025.
+- `apps/api/app/services/chat.py`: el system prompt cita `A##:2025`.
+- `apps/api/tests/test_smoke.py`: fixtures de OWASP migrados.
+- `apps/web/src/app/chat/page.tsx`: starter prompt y URL externa.
+- Docs: `README.md`, `01-instalacion-local.md`, `02-estado-fases.md`,
+  `03-arquitectura.md`, `06-api-reference.md`, `08-rag-ingestion.md`,
+  `09-diagramas.md`, `10-manual-usuario.md`.
+
+**Operación post-deploy:**
+Re-ingerir la KB con `docker compose exec api python -m
+scripts.ingest_kb --force` para sustituir los 10 docs `owasp:A##:2021`
+por `owasp:A##:2025` en Chroma. Tras la migración la colección queda
+con ~707 docs (691 MITRE + 10 OWASP 2025 + posibles extras).
+
+**Impacto:**
+- Las citas del chat usan IDs `owasp:A##:2025`.
+- Las pills clicables en `/chat` enlazan a la sección 2025 de
+  `owasp.org/Top10/`.
+
 ## [17/05/2026] - Ocultamiento de Next Step Recommender
 
 Se ha procedido a ocultar la opción "Next Step Recommender" de las interfaces principales por solicitud del usuario.
