@@ -399,10 +399,10 @@ _SAMPLE_DOCS = [
         name="T1110 — Brute Force",
     ),
     KBDoc(
-        id="owasp:A07:2021",
-        text="A07:2021 — Identification and Authentication Failures",
+        id="owasp:A07:2025",
+        text="A07:2025 — Authentication Failures",
         source="owasp",
-        name="A07:2021 — Identification and Authentication Failures",
+        name="A07:2025 — Authentication Failures",
     ),
 ]
 
@@ -415,7 +415,7 @@ def test_chat_returns_reply_and_sources():
         retriever=_FakeRetriever(_SAMPLE_DOCS),
     )
     assert result.reply == "respuesta de prueba"
-    assert result.sources == ["mitre:T1110", "owasp:A07:2021"]
+    assert result.sources == ["mitre:T1110", "owasp:A07:2025"]
 
 
 def test_chat_wraps_kb_in_untrusted_delimiters():

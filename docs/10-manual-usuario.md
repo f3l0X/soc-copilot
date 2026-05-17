@@ -17,7 +17,7 @@ junior** durante la triage de alertas. Combina cuatro capacidades:
 2. **Next Step Recommender** — recomendaciones accionables sobre una alerta
    ya analizada, con un *modo aprendizaje* que explica el porqué de cada paso.
 3. **Chat IA con RAG** — conversación con citas verificables sobre MITRE
-   ATT&CK Enterprise y OWASP Top 10 2021.
+   ATT&CK Enterprise y OWASP Top 10 2025.
 4. **Histórico y panel admin** — trazabilidad por analista, gestión de
    usuarios, roles y auditoría.
 
@@ -246,7 +246,7 @@ Más casos en [05-solucion-problemas.md](05-solucion-problemas.md).
 ## 9. Glosario
 
 - **MITRE ATT&CK** — Matriz pública de tácticas y técnicas adversarias.
-- **OWASP Top 10** — Top de riesgos en aplicaciones web (versión 2021).
+- **OWASP Top 10** — Top de riesgos en aplicaciones web (versión 2025).
 - **RAG** — *Retrieval-Augmented Generation*: el chat busca documentos
   relevantes antes de responder, y cita las fuentes.
 - **BYOK** — *Bring Your Own Key*: usar tu propia clave de Gemini.

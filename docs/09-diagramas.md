@@ -32,7 +32,7 @@ graph TB
         ADMIN[Admin SOC]
         GEMINI[(Google Gemini API<br>chat + embeddings)]
         MITRE[MITRE ATT&CK<br>STIX bundle]
-        OWASP[OWASP Top 10 2021<br>dataset interno]
+        OWASP[OWASP Top 10 2025<br>dataset interno]
     end
 
     SOC[SOC Copilot<br>Frontend + API + DB + KB]
@@ -364,7 +364,7 @@ sequenceDiagram
     CH->>CH: prompt =<br>system anti-injection<br>+ BEGIN/END_UNTRUSTED_KB(docs)<br>+ BEGIN/END_UNTRUSTED_LOG(log_context)<br>+ messages
     CH->>L: chat(prompt)
     L-->>CH: reply
-    CH-->>API: {reply, sources: [mitre:T1110, owasp:A07:2021, ...]}
+    CH-->>API: {reply, sources: [mitre:T1110, owasp:A07:2025, ...]}
     API-->>W: 200
     W-->>U: respuesta con pills clicables<br>(linkean a attack.mitre.org / owasp.org)
 ```
@@ -486,7 +486,7 @@ para admins).
 ```mermaid
 flowchart TB
     A[scripts/ingest_kb.py] --> B[Descarga STIX bundle<br>MITRE ATT&CK Enterprise]
-    A --> C[Carga dataset interno<br>OWASP Top 10 2021]
+    A --> C[Carga dataset interno<br>OWASP Top 10 2025]
     B --> D[Extrae técnicas vigentes<br>~691 entries]
     C --> E[10 entries A01..A10]
     D --> F[Normaliza a {id, text, metadata}]

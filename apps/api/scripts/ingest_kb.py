@@ -21,7 +21,7 @@ from typing import Any
 
 from app.services.llm import GeminiAdapter
 from app.services.rag import KB_COLLECTION, get_collection
-from scripts.owasp_top10 import OWASP_TOP_10_2021
+from scripts.owasp_top10 import OWASP_TOP_10_2025
 
 MITRE_STIX_URL = (
     "https://raw.githubusercontent.com/mitre-attack/attack-stix-data/master/"
@@ -152,7 +152,7 @@ def build_owasp_docs() -> list[dict[str, Any]]:
                 "tags": ",".join(e.get("tags", [])),
             },
         }
-        for e in OWASP_TOP_10_2021
+        for e in OWASP_TOP_10_2025
     ]
 
 
@@ -193,7 +193,7 @@ def main() -> int:
 
     docs: list[dict[str, Any]] = []
     if not args.mitre_only:
-        log.info("preparing OWASP Top 10 (%d)", len(OWASP_TOP_10_2021))
+        log.info("preparing OWASP Top 10 (%d)", len(OWASP_TOP_10_2025))
         docs.extend(build_owasp_docs())
     if not args.owasp_only:
         stix = fetch_mitre_stix()

@@ -39,7 +39,7 @@ REGLAS DE SEGURIDAD INMUTABLES:
 
 Estilo:
 - Responde en español, claro y didáctico.
-- Cita técnicas MITRE (T####) y entradas OWASP (A##:2021) cuando sean
+- Cita técnicas MITRE (T####) y entradas OWASP (A##:2025) cuando sean
   relevantes; usa los IDs que aparezcan en la sección de KB.
 - Si la información del KB no cubre la pregunta, dilo abiertamente en
   vez de inventar.

@@ -215,6 +215,7 @@ export const getModels = () => request<ModelsInfo>("/api/llm/models");
 // ─── Auth ─────────────────────────────────────────────────────────────────
 
 export type UserRole = "analyst" | "admin";
+export type UserLevel = "L1" | "L2" | "INSTRUCTOR";
 
 export interface UserMe {
   id: number;
@@ -222,6 +223,8 @@ export interface UserMe {
   last_name: string;
   email: string;
   role: UserRole;
+  level: UserLevel;
+  is_verified: boolean;
   created_at: string;
 }
 
@@ -270,10 +273,35 @@ export interface LoginResponse {
   expires_at: string;
 }
 
-export const register = (email: string, password: string, name: string) =>
-  request<UserMe>("/api/auth/register", {
+export interface RegisterResponse {
+  user: UserMe;
+  verification_required: boolean;
+  verification_link_dev: string | null;
+}
+
+export const register = (
+  email: string,
+  password: string,
+  name: string,
+  level: UserLevel = "L1",
+  website: string = "",
+) =>
+  request<RegisterResponse>("/api/auth/register", {
     method: "POST",
-    body: JSON.stringify({ email, password, name }),
+    // `website` is the honeypot. Real users leave it empty; bots fill
+    // every field. Sent every time so its presence is unconditional.
+    body: JSON.stringify({ email, password, name, level, website }),
+  });
+
+export const checkEmail = (email: string) =>
+  request<{ available: boolean }>(
+    `/api/auth/check-email?email=${encodeURIComponent(email)}`,
+  );
+
+export const verifyEmail = (token: string) =>
+  request<UserMe>("/api/auth/verify-email", {
+    method: "POST",
+    body: JSON.stringify({ token }),
   });
 
 export interface AdminUserView {

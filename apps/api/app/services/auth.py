@@ -6,6 +6,7 @@ claims: subject (user id), role, exp.
 """
 from __future__ import annotations
 
+import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -15,6 +16,17 @@ from passlib.context import CryptContext
 from app.config import get_settings
 
 _pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def generate_verification_token() -> str:
+    """URL-safe random token for email verification links. 43 chars (32B)."""
+    return secrets.token_urlsafe(32)
+
+
+def is_locked(locked_until: datetime | None) -> bool:
+    if locked_until is None:
+        return False
+    return locked_until > datetime.now(UTC)
 
 
 def hash_password(plain: str) -> str:

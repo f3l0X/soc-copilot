@@ -12,6 +12,9 @@
     "e2e:headed": "playwright test --headed"
   },
   "dependencies": {
+    "@zxcvbn-ts/core": "^3.0.4",
+    "@zxcvbn-ts/language-common": "^3.0.4",
+    "@zxcvbn-ts/language-es-es": "^3.0.2",
     "next": "^15.5.15",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",

@@ -67,7 +67,7 @@ def test_stats_requires_auth():
 
 def test_stats_empty_for_fresh_analyst(monkeypatch):
     _fake_llm_in_place(monkeypatch, risk="low", mitre=[])
-    pw = "stats-pw-123456"
+    pw = "Stats-Pw-123456!"
     # First user → admin, second → analyst (so we can hit the analyst branch)
     client.post("/api/auth/register", json={"name": "A", "email": _email(), "password": pw})
     analyst_email = _email()
@@ -94,7 +94,7 @@ def test_stats_empty_for_fresh_analyst(monkeypatch):
 
 def test_stats_ownership_isolation(monkeypatch):
     _fake_llm_in_place(monkeypatch, risk="high", mitre=["T1110", "T1078"])
-    pw = "stats-pw-123456"
+    pw = "Stats-Pw-123456!"
     admin_email = _email()
     a_email = _email()
     b_email = _email()
@@ -151,7 +151,7 @@ def test_stats_ownership_isolation(monkeypatch):
 def test_stats_daily_bucket(monkeypatch):
     """Single-day creation collapses into one daily point."""
     _fake_llm_in_place(monkeypatch, risk="medium", mitre=["T1059"])
-    pw = "stats-pw-123456"
+    pw = "Stats-Pw-123456!"
     admin_email = _email()
     client.post(
         "/api/auth/register",

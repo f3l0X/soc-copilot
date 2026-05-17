@@ -1,4 +1,6 @@
 import logging
+import time
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
@@ -6,21 +8,36 @@ from sqlalchemy import select
 from app.config import get_settings
 from app.db import DbSession
 from app.middleware.auth import CurrentUser
-from app.middleware.ratelimit import auth_rate_limit
-from app.models import User, UserRole
+from app.middleware.origin import enforce_same_origin
+from app.middleware.ratelimit import (
+    auth_rate_limit,
+    check_email_rate_limit,
+    register_email_rate_limit,
+)
+from app.models import User, UserLevel, UserRole
 from app.schemas.auth import (
+    CheckEmailResponse,
     LLMSettingsResponse,
     LLMSettingsUpdate,
     LoginRequest,
     LoginResponse,
     RegisterRequest,
+    RegisterResponse,
     UpdateProfileRequest,
     UserMe,
+    VerifyEmailRequest,
 )
-from app.services.auth import hash_password, issue_token, verify_password
+from app.services.auth import (
+    generate_verification_token,
+    hash_password,
+    is_locked,
+    issue_token,
+    verify_password,
+)
 from app.services.audit import log_audit
 from app.services.llm import GeminiAdapter, LLMProviderError
 from app.services.secrets import EncryptionDisabled, encrypt, last4
+from app.services.security import equalize_timing
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -41,19 +58,68 @@ def _set_session_cookie(response: Response, token: str) -> None:
 
 @router.post(
     "/register",
-    response_model=UserMe,
+    response_model=RegisterResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(auth_rate_limit)],
+    dependencies=[Depends(enforce_same_origin), Depends(auth_rate_limit)],
 )
-def register(payload: RegisterRequest, db: DbSession, request: Request) -> User:
+def register(
+    payload: RegisterRequest, db: DbSession, request: Request
+) -> RegisterResponse:
     """Bootstrap or invitation-style registration.
 
-    The very first user to register becomes ADMIN; everyone after is an
-    ANALYST. Once at least one user exists, public registration is
-    rejected unless ``ALLOW_PUBLIC_REGISTRATION=true`` — admin-only
-    invites are the secure default after bootstrap.
+    The very first user to register becomes ADMIN and is auto-verified;
+    everyone after is an ANALYST with the chosen seniority level (L1 / L2 /
+    INSTRUCTOR). Once at least one user exists, public registration is
+    rejected unless ``ALLOW_PUBLIC_REGISTRATION=true`` — admin-only invites
+    are the secure default after bootstrap.
+
+    When ``AUTH_REQUIRE_EMAIL_VERIFICATION`` is on the new user can't log
+    in until they click the verification link. Outside production we
+    return that link in the response so the flow is demoable without SMTP.
     """
+    started = time.monotonic()
     settings = get_settings()
+
+    # Honeypot: a real user can never see the "website" field. If it's
+    # filled, treat as a bot — return a believable 201 with a fake user
+    # so scanners think they succeeded and move on, but never persist.
+    if payload.website:
+        logger.warning(
+            "auth.register_honeypot_tripped",
+            extra={"ip": request.client.host if request.client else None},
+        )
+        log_audit(
+            db,
+            actor_email=payload.email,
+            action="auth.register_honeypot",
+            target_type="user",
+            target_label=payload.email,
+            details={"honeypot_value_len": len(payload.website)},
+            request=request,
+        )
+        db.commit()
+        equalize_timing(started, min_seconds=0.3)
+        fake = User(
+            id=0,
+            email=payload.email,
+            name=payload.name,
+            last_name="",
+            hashed_password="",
+            role=UserRole.ANALYST,
+            level=payload.level,
+            is_verified=False,
+            created_at=datetime.now(UTC),
+        )
+        return RegisterResponse(
+            user=UserMe.model_validate(fake),
+            verification_required=False,
+            verification_link_dev=None,
+        )
+
+    # Per-email throttle on TOP of per-IP. A distributed botnet rotating
+    # IPs to flood a single target inbox still gets capped here.
+    register_email_rate_limit(payload.email)
+
     is_first = db.scalar(select(User).limit(1)) is None
 
     # After bootstrap, gate self-service registration behind a flag so an
@@ -66,15 +132,32 @@ def register(payload: RegisterRequest, db: DbSession, request: Request) -> User:
 
     existing = db.scalar(select(User).where(User.email == payload.email))
     if existing:
+        # Equalize timing so 409 (taken) and 201 (created) responses
+        # don't differ in latency enough to enumerate via stopwatch.
+        equalize_timing(started, min_seconds=0.3)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="email already registered"
         )
+
+    # Bootstrap admin is always L1-agnostic; force a sensible level.
+    level = UserLevel.INSTRUCTOR if is_first else payload.level
+
+    requires_verification = (
+        settings.auth_require_email_verification and not is_first
+    )
+    token = generate_verification_token() if requires_verification else None
+    sent_at = datetime.now(UTC) if requires_verification else None
 
     user = User(
         email=payload.email,
         name=payload.name,
         hashed_password=hash_password(payload.password),
         role=UserRole.ADMIN if is_first else UserRole.ANALYST,
+        level=level,
+        is_verified=not requires_verification,
+        email_verified_at=datetime.now(UTC) if not requires_verification else None,
+        email_verification_token=token,
+        email_verification_sent_at=sent_at,
     )
     db.add(user)
     db.commit()
@@ -86,28 +169,188 @@ def register(payload: RegisterRequest, db: DbSession, request: Request) -> User:
         target_type="user",
         target_id=user.id,
         target_label=user.email,
-        details={"role": user.role.value, "is_first": is_first},
+        details={
+            "role": user.role.value,
+            "level": user.level.value,
+            "is_first": is_first,
+            "verification_required": requires_verification,
+        },
         request=request,
     )
     db.commit()
-    return user
+
+    # Dev-only convenience: expose the verification link so the flow can
+    # be demoed without SMTP. In production we never leak it.
+    verification_link_dev: str | None = None
+    if requires_verification and token and not settings.is_production:
+        verification_link_dev = (
+            f"{settings.web_base_url.rstrip('/')}/verify?token={token}"
+        )
+        logger.info(
+            "auth.verification_link_issued",
+            extra={"user_id": user.id, "link": verification_link_dev},
+        )
+
+    return RegisterResponse(
+        user=UserMe.model_validate(user),
+        verification_required=requires_verification,
+        verification_link_dev=verification_link_dev,
+    )
+
+
+@router.get(
+    "/check-email",
+    response_model=CheckEmailResponse,
+    dependencies=[Depends(check_email_rate_limit)],
+)
+def check_email(email: str, db: DbSession) -> CheckEmailResponse:
+    """Real-time availability check for the register form.
+
+    Hardened against email enumeration scanners:
+
+    * Tight rate limit (10/min/IP via dependency) — a human form types
+      one query per debounce, a scraper trips this in seconds.
+    * Response time floored to ~150ms so DB-hit vs DB-miss can't be
+      timed apart.
+    """
+    started = time.monotonic()
+    email_norm = email.strip().lower()
+    if "@" not in email_norm or len(email_norm) > 255:
+        equalize_timing(started)
+        return CheckEmailResponse(available=False)
+    existing = db.scalar(select(User).where(User.email == email_norm))
+    equalize_timing(started)
+    return CheckEmailResponse(available=existing is None)
+
+
+@router.post(
+    "/verify-email",
+    response_model=UserMe,
+    dependencies=[Depends(enforce_same_origin), Depends(auth_rate_limit)],
+)
+def verify_email(
+    payload: VerifyEmailRequest, db: DbSession, request: Request
+) -> UserMe:
+    """Activate an account from the verification link.
+
+    Tokens are single-use and expire after
+    ``EMAIL_VERIFICATION_TTL_HOURS``. We deliberately return the same
+    error for "no such token" and "expired token" so a stolen link can't
+    be probed for liveness.
+    """
+    settings = get_settings()
+    user = db.scalar(
+        select(User).where(User.email_verification_token == payload.token)
+    )
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="token inválido o expirado",
+        )
+
+    ttl = timedelta(hours=settings.email_verification_ttl_hours)
+    if (
+        user.email_verification_sent_at is None
+        or datetime.now(UTC) > user.email_verification_sent_at + ttl
+    ):
+        log_audit(
+            db,
+            actor=user,
+            action="auth.verify_failed",
+            target_type="user",
+            target_id=user.id,
+            target_label=user.email,
+            details={"reason": "expired"},
+            request=request,
+        )
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="token inválido o expirado",
+        )
+
+    user.is_verified = True
+    user.email_verified_at = datetime.now(UTC)
+    user.email_verification_token = None
+    user.email_verification_sent_at = None
+    db.commit()
+    db.refresh(user)
+    log_audit(
+        db,
+        actor=user,
+        action="auth.email_verified",
+        target_type="user",
+        target_id=user.id,
+        target_label=user.email,
+        request=request,
+    )
+    db.commit()
+    return UserMe.model_validate(user)
 
 
 @router.post(
     "/login",
     response_model=LoginResponse,
-    dependencies=[Depends(auth_rate_limit)],
+    dependencies=[Depends(enforce_same_origin), Depends(auth_rate_limit)],
 )
-def login(payload: LoginRequest, db: DbSession, response: Response, request: Request) -> LoginResponse:
+def login(
+    payload: LoginRequest, db: DbSession, response: Response, request: Request
+) -> LoginResponse:
+    settings = get_settings()
     user = db.scalar(select(User).where(User.email == payload.email))
 
+    # Lockout check happens BEFORE password verification — we don't even
+    # peek at the hash while locked, so a lock can't be partially
+    # circumvented by timing.
+    if user is not None and is_locked(user.locked_until):
+        log_audit(
+            db,
+            actor=user,
+            action="auth.login_blocked",
+            target_type="user",
+            target_id=user.id,
+            target_label=user.email,
+            details={"reason": "locked"},
+            request=request,
+        )
+        db.commit()
+        # Same opaque message as bad credentials — never reveal lockout
+        # state, that would help an attacker map valid accounts.
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid credentials"
+        )
+
     if user is None:
+        # Equalise timing: still hash something so existence is harder to
+        # probe via response latency.
         hash_password(payload.password)
         valid_password = False
     else:
         valid_password = verify_password(payload.password, user.hashed_password)
 
     if not valid_password:
+        details: dict = {"success": False}
+        if user is not None:
+            user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
+            details["attempts"] = user.failed_login_attempts
+            if user.failed_login_attempts >= settings.auth_lockout_threshold:
+                user.locked_until = datetime.now(UTC) + timedelta(
+                    minutes=settings.auth_lockout_minutes
+                )
+                details["locked_until"] = user.locked_until.isoformat()
+                log_audit(
+                    db,
+                    actor=user,
+                    action="auth.lockout",
+                    target_type="user",
+                    target_id=user.id,
+                    target_label=user.email,
+                    details={
+                        "attempts": user.failed_login_attempts,
+                        "locked_minutes": settings.auth_lockout_minutes,
+                    },
+                    request=request,
+                )
         log_audit(
             db,
             actor_id=user.id if user else None,
@@ -116,7 +359,7 @@ def login(payload: LoginRequest, db: DbSession, response: Response, request: Req
             target_type="user",
             target_id=user.id if user else None,
             target_label=payload.email,
-            details={"success": False},
+            details=details,
             request=request,
         )
         db.commit()
@@ -124,6 +367,29 @@ def login(payload: LoginRequest, db: DbSession, response: Response, request: Req
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid credentials"
         )
+
+    # Verification gate — only enforced once at least one admin exists,
+    # because the bootstrap user always gets auto-verified.
+    if settings.auth_require_email_verification and not user.is_verified:
+        log_audit(
+            db,
+            actor=user,
+            action="auth.login_blocked",
+            target_type="user",
+            target_id=user.id,
+            target_label=user.email,
+            details={"reason": "not_verified"},
+            request=request,
+        )
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="email no verificado — revisa tu bandeja",
+        )
+
+    # Successful login → clear lockout state.
+    user.failed_login_attempts = 0
+    user.locked_until = None
 
     token, exp = issue_token(
         user_id=user.id, role=user.role.value, password_version=user.password_version
@@ -136,7 +402,7 @@ def login(payload: LoginRequest, db: DbSession, response: Response, request: Req
         target_type="user",
         target_id=user.id,
         target_label=user.email,
-        details={"success": True},
+        details={"success": True, "level": user.level.value},
         request=request,
     )
     db.commit()

@@ -80,7 +80,7 @@ def test_quota_wall_then_admin_reset(monkeypatch):
 
     admin_email = _email()
     analyst_email = _email()
-    pw = "quota-strong-pw-1234"
+    pw = "Quota-Strong-Pw-1234!"
 
     # First user → admin, second → analyst (bootstrap rule).
     for email in (admin_email, analyst_email):

@@ -8,7 +8,7 @@ documento:
 | Origen | IDs | Cantidad | Origen |
 |--------|-----|----------|--------|
 | MITRE ATT&CK Enterprise (técnicas vigentes) | `mitre:T####` y `mitre:T####.###` | ~691 | bundle STIX descargado en runtime |
-| OWASP Top 10 2021 (categorías) | `owasp:A##:2021` | 10 | hardcodeado en `apps/api/scripts/owasp_top10.py` |
+| OWASP Top 10 2025 (categorías) | `owasp:A##:2025` | 10 | hardcodeado en `apps/api/scripts/owasp_top10.py` |
 
 Total: ~700 documentos. Embeddings de 3072 dim generados con
 `gemini-embedding-001`.

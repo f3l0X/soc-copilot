@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   AdminUserView,
@@ -20,6 +20,14 @@ import {
   updatePermissions,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import {
+  evaluatePassword,
+  loadZxcvbn,
+  MIN_STRENGTH_SCORE,
+  STRENGTH_COLORS,
+  STRENGTH_LABELS,
+  type ZxcvbnFn,
+} from "@/lib/password";
 
 type Tab = "usuarios" | "roles" | "permisos" | "auditoria";
 
@@ -65,8 +73,12 @@ export default function AdminPage() {
   // Password modal
   const [pwUser, setPwUser] = useState<AdminUserView | null>(null);
   const [newPassword, setNewPassword] = useState("");
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState("");
   const [pwLoading, setPwLoading] = useState(false);
   const [pwError, setPwError] = useState<string | null>(null);
+  const [pwStrengthScore, setPwStrengthScore] = useState(0);
+  const [pwStrengthFeedback, setPwStrengthFeedback] = useState("");
+  const pwZxcvbnRef = useRef<ZxcvbnFn | null>(null);
 
   // Per-row inline action state
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -74,6 +86,8 @@ export default function AdminPage() {
   const [rowNotice, setRowNotice] = useState<string | null>(null);
   // Inline confirmation state for the "Resetear cuota" action.
   const [confirmResetId, setConfirmResetId] = useState<number | null>(null);
+  // Inline confirmation state for the "Eliminar" action.
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   // Permisos tab
   const [perms, setPerms] = useState<PermissionCell[]>([]);
@@ -105,6 +119,40 @@ export default function AdminPage() {
   useEffect(() => {
     void loadUsers();
   }, []);
+
+  // Lazy-load zxcvbn when the reset-password modal opens.
+  useEffect(() => {
+    if (!pwUser || pwZxcvbnRef.current) return;
+    loadZxcvbn().then((fn) => {
+      pwZxcvbnRef.current = fn;
+      if (newPassword) {
+        const r = fn(newPassword);
+        setPwStrengthScore(r.score);
+        setPwStrengthFeedback(r.feedback.warning || r.feedback.suggestions[0] || "");
+      }
+    });
+  }, [pwUser, newPassword]);
+
+  // Re-score password on every change while the modal is open.
+  useEffect(() => {
+    if (!pwUser || !pwZxcvbnRef.current) return;
+    if (!newPassword) {
+      setPwStrengthScore(0);
+      setPwStrengthFeedback("");
+      return;
+    }
+    const r = pwZxcvbnRef.current(newPassword);
+    setPwStrengthScore(r.score);
+    setPwStrengthFeedback(r.feedback.warning || r.feedback.suggestions[0] || "");
+  }, [newPassword, pwUser]);
+
+  const pwEval = useMemo(() => evaluatePassword(newPassword), [newPassword]);
+  const pwMatch =
+    newPassword.length > 0 && newPassword === newPasswordConfirm;
+  const pwCanSubmit =
+    pwEval.allRulesPass &&
+    pwStrengthScore >= MIN_STRENGTH_SCORE &&
+    pwMatch;
 
   const loadAudit = async (offset = 0) => {
     setAuditLoading(true);
@@ -210,12 +258,21 @@ export default function AdminPage() {
   async function handleChangePassword(e: React.FormEvent) {
     e.preventDefault();
     if (!pwUser) return;
+    if (!pwCanSubmit) {
+      setPwError(
+        "La contraseña no cumple la política de seguridad (revisa los requisitos).",
+      );
+      return;
+    }
     setPwLoading(true);
     setPwError(null);
     try {
       await adminChangePassword(pwUser.id, newPassword);
       setPwUser(null);
       setNewPassword("");
+      setNewPasswordConfirm("");
+      setPwStrengthScore(0);
+      setPwStrengthFeedback("");
     } catch (err) {
       setPwError(err instanceof ApiError ? err.detail : "Error al actualizar la contraseña");
     } finally {
@@ -279,9 +336,6 @@ export default function AdminPage() {
   }
 
   async function handleDelete(target: AdminUserView) {
-    if (!confirm(`¿Eliminar a ${target.email}? Esta acción no se puede deshacer.`)) {
-      return;
-    }
     setBusyId(target.id);
     setRowError(null);
     try {
@@ -292,6 +346,7 @@ export default function AdminPage() {
         err instanceof ApiError ? err.detail : "No se pudo eliminar el usuario"
       );
     } finally {
+      setConfirmDeleteId(null);
       setBusyId(null);
     }
   }
@@ -409,6 +464,7 @@ export default function AdminPage() {
                       }
                     }
                     const confirmingReset = confirmResetId === u.id;
+                    const confirmingDelete = confirmDeleteId === u.id;
                     return (
                       <tr key={u.id} className="hover:bg-ink-800/40">
                         <td className="px-4 py-3 text-slate-400">{u.id}</td>
@@ -448,67 +504,103 @@ export default function AdminPage() {
                             </span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-right space-x-3">
-                          {confirmingReset ? (
-                            <>
-                              <span className="text-xs text-amber-300">
-                                ¿Resetear?
-                              </span>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap justify-end gap-2">
+                            {confirmingReset ? (
+                              <>
+                                <span className="self-center text-xs text-amber-300">
+                                  ¿Resetear?
+                                </span>
+                                <button
+                                  disabled={busy}
+                                  onClick={() => handleResetQuota(u)}
+                                  className="rounded border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-300 transition-colors hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                  Sí
+                                </button>
+                                <button
+                                  disabled={busy}
+                                  onClick={() => setConfirmResetId(null)}
+                                  className="rounded border border-ink-700 bg-ink-800/40 px-2.5 py-1 text-xs font-medium text-slate-300 transition-colors hover:bg-ink-800/70 disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                  No
+                                </button>
+                              </>
+                            ) : (
                               <button
-                                disabled={busy}
-                                onClick={() => handleResetQuota(u)}
-                                className="text-emerald-300 hover:text-emerald-300 underline disabled:opacity-50"
+                                disabled={
+                                  busy || u.byo_key_configured || used === 0
+                                }
+                                onClick={() => {
+                                  setRowNotice(null);
+                                  setRowError(null);
+                                  setConfirmResetId(u.id);
+                                }}
+                                className="rounded border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-300 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                                title={
+                                  u.byo_key_configured
+                                    ? "El usuario tiene BYO key — la cuota del servidor no aplica"
+                                    : used === 0
+                                      ? "Sin consumo hoy — nada que resetear"
+                                      : "Pone el contador del día a 0"
+                                }
                               >
-                                Sí
+                                Resetear cuota
                               </button>
-                              <button
-                                disabled={busy}
-                                onClick={() => setConfirmResetId(null)}
-                                className="text-slate-400 hover:text-slate-200 underline disabled:opacity-50"
-                              >
-                                No
-                              </button>
-                            </>
-                          ) : (
+                            )}
                             <button
-                              disabled={
-                                busy || u.byo_key_configured || used === 0
-                              }
+                              disabled={busy}
                               onClick={() => {
-                                setRowNotice(null);
-                                setRowError(null);
-                                setConfirmResetId(u.id);
+                                setPwUser(u);
+                                setNewPassword("");
+                                setNewPasswordConfirm("");
+                                setPwStrengthScore(0);
+                                setPwStrengthFeedback("");
+                                setPwError(null);
                               }}
-                              className="text-amber-400 hover:text-amber-300 underline disabled:opacity-30 disabled:no-underline"
-                              title={
-                                u.byo_key_configured
-                                  ? "El usuario tiene BYO key — la cuota del servidor no aplica"
-                                  : used === 0
-                                    ? "Sin consumo hoy — nada que resetear"
-                                    : "Pone el contador del día a 0"
-                              }
+                              className="rounded border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1 text-xs font-medium text-cyan-300 transition-colors hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                             >
-                              Resetear cuota
+                              Resetear contraseña
                             </button>
-                          )}
-                          <button
-                            disabled={busy}
-                            onClick={() => {
-                              setPwUser(u);
-                              setNewPassword("");
-                              setPwError(null);
-                            }}
-                            className="text-cyan-400 hover:text-cyan-300 underline disabled:opacity-50"
-                          >
-                            Password
-                          </button>
-                          <button
-                            disabled={busy || isSelf}
-                            onClick={() => handleDelete(u)}
-                            className="text-rose-400 hover:text-rose-300 underline disabled:opacity-30 disabled:no-underline"
-                          >
-                            Eliminar
-                          </button>
+                            {confirmingDelete ? (
+                              <>
+                                <span className="self-center text-xs text-rose-300">
+                                  ¿Eliminar?
+                                </span>
+                                <button
+                                  disabled={busy}
+                                  onClick={() => handleDelete(u)}
+                                  className="rounded border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-300 transition-colors hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                  Sí
+                                </button>
+                                <button
+                                  disabled={busy}
+                                  onClick={() => setConfirmDeleteId(null)}
+                                  className="rounded border border-ink-700 bg-ink-800/40 px-2.5 py-1 text-xs font-medium text-slate-300 transition-colors hover:bg-ink-800/70 disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                  No
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                disabled={busy || isSelf}
+                                onClick={() => {
+                                  setRowNotice(null);
+                                  setRowError(null);
+                                  setConfirmDeleteId(u.id);
+                                }}
+                                className="rounded border border-rose-500/40 bg-rose-500/10 px-2.5 py-1 text-xs font-medium text-rose-300 transition-colors hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                                title={
+                                  isSelf
+                                    ? "No puedes eliminar tu propia cuenta"
+                                    : "Eliminar usuario — acción no reversible"
+                                }
+                              >
+                                Eliminar
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -903,7 +995,7 @@ export default function AdminPage() {
             onSubmit={handleChangePassword}
             className="w-full max-w-sm bg-ink-900 border border-ink-700 rounded-xl shadow-xl p-6 space-y-4"
           >
-            <h3 className="text-lg font-bold">Cambiar Contraseña</h3>
+            <h3 className="text-lg font-bold">Resetear contraseña</h3>
             <p className="text-sm text-slate-400">
               Usuario: <span className="text-slate-200">{pwUser.email}</span>
             </p>
@@ -918,17 +1010,75 @@ export default function AdminPage() {
             )}
 
             <label className="block text-sm">
-              <span className="text-slate-400">Nueva Contraseña</span>
+              <span className="text-slate-400">Nueva contraseña</span>
               <input
                 type="password"
                 required
-                minLength={8}
+                minLength={10}
+                autoComplete="new-password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-white"
-                placeholder="Mínimo 8 caracteres"
               />
             </label>
+
+            <label className="block text-sm">
+              <span className="text-slate-400">Confirmar contraseña</span>
+              <input
+                type="password"
+                required
+                minLength={10}
+                autoComplete="new-password"
+                value={newPasswordConfirm}
+                onChange={(e) => setNewPasswordConfirm(e.target.value)}
+                className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-white"
+              />
+              {newPasswordConfirm && (
+                <span
+                  className={`mt-1 block text-[11px] ${
+                    pwMatch ? "text-emerald-400" : "text-rose-400"
+                  }`}
+                >
+                  {pwMatch
+                    ? "✓ Las contraseñas coinciden"
+                    : "✕ Las contraseñas no coinciden"}
+                </span>
+              )}
+            </label>
+
+            {newPassword && (
+              <div className="space-y-2">
+                <div className="flex gap-1">
+                  {[0, 1, 2, 3, 4].map((i) => (
+                    <div
+                      key={i}
+                      className={`h-1.5 flex-1 rounded ${
+                        i <= pwStrengthScore
+                          ? STRENGTH_COLORS[pwStrengthScore]
+                          : "bg-slate-800"
+                      }`}
+                    />
+                  ))}
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Fortaleza:{" "}
+                  <span className="font-medium text-slate-200">
+                    {STRENGTH_LABELS[pwStrengthScore]}
+                  </span>
+                  {pwStrengthFeedback ? ` — ${pwStrengthFeedback}` : ""}
+                </p>
+                <ul className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px]">
+                  {pwEval.rules.map((r) => (
+                    <li
+                      key={r.id}
+                      className={r.ok ? "text-emerald-400" : "text-slate-500"}
+                    >
+                      {r.ok ? "✓" : "○"} {r.label}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             <div className="flex justify-end gap-3 mt-6">
               <button
@@ -936,7 +1086,10 @@ export default function AdminPage() {
                 onClick={() => {
                   setPwUser(null);
                   setNewPassword("");
+                  setNewPasswordConfirm("");
                   setPwError(null);
+                  setPwStrengthScore(0);
+                  setPwStrengthFeedback("");
                 }}
                 className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200"
               >
@@ -944,8 +1097,8 @@ export default function AdminPage() {
               </button>
               <button
                 type="submit"
-                disabled={pwLoading}
-                className="px-4 py-2 text-sm bg-cyan-500 text-ink-950 hover:bg-cyan-400 disabled:bg-ink-800 disabled:text-slate-500 rounded-md font-medium"
+                disabled={pwLoading || !pwCanSubmit}
+                className="px-4 py-2 text-sm bg-cyan-500 text-ink-950 hover:bg-cyan-400 disabled:bg-ink-800 disabled:text-slate-500 disabled:cursor-not-allowed rounded-md font-medium"
               >
                 {pwLoading ? "Guardando..." : "Guardar"}
               </button>

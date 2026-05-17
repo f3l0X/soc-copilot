@@ -66,6 +66,8 @@ services:
     volumes:
       # Live-reload backend code without rebuilding the image.
       - ../apps/api/app:/code/app
+      # Mount alembic so new migration files appear without rebuilding the image.
+      - ../apps/api/alembic:/code/alembic
       # Mount tests + scripts read-only so `docker compose exec api pytest`
       # and `... python -m scripts.ingest_kb` work without bind-mount flags.
       - ../apps/api/tests:/code/tests:ro

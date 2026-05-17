@@ -261,7 +261,7 @@ Respuesta:
 ```json
 {
   "reply": "MITRE T1110 (Brute Force) ... cite [mitre:T1110]...",
-  "sources": ["mitre:T1110", "mitre:T1110.001", "owasp:A07:2021"]
+  "sources": ["mitre:T1110", "mitre:T1110.001", "owasp:A07:2025"]
 }
 ```
 

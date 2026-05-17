@@ -88,11 +88,15 @@ def create_user(
             status_code=status.HTTP_409_CONFLICT, detail="email already registered"
         )
 
+    # Admin-created users are pre-verified — the admin vouches for them.
     new_user = User(
         name=payload.name,
         email=payload.email,
         hashed_password=hash_password(payload.password),
         role=payload.role,
+        level=payload.level,
+        is_verified=True,
+        email_verified_at=datetime.now(UTC),
     )
     db.add(new_user)
     db.flush()

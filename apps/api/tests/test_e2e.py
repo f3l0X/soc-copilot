@@ -46,7 +46,7 @@ def _email() -> str:
 
 def test_first_user_becomes_admin_and_full_flow():
     admin_email = _email()
-    admin_pw = "adminpass-strong-12345"
+    admin_pw = "Adminpass-Strong-12345!"
 
     # Register → first user is admin
     r = client.post(
@@ -54,7 +54,7 @@ def test_first_user_becomes_admin_and_full_flow():
         json={"name": "Admin", "email": admin_email, "password": admin_pw},
     )
     assert r.status_code == 201, r.text
-    assert r.json()["role"] == "admin"
+    assert r.json()["user"]["role"] == "admin"
 
     # Wrong password rejected
     r = client.post(
@@ -83,13 +83,13 @@ def test_first_user_becomes_admin_and_full_flow():
 
     # Second register → analyst role
     analyst_email = _email()
-    analyst_pw = "analystpass-xyz-9999"
+    analyst_pw = "Analystpass-Xyz-9999!"
     r = client.post(
         "/api/auth/register",
         json={"name": "Analyst", "email": analyst_email, "password": analyst_pw},
     )
     assert r.status_code == 201
-    assert r.json()["role"] == "analyst"
+    assert r.json()["user"]["role"] == "analyst"
 
     # Logout invalidates the cookie session
     r = client.post("/api/auth/logout")
@@ -98,13 +98,226 @@ def test_first_user_becomes_admin_and_full_flow():
     assert r.status_code == 401
 
 
+# ─── Registration hardening (Phase 6) ───────────────────────────────────
+
+
+def test_register_rejects_duplicate_email():
+    """Second register with the same email returns 409."""
+    pw = "Dup-Strong-Pass!-1234"
+    e = _email()
+    r1 = client.post(
+        "/api/auth/register",
+        json={"name": "First", "email": e, "password": pw},
+    )
+    assert r1.status_code == 201, r1.text
+    r2 = client.post(
+        "/api/auth/register",
+        json={"name": "Second", "email": e, "password": pw},
+    )
+    assert r2.status_code == 409
+    assert "registered" in r2.json()["detail"].lower()
+
+
+def test_register_rejects_weak_password_at_http_layer():
+    r = client.post(
+        "/api/auth/register",
+        json={"name": "Weak", "email": _email(), "password": "weakpass"},
+    )
+    # Pydantic validator → 422.
+    assert r.status_code == 422
+
+
+def test_check_email_endpoint():
+    e = _email()
+    r = client.get(f"/api/auth/check-email?email={e}")
+    assert r.status_code == 200
+    assert r.json() == {"available": True}
+
+    pw = "Check-Email-Strong-1!"
+    client.post(
+        "/api/auth/register",
+        json={"name": "Owner", "email": e, "password": pw},
+    )
+    r = client.get(f"/api/auth/check-email?email={e}")
+    assert r.json() == {"available": False}
+
+
+def test_login_locks_after_threshold_failures():
+    """4 failed attempts → account locked; correct password still rejected."""
+    from app.config import get_settings
+    from app.middleware import ratelimit as rl
+
+    settings = get_settings()
+    threshold = settings.auth_lockout_threshold
+
+    email = _email()
+    pw = "Locked-Out-Strong-1!"
+    r = client.post(
+        "/api/auth/register",
+        json={"name": "Lockee", "email": email, "password": pw},
+    )
+    assert r.status_code == 201, r.text
+
+    # Burn through the strict auth bucket allowance carefully — reset
+    # between attempts so the rate limiter doesn't 429 us before we hit
+    # the lockout threshold.
+    for _ in range(threshold):
+        rl.reset()
+        r = client.post(
+            "/api/auth/login",
+            json={"email": email, "password": "wrong-password"},
+        )
+        assert r.status_code == 401, r.text
+
+    # Right password now also rejected (same opaque 401).
+    rl.reset()
+    r = client.post("/api/auth/login", json={"email": email, "password": pw})
+    assert r.status_code == 401, r.text
+
+    # Audit log captured the lockout.
+    admin_email = _email()
+    admin_pw = "Audit-Admin-Strong-1!"
+    rl.reset()
+    # Need an admin to read the audit endpoint; register one (this is
+    # actually the second user → analyst because Lockee was first… so
+    # bootstrap one BEFORE the lockout block).
+    # Instead, just check the audit table directly.
+    from sqlalchemy import select, text  # noqa: F401
+    from app.db import _SessionLocal
+    from app.models import AuditLog
+
+    with _SessionLocal() as s:
+        rows = s.scalars(
+            select(AuditLog).where(AuditLog.action == "auth.lockout")
+        ).all()
+        assert any(r.target_label == email for r in rows), [
+            (r.action, r.target_label) for r in rows
+        ]
+    _ = (admin_email, admin_pw)
+
+
+def test_verification_required_blocks_login_until_token_used(monkeypatch):
+    """With email verification on, a fresh non-bootstrap user must verify
+    before /auth/login succeeds."""
+    from app.config import Settings, get_settings
+    from app.middleware import ratelimit as rl
+
+    # Bootstrap an admin first (auto-verified).
+    admin_pw = "Verif-Admin-Strong-1!"
+    admin_email = _email()
+    r = client.post(
+        "/api/auth/register",
+        json={"name": "Admin", "email": admin_email, "password": admin_pw},
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["user"]["is_verified"] is True
+
+    # Flip the gate on for the second user.
+    def _patched():
+        s = Settings()
+        s.auth_require_email_verification = True
+        return s
+
+    get_settings.cache_clear()
+    monkeypatch.setattr("app.routers.auth.get_settings", _patched)
+
+    rl.reset()
+    user_email = _email()
+    user_pw = "Verif-User-Strong-1!"
+    r = client.post(
+        "/api/auth/register",
+        json={"name": "U", "email": user_email, "password": user_pw},
+    )
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["verification_required"] is True
+    assert body["user"]["is_verified"] is False
+    link = body["verification_link_dev"]
+    assert link and "token=" in link
+
+    # Login refused until verified.
+    rl.reset()
+    r = client.post(
+        "/api/auth/login", json={"email": user_email, "password": user_pw}
+    )
+    assert r.status_code == 403, r.text
+
+    # Verify with the token.
+    token = link.split("token=", 1)[1]
+    r = client.post("/api/auth/verify-email", json={"token": token})
+    assert r.status_code == 200, r.text
+    assert r.json()["is_verified"] is True
+
+    # Now login works.
+    rl.reset()
+    r = client.post(
+        "/api/auth/login", json={"email": user_email, "password": user_pw}
+    )
+    assert r.status_code == 200, r.text
+
+    # Re-using the same token → 400 (single-use).
+    rl.reset()
+    r = client.post("/api/auth/verify-email", json={"token": token})
+    assert r.status_code == 400
+
+    get_settings.cache_clear()
+
+
+def test_verification_token_expired():
+    """A stale token (older than TTL) is rejected with the same opaque
+    error as an unknown token."""
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import select
+    from app.config import get_settings
+    from app.db import _SessionLocal
+    from app.models import User
+    from app.middleware import ratelimit as rl
+    from app.services.auth import generate_verification_token
+
+    # Bootstrap admin → auto-verified; we need a SECOND user to inject a
+    # stale token into.
+    admin_pw = "Exp-Admin-Strong-1!"
+    client.post(
+        "/api/auth/register",
+        json={"name": "A", "email": _email(), "password": admin_pw},
+    )
+    rl.reset()
+
+    user_email = _email()
+    user_pw = "Exp-User-Strong-1!"
+    r = client.post(
+        "/api/auth/register",
+        json={"name": "U", "email": user_email, "password": user_pw},
+    )
+    assert r.status_code == 201
+
+    # Force a stale token on this user.
+    settings = get_settings()
+    stale_token = generate_verification_token()
+    with _SessionLocal() as s:
+        u = s.scalar(select(User).where(User.email == user_email))
+        u.is_verified = False
+        u.email_verified_at = None
+        u.email_verification_token = stale_token
+        u.email_verification_sent_at = datetime.now(UTC) - timedelta(
+            hours=settings.email_verification_ttl_hours + 1
+        )
+        s.commit()
+
+    rl.reset()
+    r = client.post("/api/auth/verify-email", json={"token": stale_token})
+    assert r.status_code == 400
+    assert "expirado" in r.json()["detail"].lower() or "invalid" in r.json()["detail"].lower()
+
+
 def test_ownership_isolation_between_users(monkeypatch):
     """Two analysts each see only their own alerts; admin sees both."""
     # Create three users
     admin_email = _email()
     a_email = _email()
     b_email = _email()
-    pw = "shared-strong-pw-1234"
+    pw = "Shared-Strong-Pw-1234!"
     for email in [admin_email, a_email, b_email]:
         r = client.post(
             "/api/auth/register",

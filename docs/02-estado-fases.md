@@ -58,7 +58,7 @@ Salida generada por la API:
 
 - Script idempotente `apps/api/scripts/ingest_kb.py` que descarga el bundle
   STIX de MITRE ATT&CK Enterprise, extrae técnicas vigentes y las combina
-  con OWASP Top 10 2021 hardcodeado. Embeddings en lotes con backoff
+  con OWASP Top 10 2025 hardcodeado. Embeddings en lotes con backoff
   exponencial para sobrevivir al rate limit free-tier.
 - Coleccion ChromaDB `soc_kb` con ~700 docs (691 MITRE + 10 OWASP en
   estado actual).

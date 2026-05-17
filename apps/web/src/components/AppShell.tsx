@@ -29,8 +29,13 @@ const SYS_NAV: NavItem[] = [
 
 function Sidebar() {
   const pathname = usePathname();
+  const { user } = useAuth();
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(href + "/");
+
+  const sysNav = SYS_NAV.filter(
+    (it) => it.href !== "/admin" || user?.role === "admin",
+  );
 
   const renderItem = (it: NavItem) => {
     const active = isActive(it.href);
@@ -89,7 +94,7 @@ function Sidebar() {
         <div className="px-3 pt-5 pb-2 text-[10px] uppercase tracking-widest text-slate-500">
           Sistema
         </div>
-        {SYS_NAV.map(renderItem)}
+        {sysNav.map(renderItem)}
       </nav>
 
       <div className="mt-auto m-3 rounded-lg border border-ink-700 bg-ink-850 p-3 text-xs">

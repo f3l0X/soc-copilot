@@ -121,6 +121,6 @@ Docker. El stack levanta todo en contenedores.
 4. Pulsar **Siguiente paso**: aparecen acciones recomendadas.
 5. Abrir `/history`: la alerta queda persistida con tu user_id.
 6. Abrir `/chat`, hacer una pregunta sobre alguna técnica MITRE: la
-   respuesta debe citar IDs como `mitre:T1110` u `owasp:A03:2021`.
+   respuesta debe citar IDs como `mitre:T1110` u `owasp:A03:2025`.
 
 Si algo falla, ver [docs/05-solucion-problemas.md](05-solucion-problemas.md).

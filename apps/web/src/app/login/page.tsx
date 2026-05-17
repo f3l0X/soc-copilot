@@ -1,10 +1,23 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 
-import { ApiError, register } from "@/lib/api";
+import { ApiError, checkEmail, register, UserLevel } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import {
+  loadZxcvbn,
+  MIN_STRENGTH_SCORE,
+  PASSWORD_RULES,
+  STRENGTH_COLORS,
+  STRENGTH_LABELS,
+  type ZxcvbnFn,
+} from "@/lib/password";
+const LEVEL_OPTIONS: { value: UserLevel; label: string; hint: string }[] = [
+  { value: "L1", label: "Analista L1", hint: "Junior — el Copilot explica paso a paso" },
+  { value: "L2", label: "Analista L2", hint: "Senior — respuestas más concisas" },
+  { value: "INSTRUCTOR", label: "Instructor", hint: "Detalle completo sin filtros" },
+];
 
 function LoginInner() {
   const router = useRouter();
@@ -14,29 +27,125 @@ function LoginInner() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [level, setLevel] = useState<UserLevel>("L1");
+  // Honeypot. Real users never see or focus this field; if it ends up
+  // non-empty, a bot filled the form and the server returns fake-201
+  // without persisting anything.
+  const [website, setWebsite] = useState("");
   const [mode, setMode] = useState<"login" | "register">("login");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+
+  // ── Password strength (zxcvbn, lazy-loaded) ─────────────────────────
+  const [strengthScore, setStrengthScore] = useState(0);
+  const [strengthFeedback, setStrengthFeedback] = useState<string>("");
+  const zxcvbnRef = useRef<ZxcvbnFn | null>(null);
+  useEffect(() => {
+    if (mode !== "register" || zxcvbnRef.current) return;
+    loadZxcvbn().then((fn) => {
+      zxcvbnRef.current = fn;
+      if (password) {
+        const r = fn(password);
+        setStrengthScore(r.score);
+        setStrengthFeedback(r.feedback.warning || r.feedback.suggestions[0] || "");
+      }
+    });
+  }, [mode, password]);
+
+  useEffect(() => {
+    if (mode !== "register") return;
+    if (!zxcvbnRef.current) return;
+    if (!password) {
+      setStrengthScore(0);
+      setStrengthFeedback("");
+      return;
+    }
+    const r = zxcvbnRef.current(password);
+    setStrengthScore(r.score);
+    setStrengthFeedback(r.feedback.warning || r.feedback.suggestions[0] || "");
+  }, [password, mode]);
+
+  // ── Real-time email availability check (debounced) ───────────────────
+  const [emailStatus, setEmailStatus] = useState<
+    "idle" | "checking" | "available" | "taken" | "invalid"
+  >("idle");
+  useEffect(() => {
+    if (mode !== "register") {
+      setEmailStatus("idle");
+      return;
+    }
+    if (!email) {
+      setEmailStatus("idle");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setEmailStatus("invalid");
+      return;
+    }
+    setEmailStatus("checking");
+    const handle = setTimeout(async () => {
+      try {
+        const r = await checkEmail(email);
+        setEmailStatus(r.available ? "available" : "taken");
+      } catch {
+        setEmailStatus("idle");
+      }
+    }, 350);
+    return () => clearTimeout(handle);
+  }, [email, mode]);
 
   useEffect(() => {
     if (!auth.loading && auth.user) router.replace(next);
   }, [auth.loading, auth.user, next, router]);
 
+  const ruleChecks = useMemo(
+    () => PASSWORD_RULES.map((r) => ({ ...r, ok: r.test(password) })),
+    [password],
+  );
+  const allRulesPass = ruleChecks.every((r) => r.ok);
+  const passwordsMatch = password.length > 0 && password === passwordConfirm;
+  const canSubmit =
+    mode === "login"
+      ? email.length > 0 && password.length > 0
+      : name.length >= 2 &&
+        emailStatus === "available" &&
+        allRulesPass &&
+        strengthScore >= MIN_STRENGTH_SCORE &&
+        passwordsMatch;
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setInfo(null);
     try {
       if (mode === "register") {
-        await register(email, password, name);
+        const r = await register(email, password, name, level, website);
+        if (r.verification_required) {
+          setInfo(
+            r.verification_link_dev
+              ? `Cuenta creada. Verifica tu email: ${r.verification_link_dev}`
+              : "Cuenta creada. Revisa tu email para verificarla antes de iniciar sesión.",
+          );
+          setMode("login");
+          setPassword("");
+          setPasswordConfirm("");
+          return;
+        }
       }
       await auth.signIn(email, password);
       router.replace(next);
     } catch (err) {
       if (err instanceof ApiError) {
-        // 401 invalid credentials, 409 already registered, 422 validation.
         if (err.status === 401) setError("Credenciales inválidas.");
+        else if (err.status === 403)
+          setError("Acceso denegado. ¿Tienes el email verificado?");
         else if (err.status === 409) setError("Ese email ya está registrado.");
+        else if (err.status === 422) setError("Datos inválidos. Revisa los requisitos.");
+        else if (err.status === 429)
+          setError("Demasiados intentos. Espera un minuto.");
         else setError(err.detail.slice(0, 200));
       } else {
         setError(err instanceof Error ? err.message : String(err));
@@ -50,7 +159,7 @@ function LoginInner() {
     <main className="min-h-screen flex items-center justify-center p-8">
       <form
         onSubmit={onSubmit}
-        className="w-full max-w-sm space-y-4 rounded-lg border border-slate-800 bg-slate-900/40 p-6"
+        className="w-full max-w-md space-y-4 rounded-lg border border-slate-800 bg-slate-900/40 p-6"
       >
         <div>
           <h1 className="text-2xl font-bold tracking-tight">SOC Copilot</h1>
@@ -62,17 +171,76 @@ function LoginInner() {
         </div>
 
         {mode === "register" && (
-          <label className="block text-sm">
-            <span className="text-slate-400">Nombre</span>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              autoComplete="name"
-              className="mt-1 w-full rounded bg-slate-900 border border-slate-700 px-3 py-2"
-            />
-          </label>
+          <>
+            {/* Honeypot — visually hidden, off the tab order, autocomplete off.
+                Real users never fill this. */}
+            <div
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                left: "-10000px",
+                top: "auto",
+                width: "1px",
+                height: "1px",
+                overflow: "hidden",
+              }}
+            >
+              <label>
+                Website
+                <input
+                  type="text"
+                  name="website"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  value={website}
+                  onChange={(e) => setWebsite(e.target.value)}
+                />
+              </label>
+            </div>
+
+            <label className="block text-sm">
+              <span className="text-slate-400">Nombre</span>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                minLength={2}
+                autoComplete="name"
+                className="mt-1 w-full rounded bg-slate-900 border border-slate-700 px-3 py-2"
+              />
+            </label>
+
+            <fieldset className="block text-sm">
+              <legend className="text-slate-400 mb-1">Nivel SOC</legend>
+              <div className="grid grid-cols-3 gap-2">
+                {LEVEL_OPTIONS.map((opt) => (
+                  <label
+                    key={opt.value}
+                    className={`cursor-pointer rounded border px-2 py-2 text-center ${
+                      level === opt.value
+                        ? "border-sky-500 bg-sky-950/40"
+                        : "border-slate-700 hover:border-slate-500"
+                    }`}
+                    title={opt.hint}
+                  >
+                    <input
+                      type="radio"
+                      name="level"
+                      value={opt.value}
+                      checked={level === opt.value}
+                      onChange={() => setLevel(opt.value)}
+                      className="sr-only"
+                    />
+                    <span className="block text-xs font-medium">{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+              <p className="mt-1 text-[11px] text-slate-500">
+                {LEVEL_OPTIONS.find((o) => o.value === level)?.hint}
+              </p>
+            </fieldset>
+          </>
         )}
 
         <label className="block text-sm">
@@ -85,6 +253,22 @@ function LoginInner() {
             autoComplete="email"
             className="mt-1 w-full rounded bg-slate-900 border border-slate-700 px-3 py-2"
           />
+          {mode === "register" && email && (
+            <span
+              className={`mt-1 block text-[11px] ${
+                emailStatus === "available"
+                  ? "text-emerald-400"
+                  : emailStatus === "taken"
+                    ? "text-rose-400"
+                    : "text-slate-500"
+              }`}
+            >
+              {emailStatus === "checking" && "Comprobando disponibilidad…"}
+              {emailStatus === "available" && "✓ Email disponible"}
+              {emailStatus === "taken" && "✕ Ese email ya está registrado"}
+              {emailStatus === "invalid" && "Formato de email inválido"}
+            </span>
+          )}
         </label>
 
         <label className="block text-sm">
@@ -94,7 +278,7 @@ function LoginInner() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            minLength={mode === "register" ? 8 : 1}
+            minLength={mode === "register" ? 10 : 1}
             autoComplete={
               mode === "register" ? "new-password" : "current-password"
             }
@@ -102,16 +286,78 @@ function LoginInner() {
           />
         </label>
 
+        {mode === "register" && (
+          <label className="block text-sm">
+            <span className="text-slate-400">Confirmar contraseña</span>
+            <input
+              type="password"
+              value={passwordConfirm}
+              onChange={(e) => setPasswordConfirm(e.target.value)}
+              required
+              minLength={10}
+              autoComplete="new-password"
+              className="mt-1 w-full rounded bg-slate-900 border border-slate-700 px-3 py-2"
+            />
+            {passwordConfirm && (
+              <span
+                className={`mt-1 block text-[11px] ${
+                  passwordsMatch ? "text-emerald-400" : "text-rose-400"
+                }`}
+              >
+                {passwordsMatch
+                  ? "✓ Las contraseñas coinciden"
+                  : "✕ Las contraseñas no coinciden"}
+              </span>
+            )}
+          </label>
+        )}
+
+        {mode === "register" && password && (
+          <div className="space-y-2">
+            <div className="flex gap-1">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <div
+                  key={i}
+                  className={`h-1.5 flex-1 rounded ${
+                    i <= strengthScore
+                      ? STRENGTH_COLORS[strengthScore]
+                      : "bg-slate-800"
+                  }`}
+                />
+              ))}
+            </div>
+            <p className="text-[11px] text-slate-400">
+              Fortaleza: <span className="font-medium text-slate-200">{STRENGTH_LABELS[strengthScore]}</span>
+              {strengthFeedback ? ` — ${strengthFeedback}` : ""}
+            </p>
+            <ul className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px]">
+              {ruleChecks.map((r) => (
+                <li
+                  key={r.id}
+                  className={r.ok ? "text-emerald-400" : "text-slate-500"}
+                >
+                  {r.ok ? "✓" : "○"} {r.label}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {error && (
           <div className="rounded border border-rose-700 bg-rose-950/40 p-3 text-xs text-rose-300">
             {error}
           </div>
         )}
+        {info && (
+          <div className="rounded border border-emerald-700 bg-emerald-950/40 p-3 text-xs text-emerald-200 break-all">
+            {info}
+          </div>
+        )}
 
         <button
           type="submit"
-          disabled={loading}
-          className="w-full rounded bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 px-4 py-2 text-sm font-medium"
+          disabled={loading || !canSubmit}
+          className="w-full rounded bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium"
         >
           {loading
             ? "…"
@@ -122,7 +368,12 @@ function LoginInner() {
 
         <button
           type="button"
-          onClick={() => setMode(mode === "login" ? "register" : "login")}
+          onClick={() => {
+            setMode(mode === "login" ? "register" : "login");
+            setError(null);
+            setInfo(null);
+            setPasswordConfirm("");
+          }}
           className="block w-full text-center text-xs text-slate-400 hover:text-slate-200"
         >
           {mode === "login"

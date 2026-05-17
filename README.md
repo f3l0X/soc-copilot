@@ -87,7 +87,7 @@ UI:
 ## Knowledge base (RAG)
 
 `/api/chat` consulta una colección Chroma `soc_kb` poblada con MITRE
-ATT&CK Enterprise (todas las técnicas) y OWASP Top 10 2021.
+ATT&CK Enterprise (todas las técnicas) y OWASP Top 10 2025.
 
 Para ingerir la KB la primera vez (o re-ingerir tras cambios):
 

@@ -72,6 +72,22 @@ class Settings(BaseSettings):
     # bootstrap and create new users via admin endpoints.
     allow_public_registration: bool = True
 
+    # ── Email verification ──────────────────────────────────────────────
+    # When True, /auth/login rejects users that haven't clicked their
+    # verification link. SMTP isn't wired up in this repo — the dev path
+    # surfaces the link via the API response (only outside production).
+    auth_require_email_verification: bool = False
+    email_verification_ttl_hours: int = 24
+    # Base URL of the frontend, used to build the verification link.
+    web_base_url: str = "http://localhost:13500"
+
+    # ── Brute-force lockout ─────────────────────────────────────────────
+    # Counter increments on every wrong password; on the Nth fail the
+    # account is locked for `auth_lockout_minutes`. Counter resets on
+    # successful login or when the lock expires.
+    auth_lockout_threshold: int = 4
+    auth_lockout_minutes: int = 15
+
     # ── Per-user LLM keys ───────────────────────────────────────────────
     # Symmetric key (Fernet, base64-urlsafe 32 bytes) used to encrypt
     # user-supplied Gemini API keys at rest. Generate with:

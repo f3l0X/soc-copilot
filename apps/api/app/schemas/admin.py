@@ -3,7 +3,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from app.models import UserRole
+from app.models import UserLevel, UserRole
 
 
 class ChangePasswordRequest(BaseModel):
@@ -19,6 +19,7 @@ class CreateUserRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
     role: UserRole = UserRole.ANALYST
+    level: UserLevel = UserLevel.L1
 
 
 class PermissionCell(BaseModel):

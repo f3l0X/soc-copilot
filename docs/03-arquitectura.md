@@ -243,7 +243,7 @@ Colección única `soc_kb` con ~700 documentos:
 
 - `mitre:T####` — todas las técnicas vigentes de MITRE ATT&CK Enterprise
   (~691). Texto = `id — name\nTactics: ...\ndescription`.
-- `owasp:A##:2021` — 10 categorías OWASP Top 10 2021 (descripciones
+- `owasp:A##:2025` — 10 categorías OWASP Top 10 2025 (descripciones
   curadas).
 
 Embeddings generados con `gemini-embedding-001` (3072 dim).

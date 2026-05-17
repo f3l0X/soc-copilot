@@ -101,3 +101,28 @@ def auth_rate_limit(request: Request) -> None:
     ident = _client_id(request)
     # 5 attempts per minute per client. Independent of the global bucket.
     _check("auth", ident, 5, max(settings.rate_limit_window_seconds, 60))
+
+
+def check_email_rate_limit(request: Request) -> None:
+    """Tight bucket for /auth/check-email.
+
+    The endpoint is an enumeration oracle by design (the UI needs to
+    tell the user if an email is free) so we accept the tradeoff but
+    cap probes hard: 10/min per client. A real form types ~1 query per
+    keystroke debounce, so a human never hits this; a scraper does.
+    """
+    _check("auth_check_email", _client_id(request), 10, 60)
+
+
+def register_email_rate_limit(email: str) -> None:
+    """Per-email bucket on /auth/register, independent of the IP.
+
+    The per-IP auth bucket above stops 1 client; this one stops a
+    distributed botnet pounding on the same target email. 3 attempts
+    per hour per email is plenty for a confused human and crushing for
+    a bot.
+    """
+    key = email.strip().lower()
+    if not key:
+        return
+    _check("register_email", key, 3, 3600)

@@ -28,6 +28,19 @@ class UserRole(str, Enum):
     ADMIN = "admin"
 
 
+class UserLevel(str, Enum):
+    """SOC seniority axis, orthogonal to RBAC role.
+
+    Drives Copilot tone & depth (L1 gets more guidance, L2 gets terser
+    output, INSTRUCTOR gets unfiltered detail). Not used for RBAC — see
+    ``UserRole`` for that.
+    """
+
+    L1 = "L1"
+    L2 = "L2"
+    INSTRUCTOR = "INSTRUCTOR"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -53,10 +66,44 @@ class User(Base):
         nullable=False,
         default=UserRole.ANALYST,
     )
+    level: Mapped[UserLevel] = mapped_column(
+        SAEnum(UserLevel, name="user_level"),
+        nullable=False,
+        default=UserLevel.L1,
+        server_default=UserLevel.L1.value,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         default=lambda: datetime.now(UTC),
+    )
+
+    # ── Email verification ──────────────────────────────────────────────
+    # is_verified gates login when settings.auth_require_email_verification
+    # is on. Bootstrap admin is auto-verified. Token is a urlsafe 32-byte
+    # random string, valid for settings.email_verification_ttl_hours.
+    is_verified: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    email_verification_token: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True
+    )
+    email_verification_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    email_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # ── Brute-force lockout ─────────────────────────────────────────────
+    # Counter resets on successful login. When failed_login_attempts hits
+    # settings.auth_lockout_threshold, locked_until is set N minutes ahead
+    # and /auth/login refuses even with the right password until it passes.
+    failed_login_attempts: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    locked_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
     # ── BYO Gemini key (optional) ───────────────────────────────────────

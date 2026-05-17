@@ -16,7 +16,7 @@ import { useModel } from "@/lib/useModel";
 const STARTERS = [
   "¿Qué es un ataque de fuerza bruta y cómo lo detecto?",
   "Explícame el flujo típico de respuesta a un compromiso de credenciales.",
-  "¿Cómo encaja OWASP A07:2021 con MITRE T1110?",
+  "¿Cómo encaja OWASP A07:2025 con MITRE T1110?",
 ];
 
 function SourcePill({ id }: { id: string }) {
@@ -25,7 +25,7 @@ function SourcePill({ id }: { id: string }) {
     kind === "mitre"
       ? `https://attack.mitre.org/techniques/${ref.replace(".", "/")}/`
       : kind === "owasp"
-        ? `https://owasp.org/Top10/${ref.replace(":", "_").replace("2021", "2021/")}`
+        ? `https://owasp.org/Top10/${ref.replace(":", "_").replace("2025", "2025/")}`
         : "#";
   const color =
     kind === "mitre"
