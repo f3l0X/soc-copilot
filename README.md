@@ -1,3 +1,84 @@
+
+# IA-Copilot-para-Analistas-SOC-Junior
+Practica 1 del master ciberseguridad e IA
+Guia puesta en marcha 
+# Guia de puesta en marcha (PostgreSQL + DBeaver)
+
+## 1) Maquina recomendada
+
+- SO: Windows 10/11, Ubuntu 22+, macOS 13+.
+- CPU: 2 nucleos minimo (4 recomendado).
+- RAM: 8 GB minimo (16 GB recomendado si ademas ejecutas IA local o SIEM).
+- Disco: 10 GB libres minimo (SSD recomendado).
+
+## 2) Herramientas necesarias
+
+- Docker Desktop (o Docker Engine + Compose).
+- DBeaver Community.
+- (Opcional) pgAdmin o cliente `psql`.
+
+## 3) Levantar la base de datos
+
+Desde la carpeta del proyecto:
+
+```bash
+docker compose up -d
+```
+
+Esto crea:
+
+- Contenedor: `blue_team_postgres`
+- Base de datos: `blue_team_db`
+- Usuario: `blue_team_user`
+- Password: `blue_team_pass`
+- Puerto: `5432`
+
+El archivo `postgresql_setup.sql` se ejecuta automaticamente al primer arranque del volumen.
+
+## 4) Conexion en DBeaver
+
+Crear conexion PostgreSQL con estos valores:
+
+- Host: `localhost`
+- Port: `5432`
+- Database: `blue_team_db`
+- Username: `blue_team_user`
+- Password: `blue_team_pass`
+
+Luego pulsa `Test Connection` y `Finish`.
+
+## 5) Si cambiaste el esquema y quieres recrear todo
+
+```bash
+docker compose down -v
+docker compose up -d
+```
+
+`-v` borra el volumen de datos y vuelve a ejecutar el script inicial desde cero.
+
+## 6) Verificacion rapida
+
+En DBeaver, ejecuta:
+
+```sql
+SELECT COUNT(*) FROM log_sources;
+SELECT COUNT(*) FROM mitre_techniques;
+SELECT * FROM v_open_incidents_summary;
+```
+
+Si no hay errores, la base esta operativa.
+
+Maquina USADA: 
+
+KALI LINUX.
+  SE HA INSTALADO VARIAS HERRAMIENTAS
+
+
+
+
+
+
+
 Para implementar la base de datos apartir del docker y con el postgres instalado, lo que hay que hacer es lo siguiente: 
 Entonces solo necesitas hacer 2 cosas:
 
