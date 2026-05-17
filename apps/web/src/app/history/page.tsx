@@ -44,7 +44,7 @@ export default function HistoryPage() {
         <p className="text-slate-400">
           Sin alertas todavía. Empieza en{" "}
           <Link href="/alerts" className="text-cyan-400 hover:underline">
-            /alerts
+            Alertas
           </Link>
           .
         </p>

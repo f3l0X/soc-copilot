@@ -28,13 +28,6 @@ const TILES: Tile[] = [
     hint: "/logs",
   },
   {
-    href: "/respond",
-    title: "Next Step Recommender",
-    desc: "Sugerencias de respuesta y playbooks contextuales",
-    icon: "◈",
-    hint: "/respond",
-  },
-  {
     href: "/chat",
     title: "Chat IA",
     desc: "Conversa con el copiloto + RAG sobre tus alertas",
@@ -128,9 +121,7 @@ export default function Home() {
                   </p>
                 </div>
               </div>
-              <div className="mt-3 text-[10px] font-mono text-slate-600 group-hover:text-cyan-400/70">
-                {t.hint} →
-              </div>
+
             </Link>
           ))}
           {auth.user.role === "admin" && (
@@ -151,9 +142,7 @@ export default function Home() {
                   </p>
                 </div>
               </div>
-              <div className="mt-3 text-[10px] font-mono text-rose-400/70">
-                /admin · admin only →
-              </div>
+
             </Link>
           )}
         </div>

@@ -232,11 +232,7 @@ export default function DashboardPage() {
       {stats && stats.totals.alerts === 0 && (
         <Card>
           <p className="text-sm text-slate-400">
-            Aún no hay datos. Crea tu primera alerta en{" "}
-            <Link href="/alerts" className="text-cyan-400 hover:underline">
-              /alerts
-            </Link>{" "}
-            y vuelve aquí para ver las gráficas.
+            Aún no hay datos. Crea tu primera alerta y vuelve aquí para ver las gráficas.
           </p>
         </Card>
       )}

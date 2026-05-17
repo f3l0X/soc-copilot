@@ -66,7 +66,10 @@ function AlertsInner() {
         </div>
         <div className="flex flex-col items-end gap-1">
           <ModelSelector compact />
-          <Link href="/history" className="text-sm text-cyan-400 hover:underline">
+          <Link 
+            href="/history" 
+            className="px-3 py-2 rounded-md text-xs border border-ink-700 bg-ink-850 hover:bg-ink-800 text-slate-300"
+          >
             Histórico →
           </Link>
         </div>

@@ -17,7 +17,6 @@ const OPS_NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: "▦", shortcut: "⌘1" },
   { href: "/alerts", label: "Alertas", icon: "▲" },
   { href: "/logs", label: "Logs", icon: "≡" },
-  { href: "/respond", label: "Respond", icon: "◈" },
   { href: "/chat", label: "Chat IA", icon: "◐" },
   { href: "/history", label: "Historial", icon: "◷" },
 ];

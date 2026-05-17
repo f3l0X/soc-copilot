@@ -115,8 +115,11 @@ export default function ChatPage() {
             <span className="text-amber-400">KB no disponible</span>
           )}
           <ModelSelector compact />
-          <Link href="/alerts" className="text-cyan-400 hover:underline">
-            ← alertas
+          <Link 
+            href="/alerts" 
+            className="px-3 py-2 rounded-md text-xs border border-ink-700 bg-ink-850 hover:bg-ink-800 text-slate-300"
+          >
+            ← Alertas
           </Link>
         </div>
       </div>
