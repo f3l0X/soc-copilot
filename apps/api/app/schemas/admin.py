@@ -29,6 +29,10 @@ class ChangeRoleRequest(BaseModel):
     role: UserRole
 
 
+class ChangeLevelRequest(BaseModel):
+    level: UserLevel
+
+
 class CreateUserRequest(BaseModel):
     name: str = Field(..., min_length=2, max_length=100)
     email: EmailStr
@@ -74,6 +78,9 @@ class AdminUserView(BaseModel):
     last_name: str
     email: str
     role: UserRole
+    level: UserLevel
+    requested_level: UserLevel
+    level_approved: bool
     created_at: datetime
     server_llm_calls_today: int
     server_llm_quota_date: date | None

@@ -2,8 +2,26 @@
 
 import { useEffect, useState } from "react";
 
-import { ApiError, updateProfile } from "@/lib/api";
+import { ApiError, updateProfile, UserLevel } from "@/lib/api";
 import { useAuth, useRequireAuth } from "@/lib/auth";
+
+const LEVEL_OPTIONS: { value: UserLevel; label: string; hint: string }[] = [
+  {
+    value: "L1",
+    label: "Analista L1 (Junior)",
+    hint: "El Copilot explica paso a paso, define siglas y sugiere el siguiente comando.",
+  },
+  {
+    value: "L2",
+    label: "Analista L2 (Senior)",
+    hint: "Respuestas concisas y técnicas, sin teoría básica.",
+  },
+  {
+    value: "INSTRUCTOR",
+    label: "Instructor",
+    hint: "Detalle completo: razonamiento alternativo, falsos positivos y ejemplos pedagógicos.",
+  },
+];
 
 export default function ProfilePage() {
   const auth = useRequireAuth();
@@ -12,6 +30,7 @@ export default function ProfilePage() {
   const [name, setName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [level, setLevel] = useState<UserLevel>("L1");
   const [currentPassword, setCurrentPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,6 +41,7 @@ export default function ProfilePage() {
       setName(auth.user.name);
       setLastName(auth.user.last_name ?? "");
       setEmail(auth.user.email);
+      setLevel(auth.user.level);
     }
   }, [auth.user]);
 
@@ -37,6 +57,7 @@ export default function ProfilePage() {
         name: name !== auth.user.name ? name : undefined,
         last_name: lastName !== (auth.user.last_name ?? "") ? lastName : undefined,
         email: emailChanging ? email : undefined,
+        level: level !== auth.user.level ? level : undefined,
         current_password: emailChanging ? currentPassword : undefined,
       });
       await refresh();
@@ -54,8 +75,17 @@ export default function ProfilePage() {
   }
 
   const u = auth.user!;
+  const canEditLevel = u.role === "admin";
   const dirty =
-    name !== u.name || lastName !== (u.last_name ?? "") || email !== u.email;
+    name !== u.name ||
+    lastName !== (u.last_name ?? "") ||
+    email !== u.email ||
+    (canEditLevel && level !== u.level);
+  const levelHint = LEVEL_OPTIONS.find((o) => o.value === level)?.hint;
+  const requestedHint =
+    !canEditLevel && !u.level_approved && u.requested_level !== u.level
+      ? `Solicitaste ${u.requested_level}; un administrador revisará y asignará tu nivel definitivo.`
+      : null;
 
   return (
     <div className="p-6 max-w-xl mx-auto space-y-6">
@@ -134,6 +164,61 @@ export default function ProfilePage() {
             </label>
           )}
 
+          <fieldset className="border border-ink-700 rounded-lg p-4 space-y-2">
+            <legend className="px-2 text-sm text-slate-300">
+              Nivel SOC
+              {!canEditLevel && !u.level_approved && (
+                <span
+                  className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-medium uppercase border bg-amber-500/10 text-amber-300 border-amber-500/30"
+                  title="Pendiente de aprobación por un administrador"
+                >
+                  pendiente
+                </span>
+              )}
+            </legend>
+            <p className="text-xs text-slate-500">
+              {canEditLevel
+                ? "Como administrador puedes ajustar tu propio nivel. Para el resto de usuarios, el nivel se asigna desde Administración → Usuarios."
+                : "Asignado por un administrador. Ajusta el tono y la profundidad de las respuestas del Copilot. Si necesitas otro nivel, pide la promoción al admin."}
+            </p>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {LEVEL_OPTIONS.map((opt) => {
+                const selected = level === opt.value;
+                return (
+                  <label
+                    key={opt.value}
+                    className={`rounded border px-3 py-2 text-sm transition-colors ${
+                      selected
+                        ? "border-cyan-500 bg-cyan-500/10 text-cyan-200"
+                        : "border-ink-700 bg-ink-950 text-slate-300"
+                    } ${
+                      canEditLevel
+                        ? "cursor-pointer hover:border-ink-600"
+                        : "cursor-not-allowed opacity-70"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="level"
+                      value={opt.value}
+                      checked={selected}
+                      disabled={!canEditLevel}
+                      onChange={() => setLevel(opt.value)}
+                      className="sr-only"
+                    />
+                    {opt.label}
+                  </label>
+                );
+              })}
+            </div>
+            {levelHint && (
+              <p className="text-[11px] text-slate-400">{levelHint}</p>
+            )}
+            {requestedHint && (
+              <p className="text-[11px] text-amber-300">{requestedHint}</p>
+            )}
+          </fieldset>
+
           <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"
@@ -142,6 +227,7 @@ export default function ProfilePage() {
                 setName(u.name);
                 setLastName(u.last_name ?? "");
                 setEmail(u.email);
+                setLevel(u.level);
                 setSuccess(false);
                 setError(null);
               }}

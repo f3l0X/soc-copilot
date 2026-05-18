@@ -9,7 +9,6 @@ type Tile = {
   title: string;
   desc: string;
   icon: string;
-  hint: string;
 };
 
 const TILES: Tile[] = [
@@ -18,35 +17,30 @@ const TILES: Tile[] = [
     title: "Alert Explainer",
     desc: "Pega una alerta y obtén triage estructurado",
     icon: "▲",
-    hint: "/alerts",
   },
   {
     href: "/logs",
     title: "Logs",
     desc: "Analiza y filtra eventos por host, IP, técnica MITRE",
     icon: "≡",
-    hint: "/logs",
   },
   {
     href: "/chat",
     title: "Chat IA",
     desc: "Conversa con el copiloto + RAG sobre tus alertas",
     icon: "◐",
-    hint: "/chat",
   },
   {
     href: "/history",
     title: "Histórico",
     desc: "Alertas previas y trazabilidad de decisiones",
     icon: "◷",
-    hint: "/history",
   },
   {
     href: "/dashboard",
     title: "Dashboard",
     desc: "Métricas en vivo y cobertura MITRE",
     icon: "▦",
-    hint: "/dashboard",
   },
 ];
 

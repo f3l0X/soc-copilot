@@ -78,7 +78,7 @@ function RespondInner() {
         <p className="text-slate-400">
           Llega aquí desde una alerta. Empieza analizando un log en{" "}
           <Link href="/alerts" className="text-cyan-400 hover:underline">
-            /alerts
+            Alertas
           </Link>
           .
         </p>

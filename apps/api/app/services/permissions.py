@@ -55,6 +55,10 @@ REGISTRY: tuple[PermissionDef, ...] = (
         default_analyst=False, default_admin=True,
     ),
     PermissionDef(
+        "users.update_level", "Usuarios", "Asignar nivel SOC",
+        default_analyst=False, default_admin=True,
+    ),
+    PermissionDef(
         "audit.view", "Auditoría", "Ver registro de auditoría",
         default_analyst=False, default_admin=True,
     ),

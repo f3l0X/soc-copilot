@@ -10,6 +10,7 @@ from app.models import AuditLog, User, UserRole
 from app.schemas.admin import (
     AdminUserView,
     AuditLogEntry,
+    ChangeLevelRequest,
     ChangePasswordRequest,
     ChangeRoleRequest,
     CreateUserRequest,
@@ -50,6 +51,9 @@ def _to_admin_view(u: User, *, today, quota_limit: int) -> AdminUserView:
         last_name=u.last_name,
         email=u.email,
         role=u.role,
+        level=u.level,
+        requested_level=u.requested_level,
+        level_approved=u.level_approved,
         created_at=u.created_at,
         server_llm_calls_today=calls_today,
         server_llm_quota_date=u.server_llm_quota_date,
@@ -89,12 +93,16 @@ def create_user(
         )
 
     # Admin-created users are pre-verified — the admin vouches for them.
+    # The level is assigned directly by the admin, so it counts as
+    # already approved (no review queue step needed).
     new_user = User(
         name=payload.name,
         email=payload.email,
         hashed_password=hash_password(payload.password),
         role=payload.role,
         level=payload.level,
+        requested_level=payload.level,
+        level_approved=True,
         is_verified=True,
         email_verified_at=datetime.now(UTC),
     )
@@ -248,6 +256,54 @@ def change_user_role(
     db.commit()
     db.refresh(target_user)
     return target_user
+
+
+@router.put("/users/{user_id}/level", response_model=AdminUserView)
+def change_user_level(
+    user_id: int,
+    payload: ChangeLevelRequest,
+    db: DbSession,
+    request: Request,
+    user: User = require_perm("users.update_level"),
+) -> AdminUserView:
+    """Assign a SOC seniority level to a user and mark it approved.
+
+    New self-registered users sit at L1 with ``level_approved=false``
+    until an admin reviews their ``requested_level`` and calls this
+    endpoint to confirm or override it.
+    """
+    target = db.scalar(select(User).where(User.id == user_id))
+    if not target:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="user not found"
+        )
+    old_level = target.level.value
+    was_approved = target.level_approved
+    target.level = payload.level
+    target.level_approved = True
+
+    log_audit(
+        db,
+        actor=user,
+        action="user.level_change",
+        target_type="user",
+        target_id=target.id,
+        target_label=target.email,
+        details={
+            "from": old_level,
+            "to": payload.level.value,
+            "was_pending": not was_approved,
+            "requested": target.requested_level.value,
+        },
+        request=request,
+    )
+    db.commit()
+    db.refresh(target)
+    settings = get_settings()
+    today = datetime.now(UTC).date()
+    return _to_admin_view(
+        target, today=today, quota_limit=settings.server_llm_daily_quota
+    )
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

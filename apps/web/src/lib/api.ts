@@ -224,6 +224,8 @@ export interface UserMe {
   email: string;
   role: UserRole;
   level: UserLevel;
+  requested_level: UserLevel;
+  level_approved: boolean;
   is_verified: boolean;
   created_at: string;
 }
@@ -232,6 +234,7 @@ export interface UpdateProfilePayload {
   name?: string;
   last_name?: string;
   email?: string;
+  level?: UserLevel;
 }
 
 export const updateProfile = (payload: UpdateProfilePayload & { current_password?: string }) =>
@@ -310,6 +313,9 @@ export interface AdminUserView {
   last_name: string;
   email: string;
   role: UserRole;
+  level: UserLevel;
+  requested_level: UserLevel;
+  level_approved: boolean;
   created_at: string;
   server_llm_calls_today: number;
   server_llm_quota_date: string | null;
@@ -348,6 +354,12 @@ export const adminChangeRole = (userId: number, role: UserRole) =>
   request<UserMe>(`/api/admin/users/${userId}/role`, {
     method: "PUT",
     body: JSON.stringify({ role }),
+  });
+
+export const adminChangeLevel = (userId: number, level: UserLevel) =>
+  request<AdminUserView>(`/api/admin/users/${userId}/level`, {
+    method: "PUT",
+    body: JSON.stringify({ level }),
   });
 
 export const adminDeleteUser = (userId: number) =>

@@ -6,6 +6,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from app.schemas.alerts import ExplainResponse
+from app.services.audience import with_audience
 from app.services.llm import LLMAdapter, get_llm, get_llm_for_user
 
 # Delimiters frame the user-supplied log so the model can distinguish trusted
@@ -78,7 +79,7 @@ def explain(
     data = llm.generate_json(
         user_prompt,
         schema=RESPONSE_SCHEMA,
-        system=SYSTEM_PROMPT,
+        system=with_audience(SYSTEM_PROMPT, user),
         temperature=0.2,
         model=model,
     )

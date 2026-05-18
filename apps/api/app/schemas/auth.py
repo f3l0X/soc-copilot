@@ -72,6 +72,8 @@ class UserMe(BaseModel):
     email: str
     role: UserRole
     level: UserLevel
+    requested_level: UserLevel
+    level_approved: bool
     is_verified: bool
     created_at: datetime
 
@@ -96,6 +98,8 @@ class UpdateProfileRequest(BaseModel):
     # Required only when changing email — protects against session-theft
     # account hijack. Validated server-side; ignored otherwise.
     current_password: str | None = Field(None, min_length=1, max_length=128)
+    # SOC seniority; drives Copilot tone & depth on chat/explain/recommend.
+    level: UserLevel | None = None
 
 
 class LoginResponse(BaseModel):

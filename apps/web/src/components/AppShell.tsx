@@ -114,13 +114,7 @@ function Sidebar() {
 }
 
 function Topbar() {
-  const pathname = usePathname();
   const { user, signOut } = useAuth();
-
-  const segs = pathname.split("/").filter(Boolean);
-  const current = segs[0]
-    ? segs[0].charAt(0).toUpperCase() + segs[0].slice(1)
-    : "Inicio";
 
   const initials = user
     ? `${(user.name?.[0] ?? user.email[0]).toUpperCase()}${
@@ -133,13 +127,7 @@ function Topbar() {
 
   return (
     <header className="h-14 border-b border-ink-700 bg-ink-900/60 backdrop-blur flex items-center px-6 gap-4 sticky top-0 z-40">
-      <div className="text-sm text-slate-400">
-        <span className="text-slate-500">SOC</span>{" "}
-        <span className="text-slate-600">/</span>{" "}
-        <span className="text-slate-200">{current}</span>
-      </div>
-
-      <div className="ml-6 hidden md:flex items-center gap-2 px-3 py-1.5 rounded-md bg-ink-850 border border-ink-700 text-xs text-slate-400 w-96">
+      <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-md bg-ink-850 border border-ink-700 text-xs text-slate-400 w-96">
         <span>⌕</span>
         <input
           className="bg-transparent outline-none flex-1 placeholder:text-slate-600"
@@ -170,6 +158,19 @@ function Topbar() {
               }
             >
               {user.role}
+            </span>
+            <span
+              className={
+                "px-1.5 py-0.5 rounded text-[10px] font-medium uppercase border " +
+                (user.level === "INSTRUCTOR"
+                  ? "bg-violet-500/10 text-violet-300 border-violet-500/30"
+                  : user.level === "L2"
+                    ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
+                    : "bg-amber-500/10 text-amber-300 border-amber-500/30")
+              }
+              title="Nivel SOC — ajusta el tono del Copilot (editable en Mi Perfil)"
+            >
+              {user.level}
             </span>
             <Link
               href="/profile"

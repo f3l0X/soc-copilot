@@ -72,6 +72,22 @@ class User(Base):
         default=UserLevel.L1,
         server_default=UserLevel.L1.value,
     )
+    # What the user picked at registration. Kept separate from ``level``
+    # so the admin can see the user's self-assessment without trusting it
+    # for authorization. ``level`` is forced to L1 at register and only
+    # promoted when an admin approves the account.
+    requested_level: Mapped[UserLevel] = mapped_column(
+        SAEnum(UserLevel, name="user_level"),
+        nullable=False,
+        default=UserLevel.L1,
+        server_default=UserLevel.L1.value,
+    )
+    # Flips to True once an admin sets the seniority level. Until then
+    # the user is pinned to L1 and the level selector in /profile is
+    # read-only.
+    level_approved: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

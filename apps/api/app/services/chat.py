@@ -14,6 +14,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from app.schemas.alerts import ChatMessage, ChatResponse
+from app.services.audience import with_audience
 from app.services.llm import LLMAdapter, get_llm, get_llm_for_user
 from app.services.rag import KBDoc, Retriever
 
@@ -130,7 +131,10 @@ def chat(
     user_prompt = "\n\n".join(p for p in parts if p)
 
     reply = llm.generate_text(
-        user_prompt, system=SYSTEM_PROMPT, temperature=0.3, model=model
+        user_prompt,
+        system=with_audience(SYSTEM_PROMPT, user),
+        temperature=0.3,
+        model=model,
     )
     sources = [d.id for d in docs]
     return ChatResponse(reply=reply, sources=sources)

@@ -8,7 +8,9 @@ import {
   AuditLogEntry,
   PermissionCell,
   PermissionChange,
+  UserLevel,
   UserRole,
+  adminChangeLevel,
   adminChangePassword,
   adminChangeRole,
   adminCreateUser,
@@ -56,11 +58,11 @@ const ROLE_DESCRIPTIONS: Record<UserRole, { title: string; blurb: string }> = {
 // Capacidades baseline (no gated por backend; se aplican en código de los
 // endpoints CurrentUser). Se muestran en la matriz como informativas.
 const BASELINE_CAPS: { area: string; action: string }[] = [
-  { area: "Alertas", action: "Crear / explicar (POST /api/explain)" },
+  { area: "Alertas", action: "Crear / explicar alertas" },
   { area: "Alertas", action: "Listar propias" },
-  { area: "Alertas", action: "Recomendar siguiente paso (POST /api/recommend)" },
-  { area: "Chat", action: "Chat IA + RAG (POST /api/chat)" },
-  { area: "Logs", action: "Subir y filtrar archivos locales (/logs)" },
+  { area: "Alertas", action: "Recomendar siguiente paso" },
+  { area: "Chat", action: "Chat IA + RAG" },
+  { area: "Logs", action: "Subir y filtrar archivos locales" },
 ];
 
 export default function AdminPage() {
@@ -297,6 +299,30 @@ export default function AdminPage() {
     }
   }
 
+  async function handleLevelChange(target: AdminUserView, level: UserLevel) {
+    // Even if the chosen level equals the current one, hit the endpoint
+    // so a pending account gets approved with a single click ("confirm
+    // L1" is a valid action).
+    setBusyId(target.id);
+    setRowError(null);
+    setRowNotice(null);
+    try {
+      await adminChangeLevel(target.id, level);
+      setRowNotice(
+        target.level_approved
+          ? `Nivel de ${target.email} actualizado a ${level}.`
+          : `Cuenta de ${target.email} aprobada con nivel ${level}.`,
+      );
+      await loadUsers();
+    } catch (err) {
+      setRowError(
+        err instanceof ApiError ? err.detail : "No se pudo asignar el nivel",
+      );
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function handleCreateUser(e: React.FormEvent) {
     e.preventDefault();
     setCreateLoading(true);
@@ -442,6 +468,7 @@ export default function AdminPage() {
                     <th className="px-4 py-3 font-medium">Nombre</th>
                     <th className="px-4 py-3 font-medium">Email</th>
                     <th className="px-4 py-3 font-medium">Rol</th>
+                    <th className="px-4 py-3 font-medium">Nivel SOC</th>
                     <th className="px-4 py-3 font-medium">Cuota hoy</th>
                     <th className="px-4 py-3 font-medium text-right">Acciones</th>
                   </tr>
@@ -487,6 +514,42 @@ export default function AdminPage() {
                             <option value="analyst">analyst</option>
                             <option value="admin">admin</option>
                           </select>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={u.level}
+                              disabled={busy}
+                              onChange={(e) =>
+                                handleLevelChange(u, e.target.value as UserLevel)
+                              }
+                              className="bg-ink-950 border border-ink-700 rounded px-2 py-1 text-xs disabled:opacity-50"
+                              title={
+                                u.level_approved
+                                  ? `Solicitó ${u.requested_level} en registro`
+                                  : `Pendiente — solicitó ${u.requested_level}`
+                              }
+                            >
+                              <option value="L1">L1</option>
+                              <option value="L2">L2</option>
+                              <option value="INSTRUCTOR">INSTRUCTOR</option>
+                            </select>
+                            {!u.level_approved ? (
+                              <span
+                                className="px-1.5 py-0.5 rounded border text-[10px] font-medium uppercase bg-amber-500/10 text-amber-300 border-amber-500/30"
+                                title={`Pendiente de aprobación — solicitó ${u.requested_level}`}
+                              >
+                                pend · {u.requested_level}
+                              </span>
+                            ) : u.requested_level !== u.level ? (
+                              <span
+                                className="text-[10px] text-slate-500"
+                                title={`Solicitó ${u.requested_level}, asignado ${u.level}`}
+                              >
+                                (pidió {u.requested_level})
+                              </span>
+                            ) : null}
+                          </div>
                         </td>
                         <td className="px-4 py-3">
                           {u.byo_key_configured ? (
