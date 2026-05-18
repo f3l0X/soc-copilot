@@ -140,8 +140,20 @@ function LoginInner() {
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.status === 401) setError("Credenciales inválidas.");
-        else if (err.status === 403)
-          setError("Acceso denegado. ¿Tienes el email verificado?");
+        else if (err.status === 403) {
+          // 403 means different things on each endpoint:
+          //   - register: ALLOW_PUBLIC_REGISTRATION is off on the server.
+          //   - login:    the account exists but the email isn't verified yet.
+          // The backend detail is in English; we surface a Spanish copy
+          // tailored to the current form mode.
+          if (mode === "register") {
+            setError(
+              "El registro está cerrado temporalmente. Contacta con un administrador para que cree tu cuenta.",
+            );
+          } else {
+            setError("Acceso denegado. ¿Tienes el email verificado?");
+          }
+        }
         else if (err.status === 409) setError("Ese email ya está registrado.");
         else if (err.status === 422) setError("Datos inválidos. Revisa los requisitos.");
         else if (err.status === 429)
