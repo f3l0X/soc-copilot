@@ -74,12 +74,31 @@ class Settings(BaseSettings):
 
     # ── Email verification ──────────────────────────────────────────────
     # When True, /auth/login rejects users that haven't clicked their
-    # verification link. SMTP isn't wired up in this repo — the dev path
-    # surfaces the link via the API response (only outside production).
+    # verification link. Requires SMTP_* configured below; if SMTP is
+    # missing the API still issues tokens but logs a warning and (outside
+    # production) surfaces the link in the API response for debugging.
     auth_require_email_verification: bool = False
     email_verification_ttl_hours: int = 24
     # Base URL of the frontend, used to build the verification link.
     web_base_url: str = "http://localhost:13500"
+
+    # ── SMTP (transactional email) ──────────────────────────────────────
+    # Leave smtp_host empty to disable email delivery (dev mode). Gmail
+    # example:
+    #   SMTP_HOST=smtp.gmail.com
+    #   SMTP_PORT=587
+    #   SMTP_USE_STARTTLS=true
+    #   SMTP_USER=youraddress@gmail.com
+    #   SMTP_PASSWORD=<16-char-app-password>
+    #   SMTP_FROM=youraddress@gmail.com
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    smtp_use_starttls: bool = True
+    smtp_use_ssl: bool = False  # mutually exclusive with starttls (use port 465)
+    smtp_timeout_seconds: int = 10
 
     # ── Brute-force lockout ─────────────────────────────────────────────
     # Counter increments on every wrong password; on the Nth fail the

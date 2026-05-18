@@ -35,6 +35,7 @@ from app.services.auth import (
     verify_password,
 )
 from app.services.audit import log_audit
+from app.services.email import send_verification_email
 from app.services.llm import GeminiAdapter, LLMProviderError
 from app.services.secrets import EncryptionDisabled, encrypt, last4
 from app.services.security import equalize_timing
@@ -106,7 +107,9 @@ def register(
             last_name="",
             hashed_password="",
             role=UserRole.ANALYST,
-            level=payload.level,
+            level=UserLevel.L1,
+            requested_level=payload.level,
+            level_approved=False,
             is_verified=False,
             created_at=datetime.now(UTC),
         )
@@ -139,8 +142,18 @@ def register(
             status_code=status.HTTP_409_CONFLICT, detail="email already registered"
         )
 
-    # Bootstrap admin is always L1-agnostic; force a sensible level.
-    level = UserLevel.INSTRUCTOR if is_first else payload.level
+    # Seniority gate: a self-served analyst is always pinned to L1 until
+    # an admin reviews the request and assigns a level. The level they
+    # picked is kept in ``requested_level`` so the admin sees the
+    # self-assessment as context. Bootstrap admin gets INSTRUCTOR
+    # auto-approved because there's nobody else to approve them.
+    if is_first:
+        effective_level = UserLevel.INSTRUCTOR
+        level_approved = True
+    else:
+        effective_level = UserLevel.L1
+        level_approved = False
+    requested_level = UserLevel.INSTRUCTOR if is_first else payload.level
 
     requires_verification = (
         settings.auth_require_email_verification and not is_first
@@ -153,7 +166,9 @@ def register(
         name=payload.name,
         hashed_password=hash_password(payload.password),
         role=UserRole.ADMIN if is_first else UserRole.ANALYST,
-        level=level,
+        level=effective_level,
+        requested_level=requested_level,
+        level_approved=level_approved,
         is_verified=not requires_verification,
         email_verified_at=datetime.now(UTC) if not requires_verification else None,
         email_verification_token=token,
@@ -179,17 +194,24 @@ def register(
     )
     db.commit()
 
-    # Dev-only convenience: expose the verification link so the flow can
-    # be demoed without SMTP. In production we never leak it.
+    # Try real SMTP delivery first. If SMTP is configured the email goes
+    # out and we never leak the token. If SMTP is unconfigured (or fails)
+    # we fall back to the dev-only behaviour of returning the link in the
+    # response, but ONLY outside production — in prod a broken SMTP must
+    # be visible (admin can resend the verification from the panel).
     verification_link_dev: str | None = None
-    if requires_verification and token and not settings.is_production:
-        verification_link_dev = (
-            f"{settings.web_base_url.rstrip('/')}/verify?token={token}"
+    if requires_verification and token:
+        sent = send_verification_email(
+            to_email=user.email, to_name=user.name or "", token=token
         )
-        logger.info(
-            "auth.verification_link_issued",
-            extra={"user_id": user.id, "link": verification_link_dev},
-        )
+        if not sent and not settings.is_production:
+            verification_link_dev = (
+                f"{settings.web_base_url.rstrip('/')}/verify?token={token}"
+            )
+            logger.info(
+                "auth.verification_link_issued_dev",
+                extra={"user_id": user.id, "link": verification_link_dev},
+            )
 
     return RegisterResponse(
         user=UserMe.model_validate(user),
@@ -477,6 +499,20 @@ def update_me(
         user.name = payload.name
     if payload.last_name is not None:
         user.last_name = payload.last_name
+    level_changed = False
+    if payload.level is not None and payload.level != user.level:
+        # Self-service level changes are an authorization bypass: a user
+        # could promote themselves to INSTRUCTOR and unlock the
+        # detail-without-filters tone. Only admins manage the seniority
+        # axis (via /api/admin/users/{id}/level).
+        if user.role != UserRole.ADMIN:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="el nivel SOC lo asigna un administrador",
+            )
+        user.level = payload.level
+        user.level_approved = True
+        level_changed = True
     db.commit()
     db.refresh(user)
     log_audit(
@@ -486,7 +522,11 @@ def update_me(
         target_type="user",
         target_id=user.id,
         target_label=user.email,
-        details={"email_changed": email_changing},
+        details={
+            "email_changed": email_changing,
+            "level_changed": level_changed,
+            "level": user.level.value,
+        },
     )
     db.commit()
     return UserMe.model_validate(user)
