@@ -2,8 +2,27 @@
 
 ## Resumen
 
-Cubre las mitigaciones aplicadas en fases 1–4 y los riesgos residuales que
-viajarán a fase 5 (despliegue Hetzner).
+Cubre las mitigaciones aplicadas en fases 1–5 (desarrollo + despliegue
+Hetzner) y los riesgos residuales pendientes de tratar antes o después
+de la entrega del 25-05-2026. Estado a fecha 18/05/2026 con el sistema
+en producción.
+
+### Endurecimiento incorporado en fase 5
+
+| Capa | Mitigación |
+|------|------------|
+| Transporte | Caddy 2 con TLS automático Let's Encrypt; HSTS preload (`max-age=63072000; includeSubDomains; preload`); HTTP/3 habilitado. |
+| Cookies | `HttpOnly` + `Secure` + `SameSite=Strict` en producción (forzado por `effective_cookie_samesite`). |
+| Headers globales | `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Permissions-Policy: geolocation=(), microphone=(), camera=()`, eliminación de `Server` y `X-Powered-By`. |
+| Reverse proxy | Caddy con `trusted_proxies static private_ranges` para que la API confíe XFF solo desde la red interna. |
+| Validación arranque | `Settings.validate_for_runtime()` rechaza encender la API en producción si `JWT_SECRET`, `POSTGRES_PASSWORD`, `APP_ENCRYPTION_KEY`, `GEMINI_API_KEY` o `API_CORS_ORIGINS` quedan en valores por defecto, o si algún origen CORS no es `https://`. |
+| Email verification | `AUTH_REQUIRE_EMAIL_VERIFICATION=true`. SMTP saliente vía Gmail con App Password (no contraseña real). Si SMTP falla, el registro NO se aborta — el token queda en BD y un admin puede marcarlo verificado o reenviar. En producción la API nunca expone el link en la respuesta JSON. |
+| Anti-bruteforce | 4 intentos fallidos → bloqueo 15 minutos por cuenta. Contador se reinicia con login correcto o vencimiento. |
+| Rate limit | Por IP del cliente (XFF respetado). Buckets adicionales en `/auth/check-email` (10/60s por IP) y `/auth/register` (3/h por email). |
+| Servidor | UFW (22/80/443 only). fail2ban con jail `sshd`. SSH key-only, `PermitRootLogin no`, `AllowUsers soc`. `unattended-upgrades` para parches de seguridad. |
+| Secretos | `.env` con permisos 600 propiedad del usuario `soc`. Copia offline en Windows. No commiteado (`.gitignore`). |
+| Backups | Dump `pg_dump --clean --if-exists` diario en server (cron, 14 días retención) + tarea Windows que los descarga a `Documents/` (30 días retención). Snapshots Hetzner adicionales a nivel disco (7 días). |
+| Toggle de registro | El flag `public_registration_enabled` se persiste en BD (`app_settings`) y se audita en cada cambio. El admin puede cerrarlo desde la UI tras una demo sin reiniciar nada. |
 
 ## Mitigaciones aplicadas
 
@@ -193,11 +212,21 @@ Se han implementado correcciones específicas basadas en el reporte de vulnerabi
   Nuestro top-level es 8.5.11. El fix oficial degrada Next a 9.x →
   inaceptable. Riesgo real bajo: ese postcss procesa CSS del propio
   bundle de Next, no input de usuario. Revisar al subir Next.
-- Rate limiter detrás de proxy: probado solo con TestClient (host =
-  "testclient"). En prod requiere `ProxyHeadersMiddleware` con
-  `forwarded_allow_ips` ajustado al IP de Caddy.
-- `docker-compose.prod.example.yml` validado por `docker compose
-  config` pero **no desplegado**; la prueba real es en Hetzner (fase 5).
+- Rate limiter detrás de proxy: verificado en producción Caddy → API
+  con `trusted_proxies static private_ranges` en el Caddyfile. La API
+  ve la IP del cliente real, no la del contenedor de Caddy.
+- `docker-compose.prod.yml` desplegado en Hetzner CPX22 desde
+  18/05/2026. Smoke parcial OK (login, chat con RAG, registro con
+  verificación email, toggle de registro). Smoke E2E con un compañero
+  del grupo todavía pendiente — recomendado antes de la demo.
+- SMTP Gmail App Password: limitado a ~500 emails/día. Para una
+  instalación a más usuarios convendría migrar a un servicio dedicado
+  (Brevo, Resend con dominio propio, Amazon SES). Documentado como
+  mejora post-entrega.
+- DuckDNS como proveedor DNS: aceptable para una práctica académica, no
+  para una operación seria (sin records DNS personalizables, dependes
+  de un servicio gratuito de terceros). Sustituir por un dominio propio
+  está como item baja prioridad en el roadmap.
 
 ## Pruebas de seguridad recomendadas antes de cada release
 

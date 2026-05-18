@@ -14,21 +14,26 @@ El módulo se compone principalmente del servicio `app/services/audit.py` y el m
 El módulo registra eventos clasificados por su prefijo de acción (`action`):
 
 ### Autenticación (`auth.*`)
-* `auth.register`: Creación de un nuevo usuario.
+* `auth.register`: Creación de un nuevo usuario (registra `verification_required`, `role`, `level`, `is_first` en `details`).
+* `auth.email_verified`: El usuario completa el flujo de verificación clicando el link recibido por SMTP.
+* `auth.verify_failed`: Intento de verificación con token inválido o expirado.
 * `auth.login`: Inicio de sesión exitoso.
 * `auth.login_failed`: Intento de login fallido (registra IP y correo utilizado).
+* `auth.login_locked`: Bloqueo automático tras 4 fallos consecutivos (anti-bruteforce, 15 min de timeout).
 * `auth.logout`: Cierre de sesión.
 * `auth.update_profile`: Modificación de nombre/apellidos/correo.
 * `auth.llm_settings_updated`: Configuración o actualización de la clave API de Gemini.
 * `auth.llm_key_cleared`: Eliminación de la clave API de Gemini.
 
-### Operaciones Administrativas (`user.*` y `permissions.*`)
+### Operaciones Administrativas (`user.*`, `permissions.*`, `settings.*`)
 * `user.create`: Administrador crea un analista.
 * `user.password_reset`: Administrador resetea la contraseña de un usuario.
 * `user.llm_quota_reset`: Administrador reinicia la cuota diaria del LLM.
 * `user.role_change`: Promoción o degradación de rol.
+* `user.level_change`: Aprobación o cambio del nivel SOC (L1 / L2 / Instructor) solicitado por el usuario.
 * `user.delete`: Eliminación de un usuario del sistema.
 * `permissions.update`: Modificación en la matriz de roles y permisos.
+* `settings.public_registration.update`: Toggle del registro público abierto/cerrado desde el panel admin (registra `details.from` y `details.to` con el valor booleano anterior y nuevo).
 
 ### Interacciones IA (`explain.*`, `chat.*`, `recommend.*`)
 * `explain.alert`: El analista solicita una explicación de IA para una alerta.

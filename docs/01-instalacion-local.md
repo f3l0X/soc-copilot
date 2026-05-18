@@ -74,6 +74,12 @@ Docker. El stack levanta todo en contenedores.
 
    Resultado esperado: 4 servicios healthy + `{"status":"ok"}`.
 
+   > Las migraciones de Alembic (incluidas la `0003_level_approval` y la
+   > `0004_app_settings`) se aplican automáticamente durante el primer
+   > arranque de la API. Si en un entorno ya existente añades una
+   > migración nueva, fuérzala con
+   > `docker compose exec api alembic upgrade head`.
+
 6. (Una vez por entorno) Poblar la base de conocimiento RAG. Sin este paso
    el chat funciona pero sin contexto MITRE/OWASP:
 

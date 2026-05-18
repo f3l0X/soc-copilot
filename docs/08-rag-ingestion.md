@@ -7,11 +7,12 @@ documento:
 
 | Origen | IDs | Cantidad | Origen |
 |--------|-----|----------|--------|
-| MITRE ATT&CK Enterprise (técnicas vigentes) | `mitre:T####` y `mitre:T####.###` | ~691 | bundle STIX descargado en runtime |
+| MITRE ATT&CK Enterprise (técnicas vigentes) | `mitre:T####` y `mitre:T####.###` | 697 | bundle STIX descargado en runtime desde `attack-stix-data` |
 | OWASP Top 10 2025 (categorías) | `owasp:A##:2025` | 10 | hardcodeado en `apps/api/scripts/owasp_top10.py` |
 
-Total: ~700 documentos. Embeddings de 3072 dim generados con
-`gemini-embedding-001`.
+Total: **707 documentos** en producción a fecha 18/05/2026. Embeddings
+de 3072 dim generados con `gemini-embedding-001`. La cifra de MITRE
+fluctúa entre `git pull`s del bundle upstream.
 
 ## Cuándo se ejecuta la ingestión
 
@@ -25,12 +26,28 @@ Gemini en cada restart sin valor.
 
 ## Comando
 
+**Desarrollo local:**
 ```bash
 cd "D:/Evolve/Proyecto Blue Team/soc-copilot/infra"
 docker compose exec api python -m scripts.ingest_kb
 ```
 
+**Producción (Hetzner):**
+```bash
+ssh soc@178.105.51.187
+docker compose -f /opt/soc-copilot/infra/docker-compose.prod.yml \
+  --env-file /opt/soc-copilot/.env exec api python -m scripts.ingest_kb
+```
+
 Tarda 5–15 min según RPM disponibles del free tier de Gemini.
+
+> **Aviso:** la cuota DIARIA de embeddings en el free tier es estricta.
+> Si encuentras `RESOURCE_EXHAUSTED` repetidos y persistentes, el script
+> entra en backoff de 30→90s. Si la cuota diaria se agota, no hay forma
+> de continuar hasta el reset (00:00 PT ≈ 09:00 hora España). En ese
+> caso, ejecuta `--owasp-only --force` para tener al menos OWASP cargado
+> y reintenta MITRE al día siguiente, o activa billing pay-as-you-go en
+> Google AI Studio (~0,01 €/707 docs).
 
 ## Flags soportados
 
@@ -47,10 +64,10 @@ Tarda 5–15 min según RPM disponibles del free tier de Gemini.
 curl http://localhost:8080/api/kb/status
 ```
 
-Salida esperada:
+Salida esperada (cifras pueden variar según versión del bundle STIX):
 
 ```json
-{"total": 701, "mitre": 691, "owasp": 10, "unknown": 0}
+{"total": 707, "mitre": 697, "owasp": 10, "unknown": 0}
 ```
 
 Si `total` es 0, la ingestión no corrió o falló.

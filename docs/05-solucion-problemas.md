@@ -226,3 +226,65 @@ Pero el flujo habitual es dentro del contenedor:
 docker compose exec web npm run lint
 docker compose exec web npm run build
 ```
+
+## Producción (Hetzner): incidencias frecuentes
+
+Estas son las incidencias específicas del entorno productivo. Cobertura
+completa en [operations.md](operations.md).
+
+### "Failed to fetch" en el navegador tras un deploy
+
+Casi siempre **cache** del navegador sirviendo el bundle viejo. En
+DevTools → Network → **Disable cache** y Ctrl+Shift+R. Si persiste,
+verifica que `NEXT_PUBLIC_API_URL` quedó embebido en el bundle nuevo:
+```bash
+dc exec web sh -c "grep -ro 'soc-copilot.duckdns.org' .next/static/chunks/ | head -1"
+```
+Si está vacío, falta rebuild forzado del `web` con `--no-cache`.
+
+### El registro devuelve 500 tras añadir una columna nueva
+
+Migración no aplicada. Ejecuta:
+```bash
+dc exec api alembic upgrade head
+dc exec api alembic current
+```
+Debe terminar en la última revisión disponible (`(head)`). Si no, busca
+si `git pull` falló silenciosamente por un patch local — ver el caso
+en operations.md sección 2.
+
+### `git pull` aborta con "Your local changes would be overwritten"
+
+Hay un patch manual en el server fuera del repo (típicamente del
+deploy inicial). Compara con `git diff <archivo>`; si es funcionalmente
+equivalente al de upstream, descarta el local:
+```bash
+git checkout -- <archivo>
+git pull --ff-only
+```
+
+### No llega el email de verificación
+
+Probables causas, en orden:
+1. SMTP no configurado o credenciales mal: revisa `dc logs api | grep email`.
+2. El email cayó en **spam** del Gmail destinatario.
+3. App Password de Gmail caducada o revocada — genera una nueva en
+   <https://myaccount.google.com/apppasswords> y actualiza
+   `SMTP_PASSWORD` en `.env`. Reinicia el `api` con `dc up -d api`.
+4. Solo a efectos de unblock inmediato: el admin puede marcar el
+   usuario como verificado con
+   `UPDATE users SET is_verified=true, email_verified_at=now() WHERE email='...'`.
+
+### "El registro está cerrado temporalmente" en pruebas
+
+El admin tiene `ALLOW_PUBLIC_REGISTRATION=false` y/o el toggle en BD
+en `false`. Vía rápida: `/admin → Usuarios → Registro público → Abrir`.
+Vía CLI: ver [operations.md §4](operations.md). Recuerda cerrarlo
+después de la prueba.
+
+### Cuota de Gemini agotada durante ingesta KB
+
+El free tier tiene cuota DIARIA estricta. Si el script entra en bucle
+de 429 con backoff y nunca avanza, espera al reset (00:00 PT ≈ 09:00
+hora España) o activa billing pay-as-you-go en Google AI Studio
+(coste real ~0,01 € por las 707 técnicas).
