@@ -89,6 +89,16 @@ class AdminUserView(BaseModel):
     gemini_key_last4: str | None
 
 
+class AppSettingsView(BaseModel):
+    """Snapshot of runtime-mutable settings, served to the admin panel."""
+
+    public_registration_enabled: bool
+
+
+class UpdatePublicRegistrationRequest(BaseModel):
+    enabled: bool
+
+
 class AuditLogEntry(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AdminUserView,
   ApiError,
+  AppSettingsView,
   AuditLogEntry,
   PermissionCell,
   PermissionChange,
@@ -17,8 +18,10 @@ import {
   adminDeleteUser,
   adminResetLlmQuota,
   getAdminUsers,
+  getAppSettings,
   getAuditLog,
   getPermissions,
+  setPublicRegistrationEnabled,
   updatePermissions,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -97,6 +100,37 @@ export default function AdminPage() {
   const [permsLoading, setPermsLoading] = useState(false);
   const [permsSaving, setPermsSaving] = useState(false);
   const [permsError, setPermsError] = useState<string | null>(null);
+
+  // Runtime-mutable app settings (admin can toggle public registration
+  // without redeploying — backed by the app_settings table).
+  const [appSettings, setAppSettings] = useState<AppSettingsView | null>(null);
+  const [appSettingsSaving, setAppSettingsSaving] = useState(false);
+  const [appSettingsError, setAppSettingsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void getAppSettings()
+      .then(setAppSettings)
+      .catch((err) =>
+        setAppSettingsError(
+          err instanceof ApiError ? err.detail : "Error cargando ajustes"
+        )
+      );
+  }, []);
+
+  async function togglePublicRegistration(next: boolean) {
+    setAppSettingsSaving(true);
+    setAppSettingsError(null);
+    try {
+      const updated = await setPublicRegistrationEnabled(next);
+      setAppSettings(updated);
+    } catch (err) {
+      setAppSettingsError(
+        err instanceof ApiError ? err.detail : "No se pudo actualizar"
+      );
+    } finally {
+      setAppSettingsSaving(false);
+    }
+  }
 
   // Audit tab
   const [audit, setAudit] = useState<AuditLogEntry[]>([]);
@@ -422,6 +456,60 @@ export default function AdminPage() {
       )}
 
       {tab === "usuarios" && (
+        <>
+          {/* Registro público: toggle global. Vive en app_settings (DB)
+              y manda sobre ALLOW_PUBLIC_REGISTRATION del .env, así que el
+              cambio surte efecto sin reiniciar la API. */}
+          <section className="bg-ink-900/60 border border-ink-700 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-slate-100">
+                Registro público
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {appSettings === null
+                  ? "Cargando estado..."
+                  : appSettings.public_registration_enabled
+                  ? "Abierto: cualquier persona con el enlace puede crear una cuenta. Recuerda cerrarlo cuando termines la prueba."
+                  : "Cerrado: solo se pueden crear cuentas desde aquí (botón \"+ Crear usuario\")."}
+              </p>
+              {appSettingsError && (
+                <p className="text-xs text-rose-300 mt-1">{appSettingsError}</p>
+              )}
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <span
+                className={`text-xs px-2 py-1 rounded-full border ${
+                  appSettings?.public_registration_enabled
+                    ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
+                    : "bg-slate-500/10 text-slate-300 border-slate-500/30"
+                }`}
+              >
+                {appSettings?.public_registration_enabled ? "Abierto" : "Cerrado"}
+              </span>
+              <button
+                type="button"
+                disabled={appSettings === null || appSettingsSaving}
+                onClick={() =>
+                  appSettings &&
+                  void togglePublicRegistration(
+                    !appSettings.public_registration_enabled,
+                  )
+                }
+                className={`px-3 py-1.5 text-sm rounded-md font-medium disabled:opacity-50 ${
+                  appSettings?.public_registration_enabled
+                    ? "bg-rose-500 hover:bg-rose-400 text-ink-950"
+                    : "bg-cyan-500 hover:bg-cyan-400 text-ink-950"
+                }`}
+              >
+                {appSettingsSaving
+                  ? "Aplicando..."
+                  : appSettings?.public_registration_enabled
+                  ? "Cerrar registro"
+                  : "Abrir registro"}
+              </button>
+            </div>
+          </section>
+
         <section className="bg-ink-900/60 border border-ink-700 rounded-xl overflow-hidden">
           <div className="p-4 border-b border-ink-700 bg-ink-900/60 flex justify-between items-center">
             <div className="flex items-baseline gap-3">
@@ -673,6 +761,7 @@ export default function AdminPage() {
             </div>
           )}
         </section>
+        </>
       )}
 
       {tab === "roles" && (

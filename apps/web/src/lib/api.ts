@@ -403,6 +403,19 @@ export const updatePermissions = (changes: PermissionChange[]) =>
     body: JSON.stringify({ changes }),
   });
 
+export interface AppSettingsView {
+  public_registration_enabled: boolean;
+}
+
+export const getAppSettings = () =>
+  request<AppSettingsView>("/api/admin/settings");
+
+export const setPublicRegistrationEnabled = (enabled: boolean) =>
+  request<AppSettingsView>("/api/admin/settings/public-registration", {
+    method: "PUT",
+    body: JSON.stringify({ enabled }),
+  });
+
 export const getAuditLog = (params: {
   limit?: number;
   offset?: number;

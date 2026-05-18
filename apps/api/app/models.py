@@ -240,6 +240,31 @@ class AuditLog(Base):
     ip: Mapped[str | None] = mapped_column(String(64))
 
 
+class AppSetting(Base):
+    """Tiny key/value store for runtime-mutable feature flags.
+
+    Used for settings that must change without redeploying — currently
+    ``public_registration_enabled``. Each row represents a single flag;
+    the value is stored as a string and parsed by the caller (``"true"``
+    / ``"false"`` for booleans). The DB row wins over any matching
+    environment variable; absence of a row falls back to the env value.
+    """
+
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(String(1024), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
+    updated_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+
 class RolePermission(Base):
     """Per-role override of a permission key.
 

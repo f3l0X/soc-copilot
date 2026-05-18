@@ -39,6 +39,7 @@ from app.services.email import send_verification_email
 from app.services.llm import GeminiAdapter, LLMProviderError
 from app.services.secrets import EncryptionDisabled, encrypt, last4
 from app.services.security import equalize_timing
+from app.services.settings import is_public_registration_enabled
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -127,7 +128,9 @@ def register(
 
     # After bootstrap, gate self-service registration behind a flag so an
     # unauthenticated attacker can't quietly create analyst accounts.
-    if not is_first and not settings.allow_public_registration:
+    # The flag lives in app_settings (admin-toggleable from the UI) with
+    # ALLOW_PUBLIC_REGISTRATION as the env-level fallback.
+    if not is_first and not is_public_registration_enabled(db):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="public registration is disabled",

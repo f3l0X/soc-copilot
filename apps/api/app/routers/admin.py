@@ -9,6 +9,7 @@ from app.db import DbSession
 from app.models import AuditLog, User, UserRole
 from app.schemas.admin import (
     AdminUserView,
+    AppSettingsView,
     AuditLogEntry,
     ChangeLevelRequest,
     ChangePasswordRequest,
@@ -16,6 +17,7 @@ from app.schemas.admin import (
     CreateUserRequest,
     PermissionCell,
     UpdatePermissionsRequest,
+    UpdatePublicRegistrationRequest,
 )
 from app.schemas.auth import UserMe
 from app.services.audit import log_audit
@@ -25,6 +27,10 @@ from app.services.permissions import (
     list_effective,
     require_perm,
     set_permission,
+)
+from app.services.settings import (
+    is_public_registration_enabled,
+    set_public_registration_enabled,
 )
 
 logger = logging.getLogger(__name__)
@@ -415,3 +421,46 @@ def update_permissions(
         )
     db.commit()
     return list_effective(db)
+
+
+# ─── runtime-mutable settings ──────────────────────────────────────────
+
+
+@router.get("/settings", response_model=AppSettingsView)
+def get_app_settings(
+    db: DbSession,
+    user: User = require_perm("permissions.manage"),
+) -> AppSettingsView:
+    """Return current values of admin-toggleable flags."""
+    return AppSettingsView(
+        public_registration_enabled=is_public_registration_enabled(db),
+    )
+
+
+@router.put("/settings/public-registration", response_model=AppSettingsView)
+def update_public_registration(
+    payload: UpdatePublicRegistrationRequest,
+    db: DbSession,
+    request: Request,
+    user: User = require_perm("permissions.manage"),
+) -> AppSettingsView:
+    """Open or close self-service registration.
+
+    The change is immediate — no API restart required. We persist the
+    new value in ``app_settings`` (which shadows the env-var default)
+    and write an audit row so the toggle is traceable.
+    """
+    before = is_public_registration_enabled(db)
+    set_public_registration_enabled(db, payload.enabled, actor=user)
+    if before != payload.enabled:
+        log_audit(
+            db,
+            actor=user,
+            action="settings.public_registration.update",
+            target_type="app_settings",
+            target_label="public_registration_enabled",
+            details={"from": before, "to": payload.enabled},
+            request=request,
+        )
+        db.commit()
+    return AppSettingsView(public_registration_enabled=payload.enabled)

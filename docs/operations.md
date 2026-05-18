@@ -123,13 +123,50 @@ dc down && dc up -d            # apaga todo y vuelve a levantar (sin rebuild)
 
 ## 4. Gestión de usuarios
 
-### Cerrar el registro público (hacer una vez creados los 5 del grupo)
+### Abrir o cerrar el registro público
+
+**Desde el panel de administración (recomendado):**
+
+Login como admin → **Administración** → toggle **"Registro público"**. El cambio es inmediato, no requiere reiniciar contenedores.
+
+**Desde el servidor (fallback si la UI no es accesible):**
 
 ```bash
+# Cerrar
 cd /opt/soc-copilot
 sed -i 's/ALLOW_PUBLIC_REGISTRATION=.*/ALLOW_PUBLIC_REGISTRATION=false/' .env
 cd infra && dc up -d api
+
+# Abrir (para que el grupo o el tribunal pueda probar el registro)
+cd /opt/soc-copilot
+sed -i 's/ALLOW_PUBLIC_REGISTRATION=.*/ALLOW_PUBLIC_REGISTRATION=true/' .env
+cd infra && dc up -d api
+
+# Verifica el estado actual
+grep ALLOW_PUBLIC_REGISTRATION /opt/soc-copilot/.env
 ```
+
+**Directo en la base de datos** (el override de la UI vive aquí):
+
+```bash
+# Ver estado actual
+dc exec postgres psql -U soc -d soc_copilot -c \
+  "SELECT key, value, updated_at FROM app_settings WHERE key='public_registration_enabled';"
+
+# Forzar a abierto
+dc exec postgres psql -U soc -d soc_copilot -c \
+  "INSERT INTO app_settings(key, value) VALUES('public_registration_enabled','true')
+   ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now();"
+
+# Forzar a cerrado
+dc exec postgres psql -U soc -d soc_copilot -c \
+  "INSERT INTO app_settings(key, value) VALUES('public_registration_enabled','false')
+   ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now();"
+```
+
+Precedencia: si `app_settings.public_registration_enabled` existe, manda sobre `ALLOW_PUBLIC_REGISTRATION` del `.env`. Si no existe, se usa el `.env` como fallback. Esto permite tocar el flag sin redeploy.
+
+> **Tip para demos al tribunal**: deja el flag en `false` por defecto y ábrelo solo durante la demo del flujo de registro. Cierra inmediatamente después.
 
 ### Promover a admin manualmente (sin esperar SMTP)
 
