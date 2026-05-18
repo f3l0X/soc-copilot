@@ -103,6 +103,10 @@ services:
     build:
       context: ../apps/web
       target: runner   # production stage: next build + node server.js
+      args:
+        # Re-exported here because NEXT_PUBLIC_* must be present during
+        # `next build`, not just at runtime. Read from --env-file.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
     restart: always
     logging: *default-logging
     env_file: ../.env
