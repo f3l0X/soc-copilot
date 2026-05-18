@@ -37,6 +37,64 @@ El script hace:
 
 Tarda 3–8 min según qué cambie. La app puede dar 502 durante los últimos 10–20s mientras Caddy reconecta a los contenedores nuevos.
 
+### Pre-flight checklist (ejecutar SIEMPRE antes del deploy)
+
+Antes de `bash scripts/deploy.sh`, verifica:
+
+```bash
+cd /opt/soc-copilot
+
+# 1. ¿Hay cambios locales sin commitear en el server? (deben ser 0)
+git status --short
+
+# 2. ¿La rama está al día con remoto?
+git fetch
+git status -uno   # debe decir "Your branch is up to date with 'origin/main'"
+
+# 3. ¿Hay migraciones nuevas en el repo que no estén aplicadas en BD?
+diff <(ls apps/api/alembic/versions/ | sort) \
+     <(docker compose -f infra/docker-compose.prod.yml --env-file .env \
+         exec api ls alembic/versions/ 2>/dev/null | sort) || \
+   echo "⚠️ Migraciones en repo != contenedor"
+```
+
+Si paso 1 muestra algún archivo modificado en el server, **NO hagas pull todavía**:
+```bash
+git diff <archivo>                       # mira qué cambió
+git stash -u                              # guarda los cambios local
+# o si son patches obsoletos ya en remoto:
+git checkout -- <archivo>                 # descarta
+```
+
+### Migraciones de base de datos
+
+Por defecto la API **no** corre `alembic upgrade head` al arrancar (solo aplica las que estaban presentes en el primer arranque). Después de cada deploy con migraciones nuevas, **fuerza la subida**:
+
+```bash
+cd /opt/soc-copilot/infra
+docker compose -f docker-compose.prod.yml --env-file ../.env exec api alembic upgrade head
+docker compose -f docker-compose.prod.yml --env-file ../.env exec api alembic current
+```
+
+`alembic current` debe terminar con `(head)`. Si dice `Running upgrade X -> Y` ya las aplicó. Si dice solo `0002_xxx (head)` cuando esperabas `0003_xxx`, la migración no llegó al contenedor — revisa que el `git pull` en el server haya ido bien y que el `--build` no haya usado caché stale (rebuild con `build --no-cache <servicio>`).
+
+### Errores típicos y cómo evitarlos
+
+- **`TypeError: 'X' is an invalid keyword argument for User`** en el endpoint de registro → falta aplicar una migración. Ejecuta `alembic upgrade head` y vuelve a probar.
+- **El frontend muestra "Internal Server Error" en text/plain** pero la API responde 200 a `GET /` → un endpoint está reventando con excepción no manejada por la middleware ASGI. Captura el traceback con:
+  ```bash
+  docker compose -f docker-compose.prod.yml --env-file ../.env exec api python -c "
+  import logging; logging.basicConfig(level=logging.DEBUG)
+  from app.main import app
+  from fastapi.testclient import TestClient
+  c = TestClient(app)
+  r = c.post('/api/<endpoint>', json={...})
+  print(r.status_code, r.text)
+  " 2>&1 | tail -60
+  ```
+  `TestClient` salta uvicorn y deja que las excepciones afloren tal cual.
+- **`git pull` aborta con "Your local changes ... would be overwritten"** → algún patch manual quedó en el server fuera del repo. Compara con `git diff <archivo>`; si es equivalente a lo de upstream, `git checkout -- <archivo>` y vuelve a pullear.
+
 ---
 
 ## 3. Inspeccionar el stack
