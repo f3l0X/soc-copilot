@@ -9,8 +9,8 @@
 | 2 | Next Step Recommender + persistencia Postgres | ✅ |
 | 3 | RAG + Chat IA (MITRE + OWASP en Chroma) | ✅ |
 | 4 | Auth (JWT cookie + bcrypt) + RBAC + tests E2E | ✅ |
-| 4.5 | Dashboard analítico (`/dashboard` + `GET /api/stats`) | ⏳ pendiente |
-| 5 | Despliegue Hetzner + dominio + HTTPS + CI/CD | ⏳ pendiente |
+| 4.5 | Dashboard analítico (`/dashboard` + `GET /api/stats`) | ✅ |
+| 5 | Despliegue Hetzner + dominio + HTTPS (Caddy) + backups + SMTP + toggle registro | ✅ |
 | 6 | Informe PDF + presentación 10 min | ⏳ pendiente |
 
 Detalle de cada fase en [02-estado-fases.md](02-estado-fases.md).
@@ -59,58 +59,59 @@ y aporta material visual fuerte para la demo y el informe.
 - [ ] Tiempo de carga < 500 ms con DB de 1k alertas.
 - [ ] Captura del dashboard incluida en el informe PDF.
 
-## Fase 5 — checklist operativa
+## Fase 5 — checklist operativa (✅ cerrada 18/05/2026)
+
+URL pública: <https://soc-copilot.duckdns.org>
+Runbook de operación: [operations.md](operations.md)
 
 ### Infra
 
-- [ ] VPS Hetzner CX22 (2 vCPU / 4 GB RAM / ~5 €/mes) provisionado.
-- [ ] Dominio comprado y DNS A → IP del VPS.
-- [ ] SSH key-only (deshabilitar password auth).
-- [ ] `ufw` allow 22, 80, 443. Resto deny.
-- [ ] `fail2ban` con jails para sshd y `auth.log`.
-- [ ] `unattended-upgrades` activo para kernel + paquetes seguridad.
-- [ ] Swap 2 GB.
-- [ ] Backups Postgres: `pg_dump | gzip | scp` cron diario + retención 7 días.
+- [x] VPS Hetzner **CPX22** (3 vCPU / 4 GB RAM / 80 GB NVMe / ~8,5 €/mes con backups) provisionado en Nuremberg.
+- [x] Dominio DuckDNS `soc-copilot.duckdns.org` apuntando al VPS.
+- [x] SSH key-only (`PermitRootLogin no`, `PasswordAuthentication no`, `AllowUsers soc`).
+- [x] `ufw` allow 22, 80, 443. Resto deny.
+- [x] `fail2ban` activo con jail `sshd`.
+- [x] `unattended-upgrades` activo para parches de seguridad.
+- [x] Swap 2 GB en `/swapfile`.
+- [x] Backups Postgres: `cron.daily/soc-copilot-pgbackup`, `pg_dump --clean --if-exists | gzip` con retención 14 días en `/var/backups/soc-copilot/`. Copia adicional a Windows vía tarea programada con retención 30 días.
 
 ### Configuración
 
-- [ ] `JWT_SECRET` rotado a `openssl rand -base64 48`.
-- [ ] `COOKIE_SECURE=true`.
-- [ ] `RATE_LIMIT_*` revisado para tráfico real.
-- [ ] `API_CORS_ORIGINS` con el dominio real.
-- [ ] `NEXT_PUBLIC_API_URL` con dominio real.
-- [ ] Copiar `infra/docker-compose.prod.example.yml` → `docker-compose.prod.yml`.
-- [ ] Caddyfile con `PUBLIC_DOMAIN` real + `ACME_EMAIL`.
-- [ ] `.env` de producción fuera del repo (ej. `/etc/soc-copilot/.env`
-      con permisos 600 root).
+- [x] `JWT_SECRET`, `APP_ENCRYPTION_KEY`, `POSTGRES_PASSWORD`, `NEXTAUTH_SECRET` rotados a `openssl rand -base64 ...`.
+- [x] `COOKIE_SECURE=true`, `APP_ENV=production` (la API valida `validate_for_runtime` al arrancar y rechaza defaults inseguros).
+- [x] `RATE_LIMIT_*` mantiene 20 req/60s; rate limiter detrás de Caddy lee la IP del cliente vía X-Forwarded-For.
+- [x] `API_CORS_ORIGINS=https://soc-copilot.duckdns.org`.
+- [x] `NEXT_PUBLIC_API_URL=https://soc-copilot.duckdns.org` (build-arg en `apps/web/Dockerfile` para que quede embebido en el bundle).
+- [x] `docker-compose.prod.yml` creado desde el example.
+- [x] Caddyfile con `PUBLIC_DOMAIN` y `ACME_EMAIL` reales → certificados Let's Encrypt automáticos.
+- [x] `.env` en `/opt/soc-copilot/.env` con permisos 600 (owner `soc`); copia offline en Windows.
 
 ### Auth / acceso
 
-- [ ] `AUTH_REGISTRATION_ENABLED=false` (o seed CLI de admin).
-- [ ] Crear admin via script o `psql` antes de exponer.
-- [ ] `ProxyHeadersMiddleware` en uvicorn + `forwarded_allow_ips`
-      apuntando a la red del compose (Caddy).
+- [x] `ALLOW_PUBLIC_REGISTRATION=false` por defecto. **Toggle desde admin UI** (`/admin → Usuarios → Registro público`) — backend en tabla `app_settings` (migración 0004), audit-logged.
+- [x] Admin creado a mano sobre el primer registro (bootstrap auto-promote).
+- [x] Caddy reverse-proxy: `trusted_proxies static private_ranges` para que XFF llegue correcto.
+- [x] **SMTP** configurado (Gmail App Password) para verificación de email (`AUTH_REQUIRE_EMAIL_VERIFICATION=true`).
 
 ### CD
 
-- [ ] Workflow GitHub Actions `deploy.yml` triggered on tag.
-- [ ] Secret `DEPLOY_SSH_KEY` configurado en repo.
-- [ ] Job hace `ssh user@host 'cd /opt/soc-copilot && git pull && docker compose -f docker-compose.prod.yml up --build -d'`.
-- [ ] Health check post-deploy.
+- [x] `scripts/deploy.sh` ejecutable: `git pull --ff-only` + validación de secretos en `.env` + `up -d --build` + status + tail de logs.
+- [ ] *(Opcional post-entrega)* Workflow GitHub Actions `deploy.yml` triggered on tag con `DEPLOY_SSH_KEY` y health check post-deploy.
 
 ### Datos iniciales
 
-- [ ] `docker compose exec api python -m scripts.ingest_kb` en VPS.
-- [ ] Verificar `/api/kb/status` devuelve ~700 docs.
+- [x] `python -m scripts.ingest_kb` ejecutado en producción.
+- [x] `/api/kb/status` devuelve **707 docs** (697 técnicas MITRE Enterprise + 10 entradas OWASP 2025).
 
 ### Verificación
 
-- [ ] HTTPS válido (test SSL Labs grado A).
-- [ ] CSP / HSTS / X-Content-Type-Options en Caddy.
-- [ ] Endpoints LLM siguen respondiendo tras Caddy proxy.
-- [ ] Rate limit lee la IP correcta (no la de Caddy).
-- [ ] Cookie `Secure` flag presente en respuestas.
-- [ ] Smoke completo (login → explain → recommend → chat → history).
+- [x] HTTPS válido, HTTP/2 + HTTP/3, HSTS preload activo.
+- [x] CSP / HSTS / X-Content-Type-Options / X-Frame-Options / Referrer-Policy / Permissions-Policy presentes en respuestas (vía Caddy).
+- [x] Endpoints LLM responden tras el reverse proxy.
+- [x] Rate limit aplica por IP del cliente (no por la de Caddy).
+- [x] Cookie `Secure` + `httpOnly` + `SameSite=Strict` presente en `/auth/login`.
+- [x] Smoke parcial: login → chat con citas → registro nuevo con verificación email → toggle registro abierto/cerrado → migración 0004 aplicada.
+- [ ] Smoke E2E con un compañero del grupo (pendiente para antes de la demo).
 
 ## Fase 6 — checklist informe + demo
 

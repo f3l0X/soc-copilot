@@ -1,304 +1,149 @@
+# SOC Copilot
 
-# IA-Copilot-para-Analistas-SOC-Junior
-Practica 1 del master ciberseguridad e IA
-Guia puesta en marcha 
-# Guia de puesta en marcha (PostgreSQL + DBeaver)
+> IA Copilot para Analistas SOC Junior — Práctica 1 del Máster de
+> Ciberseguridad e IA (entrega 25-mayo-2026).
 
-## 1) Maquina recomendada
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+![Stack](https://img.shields.io/badge/stack-FastAPI%20%2B%20Next.js%20%2B%20Postgres%20%2B%20ChromaDB-blue)
+![Estado](https://img.shields.io/badge/estado-en%20producci%C3%B3n-success)
 
-- SO: Windows 10/11, Ubuntu 22+, macOS 13+.
-- CPU: 2 nucleos minimo (4 recomendado).
-- RAM: 8 GB minimo (16 GB recomendado si ademas ejecutas IA local o SIEM).
-- Disco: 10 GB libres minimo (SSD recomendado).
+**Producción:** <https://soc-copilot.duckdns.org>
 
-## 2) Herramientas necesarias
+SOC Copilot es un asistente con IA pensado para apoyar a analistas SOC
+junior durante la triage de alertas. Combina cuatro capacidades:
 
-- Docker Desktop (o Docker Engine + Compose).
-- DBeaver Community.
-- (Opcional) pgAdmin o cliente `psql`.
+1. **Alert Explainer** — pega un log y obtén resumen, severidad,
+   técnica MITRE ATT&CK probable y siguientes pasos.
+2. **Next Step Recommender** — recomendaciones accionables sobre una
+   alerta ya analizada, con modo aprendizaje opcional.
+3. **Chat IA con RAG** — conversación con citas verificables sobre
+   MITRE ATT&CK Enterprise y OWASP Top 10 2025 (707 docs en ChromaDB).
+4. **Dashboard + panel admin** — KPIs, distribución por riesgo, gestión
+   de usuarios, RBAC dinámico, auditoría inmutable.
 
-## 3) Levantar la base de datos
-
-Desde la carpeta del proyecto:
-
-```bash
-docker compose up -d
-```
-
-Esto crea:
-
-- Contenedor: `blue_team_postgres`
-- Base de datos: `blue_team_db`
-- Usuario: `blue_team_user`
-- Password: `blue_team_pass`
-- Puerto: `5432`
-
-El archivo `postgresql_setup.sql` se ejecuta automaticamente al primer arranque del volumen.
-
-## 4) Conexion en DBeaver
-
-Crear conexion PostgreSQL con estos valores:
-
-- Host: `localhost`
-- Port: `5432`
-- Database: `blue_team_db`
-- Username: `blue_team_user`
-- Password: `blue_team_pass`
-
-Luego pulsa `Test Connection` y `Finish`.
-
-## 5) Si cambiaste el esquema y quieres recrear todo
-
-```bash
-docker compose down -v
-docker compose up -d
-```
-
-`-v` borra el volumen de datos y vuelve a ejecutar el script inicial desde cero.
-
-## 6) Verificacion rapida
-
-En DBeaver, ejecuta:
-
-```sql
-SELECT COUNT(*) FROM log_sources;
-SELECT COUNT(*) FROM mitre_techniques;
-SELECT * FROM v_open_incidents_summary;
-```
-
-Si no hay errores, la base esta operativa.
-
-Maquina USADA: 
-
-KALI LINUX.
-  SE HA INSTALADO VARIAS HERRAMIENTAS
-
-
-
-
-
-
-
-Para implementar la base de datos apartir del docker y con el postgres instalado, lo que hay que hacer es lo siguiente: 
-Entonces solo necesitas hacer 2 cosas:
-
-1. meter tu schema SQL dentro del contenedor PostgreSQL ya existente
-2. conectar tu proyecto a esa base de datos existente
-
-NO necesitas crear otro Docker ni otro PostgreSQL.
+La IA **no sustituye** al analista: propone hipótesis y referencias. La
+decisión final siempre es humana.
 
 ---
 
-# Paso 1 — Identificar el contenedor PostgreSQL
-
-Ver contenedores:
-
-```bash
-docker ps
-```
-
-Ejemplo:
+## Arquitectura en una imagen
 
 ```text
-CONTAINER ID   NAMES
-81ab2c1d       postgres
+                    ┌─────────────────┐
+                    │     Caddy 2     │  TLS auto (Let's Encrypt)
+                    │  HTTP/2 + HTTP/3│  HSTS preload
+                    └────────┬────────┘
+                ┌────────────┼────────────┐
+                │            │            │
+        /api/* │            │            │ /*
+                ▼            ▼            ▼
+       ┌─────────────┐                 ┌─────────────┐
+       │  FastAPI    │◄────────────────│  Next.js    │
+       │  (uvicorn)  │   internal API  │  (standalone│
+       │             │                 │   runtime)  │
+       └──┬───┬───┬──┘                 └─────────────┘
+          │   │   │
+          │   │   └─── ChromaDB (RAG: MITRE + OWASP)
+          │   └─────── Gemini API (chat + embeddings)
+          └─────────── Postgres 16 (users, alerts, audit, app_settings)
 ```
 
-o:
-
-```text
-mi_postgres
-```
-
-Ese nombre es importante.
+Detalle en [docs/03-arquitectura.md](docs/03-arquitectura.md) y diagramas
+Mermaid en [docs/09-diagramas.md](docs/09-diagramas.md).
 
 ---
 
-# Paso 2 — Meter el schema SQL
+## Quickstart — desarrollo local
 
-Si tienes:
-
-```text
-nombre de la base de datos 
-```
-
-ejecuta:
+Prerrequisitos: Docker Desktop, una API key de Gemini
+(<https://aistudio.google.com/app/apikey>), Node 22+ (opcional para
+debugging directo).
 
 ```bash
-docker exec -i NOMBRE_CONTENEDOR psql -U USUARIO -d BASEDATOS < nombre de la base de datos 
+git clone git@github.com:f3l0X/soc-copilot.git
+cd soc-copilot
+cp .env.example .env
+# Edita .env y rellena GEMINI_API_KEY + secretos
+docker compose -f infra/docker-compose.yml --env-file .env up -d --build
 ```
 
-Cambia:
+Abre <http://localhost:13500>. El primer usuario que se registre se
+convierte automáticamente en `admin`.
 
-* `postgres` → nombre del contenedor
-* `-U postgres` → usuario real
-* `-d postgres` → base de datos real
+Guía completa: [docs/01-instalacion-local.md](docs/01-instalacion-local.md).
 
----
+### Ingesta de la base de conocimiento
 
-# Ejemplo real
-
-Supón:
-
-```text
-contenedor: cyber-postgres
-usuario: soc_user
-database: soc_kb
-```
-
-Entonces:
+Para que el chat con RAG funcione hay que poblar ChromaDB (~5 min, usa
+cuota de Gemini para embeddings):
 
 ```bash
-docker exec -i cyber-postgres \
-psql -U soc_user -d soc_kb < nombre de la base de datos 
+docker compose -f infra/docker-compose.yml --env-file .env \
+  exec api python -m scripts.ingest_kb
 ```
+
+Detalle en [docs/08-rag-ingestion.md](docs/08-rag-ingestion.md).
 
 ---
 
-# Paso 3 — Verificar tablas
+## Documentación
 
-Entrar:
+| Para… | Lee |
+|-------|-----|
+| Entender qué hace el sistema | [docs/10-manual-usuario.md](docs/10-manual-usuario.md) |
+| Levantar el stack en tu máquina | [docs/01-instalacion-local.md](docs/01-instalacion-local.md) |
+| Saber cómo se descompone el código | [docs/03-arquitectura.md](docs/03-arquitectura.md) |
+| Operar el entorno de producción | [docs/operations.md](docs/operations.md) |
+| Consultar la API | [docs/06-api-reference.md](docs/06-api-reference.md) |
+| Ver el estado de cada fase | [docs/02-estado-fases.md](docs/02-estado-fases.md) |
+| Auditar la seguridad | [docs/security.md](docs/security.md), [docs/vulnerability_report.md](docs/vulnerability_report.md) |
+| Histórico de cambios visibles | [docs/12-changelog.md](docs/12-changelog.md) |
 
-```bash
-docker exec -it NOMBRE_CONTENEDOR psql -U USUARIO -d BASEDATOS  
-```
-
-Luego:
-
-```sql
-\dt
-```
-
-Deberías ver:
-
-```text
-las tablas de la BBDD
-```
----
-
-# Paso 4 — Conectar tu proyecto
-
-Tu proyecto ya tiene PostgreSQL funcionando.
-
-Solo necesitas usar las credenciales correctas.
+Índice maestro: [docs/00-indice.md](docs/00-indice.md).
 
 ---
 
-# En Docker Compose
+## Stack técnico
 
-El backend normalmente conecta así:
-
-```env
-DB_HOST=postgres
-DB_PORT=5432
-DB_NAME=soc_kb -> Nombre de la base de datos
-DB_USER=soc_user -> Nombre del usuario
-DB_PASSWORD=password
-```
-
----
-
-# Paso 5 — Probar desde el backend -> EL comando que hay que meter es el siguiente "docker exec -it NOMBRE DE LA BBDD psql -U USUARIO" para entar como superuser (ESTA MAS ABAJO EL COMANDO)
-Haz una query:
-
-```sql
-SELECT * FROM kb_knowledge; -> Nombre de la tabla 
-```
-
-Si devuelve los seeds:
-
-* brute_force_ssh
-* ransomware_indicators
-
-ya quedó integrado.
+| Capa | Tecnología | Versión |
+|------|------------|---------|
+| Backend API | FastAPI + Uvicorn | 0.115 / 0.32 |
+| ORM + migraciones | SQLAlchemy + Alembic | 2.0 / 1.14 |
+| Base de datos | PostgreSQL | 16-alpine |
+| RAG / vector store | ChromaDB | 0.5.23 |
+| LLM | Gemini (`gemini-2.5-flash-lite`, `gemini-2.5-flash`, embeddings) | API v1 |
+| Auth | PyJWT cookie httpOnly + bcrypt + lockout | — |
+| Frontend | Next.js (app router, standalone build) | 22-alpine |
+| UI | React + Tailwind + Recharts | — |
+| Reverse proxy | Caddy 2 | alpine |
+| Hosting | Hetzner Cloud CPX22 | Nuremberg |
 
 ---
 
-# Si NO sabes la base de datos
+## Estado del proyecto
 
-Dentro de psql:
+| Fase | Descripción | Estado |
+|------|-------------|--------|
+| 1 | Alert Explainer (Gemini + MITRE) | ✅ |
+| 2 | Next Step Recommender + persistencia Postgres | ✅ |
+| 3 | RAG + Chat IA (MITRE + OWASP en Chroma) | ✅ |
+| 4 | Auth + RBAC + tests E2E | ✅ |
+| 4.5 | Dashboard analítico | ✅ |
+| 5 | Despliegue Hetzner + dominio + HTTPS + backups + SMTP + toggle registro | ✅ |
+| 6 | Informe PDF + presentación 10 min | ⏳ pendiente |
 
-```sql
-\l
-```
-
----
-
-# Si NO sabes el usuario
-
-```sql
-SELECT current_user;
-```
+Detalle por fase en [docs/02-estado-fases.md](docs/02-estado-fases.md).
 
 ---
 
-# Si falla por extensiones
+## Equipo y soporte
 
-Tu schema usa:
-
-```sql
-CREATE EXTENSION
-```
-
-Entonces quizá necesites entrar como superuser: 
-
-```bash
-docker exec -it NOMBRE DE LA BBDD psql -U USUARIO
-```
-
-y ejecutar:
-
-```sql
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-```
+- Repo: <https://github.com/f3l0X/soc-copilot>
+- Issues: <https://github.com/f3l0X/soc-copilot/issues>
+- Para incidencias en producción, contacta al admin de la instancia.
 
 ---
 
-# Si las tablas ya existen
+## Licencia
 
-Puedes borrar primero:
-
-```sql
-DROP SCHEMA public CASCADE;
-CREATE SCHEMA public;
-```
-
-y luego volver a ejecutar el schema.
-
----
-
-# Flujo final
-
-```text
-Proyecto existente
-        ↓
-PostgreSQL existente
-        ↓
-Ejecutar bloque4_schema.sql
-        ↓
-Tablas creadas
-        ↓
-Backend conectado
-        ↓
-Sistema funcionando
-```
-
----
-
-# El comando más importante
-
-Este realmente es el núcleo de todo:
-
-```bash
-docker exec -i NOMBRE_CONTENEDOR \
-psql -U USUARIO -d BASEDATOS < nombre de la base de datos 
-```
-
-Con eso implementas tu base de datos dentro del Docker ya existente.
-
-
-<img width="1401" height="442" alt="image" src="https://github.com/user-attachments/assets/7b7c5bf1-9e7e-47eb-90b8-87b6271657ad" />
-
-
-  
+MIT — ver [LICENSE](LICENSE).

@@ -1,5 +1,98 @@
 # Changelog de UI/UX
 
+## [18/05/2026] - Toggle de registro público desde el panel admin
+
+Los admins pueden ahora abrir o cerrar el registro de cuentas
+directamente desde `/admin → Usuarios`, sin tocar el `.env` ni reiniciar
+contenedores. El cambio surte efecto inmediatamente y queda en auditoría.
+
+**Archivos modificados:**
+- `apps/api/alembic/versions/20260518_2200_app_settings.py` (nuevo):
+  migración 0004 que crea la tabla `app_settings(key, value, updated_at,
+  updated_by)` para guardar flags mutables en runtime.
+- `apps/api/app/models.py`: nuevo modelo `AppSetting`.
+- `apps/api/app/services/settings.py` (nuevo): encapsula la lógica de
+  override DB → fallback env. Función `is_public_registration_enabled(db)`
+  es ahora la fuente única de verdad.
+- `apps/api/app/routers/auth.py`: `/auth/register` consulta el servicio
+  en lugar del `settings.allow_public_registration` directo.
+- `apps/api/app/routers/admin.py`: `GET /api/admin/settings` y
+  `PUT /api/admin/settings/public-registration`, gated por
+  `permissions.manage` y con audit log
+  `settings.public_registration.update`.
+- `apps/api/app/schemas/admin.py`: `AppSettingsView` y
+  `UpdatePublicRegistrationRequest`.
+- `apps/web/src/lib/api.ts`: helpers `getAppSettings()` y
+  `setPublicRegistrationEnabled()`.
+- `apps/web/src/app/admin/page.tsx`: banner en el tab Usuarios con
+  estado (Abierto / Cerrado) y botón con la copy correcta para el
+  siguiente estado.
+- `docs/operations.md`: la sección 4 documenta las 3 vías (UI, sed sobre
+  `.env`, INSERT en `app_settings`) y explica la precedencia DB > env.
+- `docs/10-manual-usuario.md`: nueva sección "Abrir el registro
+  temporalmente para una demo" y entrada en la tabla de admin features.
+
+**Impacto.** Demos al tribunal y pruebas con compañeros ya no requieren
+SSH al servidor. El flag por defecto sigue siendo lo que diga
+`ALLOW_PUBLIC_REGISTRATION` del `.env`; el override en BD solo aparece
+cuando alguien toca el toggle.
+
+## [18/05/2026] - Verificación por email vía SMTP (Gmail)
+
+Cableado completo del flujo de verificación. Hasta hoy el endpoint
+generaba el token pero nunca enviaba el correo: el link salía en la
+respuesta JSON (modo dev) o se perdía silenciosamente (producción).
+
+**Archivos modificados:**
+- `apps/api/app/services/email.py` (nuevo): envío SMTP con stdlib
+  `smtplib`, plantilla HTML+texto, soporte STARTTLS y SSL, timeout
+  configurable. Fallo silencioso con log (`email.send_failed`) — un SMTP
+  caído nunca rompe el registro.
+- `apps/api/app/config.py`: añadidas 8 variables (`SMTP_HOST`,
+  `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`,
+  `SMTP_USE_STARTTLS`, `SMTP_USE_SSL`, `SMTP_TIMEOUT_SECONDS`).
+- `apps/api/app/routers/auth.py`: el `/auth/register` llama a
+  `send_verification_email`. El fallback de link en la respuesta solo
+  se activa si SMTP no está configurado **y** no estamos en producción.
+- `apps/web/src/app/login/page.tsx`: distingue 403 de
+  `/auth/register` (registro cerrado) vs 403 de `/auth/login` (email no
+  verificado) con mensajes específicos.
+
+**Producción.** El servidor envía vía `smtp.gmail.com:587` con un App
+Password de Google (no la contraseña real de la cuenta). 2FA debe estar
+activado en la cuenta para poder generar App Passwords.
+
+## [18/05/2026] - Despliegue en producción (Hetzner CPX22)
+
+Infraestructura puesta en marcha en un VPS Hetzner CPX22 (Nuremberg) con
+todo el stack containerizado detrás de Caddy 2 + Let's Encrypt.
+
+**Highlights:**
+- URL pública: <https://soc-copilot.duckdns.org>
+- Hardening SSH: clave-only, root deshabilitado, `AllowUsers soc`,
+  3 intentos máximos, UFW (22/80/443) + fail2ban activos.
+- Stack Docker: Postgres 16 + ChromaDB + FastAPI + Next.js + Caddy con
+  HTTP/3.
+- Backups Postgres diarios (cron) con retención 14 días + tarea
+  programada en Windows que descarga los dumps a `Documents/` con
+  retención 30 días.
+- KB cargada en Chroma: 697 técnicas MITRE ATT&CK Enterprise + 10
+  entradas OWASP Top 10 2025 = 707 docs.
+- Verificación de salud completa documentada en `docs/operations.md` con
+  pre-flight checklist, troubleshooting típico (migraciones pendientes,
+  text/plain 500, conflictos de `git pull` por patches manuales) y
+  recipe `TestClient` para tracebacks ASGI.
+
+**Archivos creados/modificados:**
+- `apps/web/Dockerfile`: stage `builder` acepta `ARG NEXT_PUBLIC_API_URL`
+  para que la URL pública quede embebida en el bundle de Next.
+- `infra/docker-compose.prod.example.yml`: forward del build-arg vía
+  `args:`. Indentación del bloque `web:` corregida (era 4 espacios en
+  lugar de 2).
+- `scripts/deploy.sh`: `git pull` + validación de secretos en `.env` +
+  `up -d --build` + status.
+- `docs/operations.md`: runbook completo en español.
+
 ## [17/05/2026] - Política de contraseñas unificada en reseteo admin
 
 El modal "Resetear contraseña" del panel `/admin → Usuarios` ahora aplica

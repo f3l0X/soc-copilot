@@ -1,9 +1,11 @@
 # Documentacion del proyecto SOC Copilot
 
-Este paquete contiene el estado del proyecto al cierre del **ciclo de
-hardening post-fase-4** (admin avanzado, perfil, analizador de logs,
-auditoría, RBAC dinámico) y la informacion necesaria para que cualquier
-miembro del equipo pueda ejecutarlo y mantenerlo localmente.
+Este paquete contiene el estado del proyecto tras el **despliegue en
+producción** (fase 5) y refleja el sistema funcionando en
+<https://soc-copilot.duckdns.org>. Cubre instalación local para
+desarrollo, operación del entorno productivo en Hetzner, y todo lo
+necesario para que cualquier miembro del equipo y cualquier evaluador
+externo pueda ejecutarlo, mantenerlo o auditarlo.
 
 ## Orden recomendado de lectura
 
@@ -20,6 +22,8 @@ miembro del equipo pueda ejecutarlo y mantenerlo localmente.
 | 09 | [Diagramas del sistema](09-diagramas.md) | ER, despliegue, secuencia (login/explain/chat/reset/logs), casos de uso, ciclo de vida, pipeline KB, resolución RBAC |
 | 10 | [Manual de usuario](10-manual-usuario.md) | Guía para analista/admin: módulos, flujo de trabajo, cuotas, troubleshooting |
 | 11 | [Módulo de Auditoría](11-modulo-auditoria.md) | Detalles técnicos y funcionamiento del registro de eventos inmutable |
+| 12 | [Changelog de UI/UX](12-changelog.md) | Historial de cambios visibles para el usuario |
+| —  | [**Operations runbook**](operations.md) | **Operación del entorno productivo en Hetzner**: acceso, deploy, migraciones, backups, troubleshooting |
 | —  | [Estado de seguridad y mitigaciones](security.md) | Threats activas y residuales |
 | —  | [Reporte de Vulnerabilidades](vulnerability_report.md) | Informe de la auditoría y parches de remediación |
 | —  | [Roadmap](roadmap.md) | Plan por fases hasta entrega 25-mayo-2026 |
@@ -35,4 +39,11 @@ filtros (IP/puerto/MAC/protocolo/tiempo), histórico, chat con citas, panel
 de administración (usuarios, roles, matriz de permisos editable, auditoría)
 y página de perfil de usuario.
 
-Fases 0–4 y 4.5 (Dashboard) cerradas + ciclo de hardening admin completado. Fase 5 (despliegue Hetzner) y fase 6 (informe + demo) pendientes según roadmap.
+**Despliegue productivo** en VPS Hetzner CPX22 (Nuremberg) con TLS
+automático (Caddy + Let's Encrypt), backups Postgres diarios duplicados
+(server + local Windows), verificación de email vía SMTP Gmail, y toggle
+admin para abrir/cerrar el registro público sin redeploy.
+
+Fases 0–4 y 4.5 (Dashboard) cerradas + ciclo de hardening admin + **fase
+5 (despliegue Hetzner) cerrada**. Fase 6 (informe + demo) en curso de
+cara a entrega del 25-mayo-2026.

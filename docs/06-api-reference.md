@@ -485,6 +485,43 @@ Cada diff se persiste como una sola fila en `audit_logs` con
 `action = "permissions.update"` y `details.changes` con la lista de
 celdas modificadas.
 
+### `GET /api/admin/settings`
+
+Permiso: `permissions.manage`. Devuelve el estado actual de los flags
+mutables en runtime. Respuesta:
+
+```json
+{
+  "public_registration_enabled": false
+}
+```
+
+El valor sale de la tabla `app_settings` si existe la fila, y cae al
+`ALLOW_PUBLIC_REGISTRATION` del entorno como fallback cuando todavía no
+se ha tocado el toggle desde la UI.
+
+### `PUT /api/admin/settings/public-registration`
+
+Permiso: `permissions.manage`. Abre o cierra el registro público sin
+reiniciar la API.
+
+```json
+{ "enabled": true }
+```
+
+- 200: devuelve `AppSettingsView` actualizado.
+- 403: rol sin `permissions.manage`.
+
+Cada cambio se persiste en `app_settings` (clave
+`public_registration_enabled`) y se audita con
+`action = "settings.public_registration.update"`,
+`details = {"from": <bool>, "to": <bool>}`. Si el nuevo valor es igual
+al anterior no se escribe fila de auditoría (idempotente).
+
+> El endpoint `/api/auth/register` consulta este flag en cada petición,
+> así que el cambio surte efecto inmediatamente para todos los
+> contenedores que compartan la BD.
+
 ## Errores comunes (resumen)
 
 | Código | Condición |

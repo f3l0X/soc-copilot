@@ -201,19 +201,31 @@ Página `/dashboard` con KPIs, distribución por riesgo, serie temporal
 30d y top técnicas MITRE, alimentada por un nuevo `GET /api/stats` que
 respeta el ownership existente. Recharts integrado y renderizando gráficas interactivas en frontend. Suma al 15% de UX de la rúbrica y aporta material visual para la demo.
 
-### Fase 5: despliegue Hetzner — pendiente
+### Fase 5: despliegue Hetzner — ✅ completada (18/05/2026)
 
-Detalle en [roadmap.md](roadmap.md). Pasos clave:
+Producción operativa en <https://soc-copilot.duckdns.org>. Detalles
+operativos completos en [operations.md](operations.md). Resumen del
+estado entregado:
 
-- VPS Hetzner CX22 (~5 €/mes) + dominio.
-- Rotar `JWT_SECRET` (`openssl rand -base64 48`).
-- Adaptar `infra/docker-compose.prod.example.yml`.
-- Caddy con `PUBLIC_DOMAIN` real → TLS automático.
-- `cookie_secure=true` + `forwarded_allow_ips` en uvicorn.
-- Hardening VPS: SSH key only, ufw, fail2ban, auto-actualizaciones.
-- Backups Postgres (`pg_dump` cron + offsite).
-- Re-ingestar KB en prod.
-- CD on tag → SSH + `docker compose pull && up -d`.
+| Capa | Estado |
+|------|--------|
+| VPS Hetzner CPX22 (Nuremberg, ~8,5 €/mes con backups) | ✅ |
+| Dominio DuckDNS apuntando al VPS | ✅ |
+| `JWT_SECRET`, `APP_ENCRYPTION_KEY`, `POSTGRES_PASSWORD`, `NEXTAUTH_SECRET` rotados a valores producción (`openssl rand`) | ✅ |
+| `infra/docker-compose.prod.yml` desplegado a partir del example, con el bloque `web.build.args` forwardeando `NEXT_PUBLIC_API_URL` para que Next lo embeba en el bundle | ✅ |
+| Caddy 2 con `PUBLIC_DOMAIN=soc-copilot.duckdns.org` y `ACME_EMAIL` reales → certs Let's Encrypt automáticos, HTTP/3, HSTS preload | ✅ |
+| `cookie_secure=true`, `APP_ENV=production` (la API se niega a arrancar con defaults inseguros) | ✅ |
+| Hardening VPS: SSH key-only, `PermitRootLogin no`, `AllowUsers soc`, UFW 22/80/443, fail2ban activo, `unattended-upgrades` para parches de seguridad | ✅ |
+| Backups Postgres: `cron.daily` con dump `pg_dump --clean --if-exists` comprimido, retención 14 días en `/var/backups/soc-copilot/` | ✅ |
+| Backups offline: tarea programada en Windows que descarga los dumps a `Documents/soc-copilot-db-backups/` con retención 30 días | ✅ |
+| KB ingestada en Chroma de producción: 697 técnicas MITRE Enterprise + 10 OWASP 2025 = **707 docs** | ✅ |
+| SMTP cableado (Gmail App Password) para verificación de email en `/auth/register` | ✅ |
+| Toggle admin para abrir/cerrar `ALLOW_PUBLIC_REGISTRATION` desde UI sin redeploy (tabla `app_settings`, migración 0004) | ✅ |
+| Manual de operaciones en español (`docs/operations.md`) con pre-flight checklist, troubleshooting típico, gestión de migraciones y recipes de TestClient para tracebacks ASGI | ✅ |
+
+CD on tag queda como mejora opcional post-entrega — actualmente el
+deploy es `bash /opt/soc-copilot/scripts/deploy.sh` sobre SSH, con el
+checklist documentado.
 
 ### Fase 6: informe + presentación — pendiente
 

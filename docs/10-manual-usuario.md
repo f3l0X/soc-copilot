@@ -31,28 +31,62 @@ decisión final siempre es humana.
 | Entorno | URL |
 |---------|-----|
 | Local (desarrollo) | <http://localhost:13500> |
-| Producción (Hetzner) | la que indique tu administrador |
+| **Producción (Hetzner)** | <https://soc-copilot.duckdns.org> |
 
 ### 2.1 Crear cuenta
 
+> El registro público se puede abrir o cerrar desde el panel de
+> administración. Si está cerrado verás el mensaje *"El registro está
+> cerrado temporalmente. Contacta con un administrador para que cree tu
+> cuenta."* — en ese caso pide al admin que te dé de alta desde
+> `/admin → Usuarios`.
+
 1. Abre `/login` y pulsa **Registrarse**.
-2. Introduce nombre, email y contraseña. La contraseña debe cumplir
-   **todas** las reglas siguientes:
+2. Introduce nombre, email, contraseña y **nivel solicitado** (L1 / L2 /
+   Instructor). La contraseña debe cumplir **todas** las reglas siguientes:
    - Al menos **10 caracteres**.
    - Incluye **mayúscula**, **minúscula**, **dígito** y **símbolo**.
    - Fortaleza zxcvbn ≥ *Aceptable* (puntuación 2/4). Se muestra una
      barra de fortaleza en tiempo real con sugerencias para mejorarla.
    - Debes confirmarla en el campo "Confirmar contraseña".
-3. El **primer usuario** que se registra en una instalación nueva queda
-   automáticamente como `admin`. El resto son `analyst` por defecto.
+3. Al enviar el formulario recibirás un **email de verificación** en la
+   dirección que indicaste. Pulsa el botón **"Verificar email"** del
+   correo (válido durante 24 h). Hasta que verifiques no podrás iniciar
+   sesión — el login mostrará *"Acceso denegado. ¿Tienes el email
+   verificado?"*.
+4. El **primer usuario** que se registra en una instalación nueva queda
+   automáticamente como `admin` y con el email pre-verificado. El resto
+   son `analyst` por defecto.
 
-> La misma política se aplica cuando un admin resetea la contraseña de
-> otro usuario desde `/admin → Usuarios`.
+> La misma política de contraseñas se aplica cuando un admin resetea la
+> contraseña de otro usuario desde `/admin → Usuarios`.
+
+#### Aprobación de nivel por un admin
+
+El nivel que solicitas (L1, L2 o Instructor) **no se aplica directamente**:
+queda pendiente de aprobación por un administrador.
+
+- Mientras no se apruebe, tu cuenta opera como **L1** independientemente
+  de lo que pidieras. El nivel solicitado aparece en el panel admin con
+  un badge "Pendiente".
+- Cuando el admin te apruebe (o te asigne otro nivel), recibirás el nuevo
+  rango la próxima vez que recargues. El nivel cambia el tono y
+  profundidad de las respuestas del Copilot:
+  - **L1** → más guía, paso a paso, más explicaciones didácticas.
+  - **L2** → más conciso, asume conocimiento intermedio.
+  - **Instructor** → respuestas técnicas sin filtros pedagógicos.
+
+> Los cinco usuarios bootstrap del grupo se aprueban automáticamente al
+> aplicar la migración inicial. La aprobación pendiente solo aplica a
+> registros nuevos posteriores.
 
 ### 2.2 Iniciar / cerrar sesión
 
 - Login: email + contraseña. La sesión se mantiene en una cookie segura
   (`httpOnly`); no necesitas copiar tokens.
+- Si introduces el password mal **4 veces** la cuenta queda **bloqueada
+  durante 15 minutos** (anti-bruteforce). El contador se reinicia con un
+  login correcto o cuando expira el bloqueo.
 - Logout: menú superior derecho → **Cerrar sesión**. Cierra la sesión en
   todos los dispositivos donde usases esa contraseña.
 
@@ -61,7 +95,7 @@ decisión final siempre es humana.
 | Rol | Puede |
 |-----|-------|
 | `analyst` | Crear alertas, pedir recomendaciones, chatear, ver su histórico, editar su perfil. |
-| `admin` | Todo lo anterior + gestionar usuarios, roles, matriz de permisos, ver auditoría global y log analyzer completo. |
+| `admin` | Todo lo anterior + gestionar usuarios, roles, matriz de permisos, abrir/cerrar el registro público, aprobar niveles solicitados, ver auditoría global y log analyzer completo. |
 
 ---
 
@@ -203,16 +237,39 @@ Disponibles solo para rol `admin`, en `/admin`.
 
 | Sección | Qué hace |
 |---------|----------|
-| **Usuarios** | Listar, crear, cambiar rol, **resetear cuota** diaria de LLM, **resetear contraseña** y **eliminar** cuentas. Las acciones críticas (resetear cuota y eliminar) piden confirmación inline en la propia fila (¿Resetear? / ¿Eliminar? **Sí / No**) para evitar borrados accidentales. |
+| **Registro público** (banner en tab Usuarios) | Toggle inmediato para abrir o cerrar el registro de cuentas. El cambio surte efecto sin reiniciar la API. Pensado para demos: lo abres al tribunal o al grupo durante la prueba y lo vuelves a cerrar al terminar. Cada cambio queda en auditoría como `settings.public_registration.update`. |
+| **Usuarios** | Listar, crear, cambiar rol, **cambiar nivel** (aprobar L1/L2/Instructor solicitados), **resetear cuota** diaria de LLM, **resetear contraseña** y **eliminar** cuentas. Las acciones críticas (resetear cuota y eliminar) piden confirmación inline en la propia fila (¿Resetear? / ¿Eliminar? **Sí / No**) para evitar borrados accidentales. |
 | **Roles y permisos** | Matriz editable de permisos por rol (RBAC dinámico). |
-| **Auditoría** | Eventos de login, registros, cambios de ajustes IA, acciones admin, alertas creadas, errores de cuota. |
+| **Auditoría** | Eventos de login, registros, cambios de ajustes IA, acciones admin, alertas creadas, errores de cuota, toggles de registro público. |
 | **Knowledge base** | Estado de la colección Chroma (`/api/kb/status`). |
 | **Modelos LLM** | Allowlist visible al usuario. |
+
+### Cómo aprobar el nivel de un usuario nuevo
+
+1. Entra en `/admin → Usuarios`.
+2. Localiza la fila del usuario. Si pidió un nivel distinto al actual,
+   verás un badge **"Solicita: L2"** (o el que pidiera) junto a su nivel
+   vigente.
+3. Despliega el selector de **Nivel** y pon el rango que corresponda.
+4. Al guardar, el usuario queda marcado como **aprobado** y el nivel
+   solicitado deja de aparecer como pendiente.
 
 > El reseteo de contraseña abre un modal con la **misma política de
 > seguridad que el registro** (10+ caracteres, mayús/minús/dígito/símbolo,
 > zxcvbn ≥ 2 y confirmación). Tras guardar se invalidan todas las
 > sesiones activas del usuario afectado.
+
+### Abrir el registro temporalmente para una demo
+
+1. En la pestaña **Usuarios**, banner superior **Registro público** →
+   pulsa **"Abrir registro"**. El badge pasará a *Abierto*.
+2. Avisa a quien vaya a probar (compañero, tribunal). Pueden entrar a
+   <https://soc-copilot.duckdns.org> y registrarse normalmente.
+3. Cuando termine la demo, vuelve al mismo banner → **"Cerrar registro"**.
+
+> Si no tienes acceso a la UI, también puedes tocar el flag desde el
+> servidor o directamente en la base de datos: ver
+> [operations.md §4](operations.md) para los comandos exactos.
 
 Todas las acciones administrativas quedan registradas con `actor_id`,
 `action`, `target_type` y `target_id`.
@@ -252,6 +309,10 @@ Todas las acciones administrativas quedan registradas con `actor_id`,
 | Chat responde sin citas | KB vacía | Pide al admin ejecutar la ingesta (`scripts.ingest_kb`). |
 | `429 rate limit exceeded` | Demasiadas peticiones seguidas | Espera 60 s o agrupa logs antes de analizar. |
 | Sesión cerrada de golpe en todos lados | Alguien cambió tu contraseña | Recupera acceso e investiga el evento `auth.login` en auditoría. |
+| *"El registro está cerrado temporalmente"* al intentar registrarte | El admin tiene el flag en *Cerrado* | Pide al admin que te dé de alta desde `/admin → Usuarios` o que abra el registro brevemente. |
+| *"Acceso denegado. ¿Tienes el email verificado?"* tras un registro nuevo | No has clicado el link del email de verificación | Mira tu bandeja (y spam). Si nunca llegó, pide al admin que reenvíe la verificación o te marque como verificado a mano. |
+| Tu nivel sigue como L1 después de pedir L2 / Instructor | Falta aprobación del admin | Espera a que el admin te apruebe en `/admin → Usuarios`. El nivel solicitado aparece como "Pendiente" en su panel. |
+| Cuenta bloqueada tras varios intentos de login | Anti-bruteforce: 4 fallos seguidos | Espera 15 minutos. Si urge, el admin puede resetearte la contraseña. |
 
 Más casos en [05-solucion-problemas.md](05-solucion-problemas.md).
 
