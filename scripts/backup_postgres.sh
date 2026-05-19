@@ -24,16 +24,34 @@ REPO_DIR="/opt/soc-copilot"
 ENV_FILE="${REPO_DIR}/.env"
 COMPOSE_FILE="${REPO_DIR}/infra/docker-compose.prod.yml"
 
-# shellcheck disable=SC1090
-set -a; . "${ENV_FILE}"; set +a
+# Safe .env reader — does NOT execute the file (avoids issues with special
+# chars in secrets like $, `, parens, etc.). Picks the LAST occurrence and
+# strips surrounding single/double quotes if present.
+read_env() {
+  local key="$1"
+  local val
+  val="$(grep -E "^${key}=" "${ENV_FILE}" | tail -n1 | cut -d= -f2-)"
+  # Strip optional surrounding quotes.
+  val="${val%\"}"; val="${val#\"}"
+  val="${val%\'}"; val="${val#\'}"
+  printf '%s' "${val}"
+}
 
-: "${POSTGRES_USER:?missing in .env}"
-: "${POSTGRES_DB:?missing in .env}"
-: "${BACKUP_AGE_RECIPIENT:?missing in .env — generate with: age-keygen -o ~/.age-key.txt}"
+POSTGRES_USER="$(read_env POSTGRES_USER)"
+POSTGRES_DB="$(read_env POSTGRES_DB)"
+BACKUP_AGE_RECIPIENT="$(read_env BACKUP_AGE_RECIPIENT)"
+BACKUP_DIR_ENV="$(read_env BACKUP_DIR)"
+BACKUP_RETENTION_DAILY_ENV="$(read_env BACKUP_RETENTION_DAILY)"
+BACKUP_RETENTION_WEEKLY_ENV="$(read_env BACKUP_RETENTION_WEEKLY)"
+BACKUP_RCLONE_REMOTE="$(read_env BACKUP_RCLONE_REMOTE)"
 
-BACKUP_DIR="${BACKUP_DIR:-/var/backups/soc-copilot}"
-RETAIN_DAILY="${BACKUP_RETENTION_DAILY:-7}"
-RETAIN_WEEKLY="${BACKUP_RETENTION_WEEKLY:-4}"
+[[ -n "${POSTGRES_USER}"          ]] || { echo "missing POSTGRES_USER in .env" >&2; exit 1; }
+[[ -n "${POSTGRES_DB}"            ]] || { echo "missing POSTGRES_DB in .env" >&2; exit 1; }
+[[ -n "${BACKUP_AGE_RECIPIENT}"   ]] || { echo "missing BACKUP_AGE_RECIPIENT in .env (age public key)" >&2; exit 1; }
+
+BACKUP_DIR="${BACKUP_DIR_ENV:-/var/backups/soc-copilot}"
+RETAIN_DAILY="${BACKUP_RETENTION_DAILY_ENV:-7}"
+RETAIN_WEEKLY="${BACKUP_RETENTION_WEEKLY_ENV:-4}"
 
 mkdir -p "${BACKUP_DIR}/daily" "${BACKUP_DIR}/weekly"
 chmod 700 "${BACKUP_DIR}"
