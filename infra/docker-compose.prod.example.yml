@@ -57,6 +57,10 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
     healthcheck:
       test:
         - CMD-SHELL
@@ -77,6 +81,9 @@ services:
       IS_PERSISTENT: "TRUE"
       PERSIST_DIRECTORY: /data
       ANONYMIZED_TELEMETRY: "FALSE"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
     # No `ports:` block on purpose.
 
   api:
@@ -90,6 +97,12 @@ services:
       POSTGRES_HOST: postgres
       CHROMA_HOST: chroma
       COOKIE_SECURE: "true"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
     # No `ports:` — Caddy reaches it via the docker network.
     # Override the dev CMD so we don't run --reload in production.
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
@@ -112,6 +125,9 @@ services:
     env_file: ../.env
     environment:
       INTERNAL_API_URL: http://api:8080
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
     depends_on:
       - api
 
@@ -130,6 +146,11 @@ services:
     environment:
       PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:-localhost}
       ACME_EMAIL: ${ACME_EMAIL:-admin@example.com}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    # NET_BIND_SERVICE so Caddy can bind 80/443 as non-root inside the image.
+    cap_add: [NET_BIND_SERVICE]
     depends_on:
       - api
       - web
