@@ -4,24 +4,12 @@ import { useEffect, useState } from "react";
 
 import { ApiError, updateProfile, UserLevel } from "@/lib/api";
 import { useAuth, useRequireAuth } from "@/lib/auth";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 
-const LEVEL_OPTIONS: { value: UserLevel; label: string; hint: string }[] = [
-  {
-    value: "L1",
-    label: "Analista L1 (Junior)",
-    hint: "El Copilot explica paso a paso, define siglas y sugiere el siguiente comando.",
-  },
-  {
-    value: "L2",
-    label: "Analista L2 (Senior)",
-    hint: "Respuestas concisas y técnicas, sin teoría básica.",
-  },
-  {
-    value: "INSTRUCTOR",
-    label: "Instructor",
-    hint: "Detalle completo: razonamiento alternativo, falsos positivos y ejemplos pedagógicos.",
-  },
+const LEVEL_OPTIONS: { value: UserLevel; labelKey: TranslationKey; hintKey: TranslationKey }[] = [
+  { value: "L1", labelKey: "level_l1_label", hintKey: "level_l1_hint" },
+  { value: "L2", labelKey: "level_l2_label", hintKey: "level_l2_hint" },
+  { value: "INSTRUCTOR", labelKey: "level_instructor_label", hintKey: "level_instructor_hint" },
 ];
 
 export default function ProfilePage() {
@@ -83,7 +71,8 @@ export default function ProfilePage() {
     lastName !== (u.last_name ?? "") ||
     email !== u.email ||
     (canEditLevel && level !== u.level);
-  const levelHint = LEVEL_OPTIONS.find((o) => o.value === level)?.hint;
+  const levelHintOpt = LEVEL_OPTIONS.find((o) => o.value === level);
+  const levelHint = levelHintOpt ? t(levelHintOpt.hintKey) : undefined;
   const requestedHint =
     !canEditLevel && !u.level_approved && u.requested_level !== u.level
       ? `Solicitaste ${u.requested_level}; un administrador revisará y asignará tu nivel definitivo.`
@@ -105,7 +94,7 @@ export default function ProfilePage() {
 
         {success && !dirty && (
           <div className="text-sm bg-emerald-950/40 border border-emerald-800 text-emerald-300 p-3 rounded">
-            Perfil actualizado correctamente.
+            {t("profile_updated")}
           </div>
         )}
 
@@ -131,7 +120,7 @@ export default function ProfilePage() {
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
               className="mt-1 w-full rounded bg-slate-950 border border-slate-700 px-3 py-2 text-white"
-              placeholder="Opcional"
+              placeholder={t("profile_optional")}
             />
           </label>
 
@@ -145,40 +134,37 @@ export default function ProfilePage() {
               className="mt-1 w-full rounded bg-slate-950 border border-slate-700 px-3 py-2 text-white"
             />
             <span className="text-xs text-slate-500 mt-1 block">
-              Para cambiar el email tendrás que confirmar tu contraseña actual.
+              {t("profile_email_hint")}
             </span>
           </label>
 
           {email !== u.email && (
             <label className="block text-sm">
-              <span className="text-slate-400">Contraseña actual</span>
+              <span className="text-slate-400">{t("profile_current_password")}</span>
               <input
                 type="password"
                 required
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
                 className="mt-1 w-full rounded bg-slate-950 border border-slate-700 px-3 py-2 text-white"
-                placeholder="Necesaria para confirmar el cambio de email"
+                placeholder={t("profile_current_password_placeholder")}
               />
             </label>
           )}
 
           <fieldset className="border border-ink-700 rounded-lg p-4 space-y-2">
             <legend className="px-2 text-sm text-slate-300">
-              Nivel SOC
+              {t("login_level")}
               {!canEditLevel && !u.level_approved && (
                 <span
                   className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-medium uppercase border bg-amber-500/10 text-amber-300 border-amber-500/30"
-                  title="Pendiente de aprobación por un administrador"
                 >
-                  pendiente
+                  {t("profile_level_pending")}
                 </span>
               )}
             </legend>
             <p className="text-xs text-slate-500">
-              {canEditLevel
-                ? "Como administrador puedes ajustar tu propio nivel. Para el resto de usuarios, el nivel se asigna desde Administración → Usuarios."
-                : "Asignado por un administrador. Ajusta el tono y la profundidad de las respuestas del Copilot. Si necesitas otro nivel, pide la promoción al admin."}
+              {canEditLevel ? t("profile_level_admin_note") : t("profile_level_user_note")}
             </p>
             <div className="grid gap-2 sm:grid-cols-3">
               {LEVEL_OPTIONS.map((opt) => {
@@ -205,7 +191,7 @@ export default function ProfilePage() {
                       onChange={() => setLevel(opt.value)}
                       className="sr-only"
                     />
-                    {opt.label}
+                    {t(opt.labelKey)}
                   </label>
                 );
               })}

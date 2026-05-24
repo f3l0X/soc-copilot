@@ -31,7 +31,7 @@ import {
   loadZxcvbn,
   MIN_STRENGTH_SCORE,
   STRENGTH_COLORS,
-  STRENGTH_LABELS,
+  STRENGTH_LABEL_KEYS,
   type ZxcvbnFn,
 } from "@/lib/password";
 
@@ -46,17 +46,13 @@ const ACTION_OPTIONS = [
   "user.password_reset",
 ] as const;
 
-const ROLE_DESCRIPTIONS: Record<UserRole, { title: string; blurb: string }> = {
-  analyst: {
-    title: "Analyst",
-    blurb:
-      "Rol por defecto. Puede analizar logs, generar recomendaciones y consultar el chat con RAG. Solo ve sus propias alertas.",
-  },
-  admin: {
-    title: "Admin",
-    blurb:
-      "Acceso completo. Gestiona usuarios, roles y contraseñas. Ve todas las alertas, incluidas las huérfanas (sin propietario).",
-  },
+const ROLE_BLURB_KEY: Record<UserRole, TranslationKey> = {
+  analyst: "admin_role_analyst_blurb",
+  admin: "admin_role_admin_blurb",
+};
+const ROLE_TITLE: Record<UserRole, string> = {
+  analyst: "Analyst",
+  admin: "Admin",
 };
 
 // Capacidades baseline (no gated por backend; se aplican en código de los
@@ -773,38 +769,34 @@ export default function AdminPage() {
 
       {tab === "roles" && (
         <section className="grid gap-4 md:grid-cols-2">
-          {(Object.entries(ROLE_DESCRIPTIONS) as [UserRole, typeof ROLE_DESCRIPTIONS["admin"]][]).map(
-            ([role, info]) => {
-              const count = users.filter((u) => u.role === role).length;
-              return (
-                <article
-                  key={role}
-                  className="bg-ink-900/60 border border-ink-700 rounded-xl p-5 space-y-3"
-                >
-                  <header className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold">{info.title}</h3>
-                    <span
-                      className={`px-2 py-1 rounded text-xs font-medium ${
-                        role === "admin"
-                          ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
-                          : "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
-                      }`}
-                    >
-                      {role}
-                    </span>
-                  </header>
-                  <p className="text-sm text-slate-400">{info.blurb}</p>
-                  <p className="text-xs text-slate-500">
-                    {t("admin_users_with_role")} <span className="text-slate-300">{count}</span>
-                  </p>
-                </article>
-              );
-            }
-          )}
+          {(["analyst", "admin"] as UserRole[]).map((role) => {
+            const count = users.filter((u) => u.role === role).length;
+            return (
+              <article
+                key={role}
+                className="bg-ink-900/60 border border-ink-700 rounded-xl p-5 space-y-3"
+              >
+                <header className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">{ROLE_TITLE[role]}</h3>
+                  <span
+                    className={`px-2 py-1 rounded text-xs font-medium ${
+                      role === "admin"
+                        ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                        : "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
+                    }`}
+                  >
+                    {role}
+                  </span>
+                </header>
+                <p className="text-sm text-slate-400">{t(ROLE_BLURB_KEY[role])}</p>
+                <p className="text-xs text-slate-500">
+                  {t("admin_users_with_role")} <span className="text-slate-300">{count}</span>
+                </p>
+              </article>
+            );
+          })}
           <p className="md:col-span-2 text-xs text-slate-500">
-            Los roles están definidos en <code>app/models.py::UserRole</code> y se
-            asignan en el alta o desde la pestaña Usuarios. El primer registro pasa
-            automáticamente a admin.
+            {t("admin_roles_note")}
           </p>
         </section>
       )}
@@ -1214,9 +1206,9 @@ export default function AdminPage() {
                   ))}
                 </div>
                 <p className="text-[11px] text-slate-400">
-                  Fortaleza:{" "}
+                  {t("strength_label")}:{" "}
                   <span className="font-medium text-slate-200">
-                    {STRENGTH_LABELS[pwStrengthScore]}
+                    {t(STRENGTH_LABEL_KEYS[pwStrengthScore])}
                   </span>
                   {pwStrengthFeedback ? ` — ${pwStrengthFeedback}` : ""}
                 </p>
@@ -1226,7 +1218,7 @@ export default function AdminPage() {
                       key={r.id}
                       className={r.ok ? "text-emerald-400" : "text-slate-500"}
                     >
-                      {r.ok ? "✓" : "○"} {r.label}
+                      {r.ok ? "✓" : "○"} {t(r.labelKey)}
                     </li>
                   ))}
                 </ul>

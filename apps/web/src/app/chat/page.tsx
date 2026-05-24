@@ -14,11 +14,7 @@ import { useRequireAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { useModel } from "@/lib/useModel";
 
-const STARTERS = [
-  "¿Qué es un ataque de fuerza bruta y cómo lo detecto?",
-  "Explícame el flujo típico de respuesta a un compromiso de credenciales.",
-  "¿Cómo encaja OWASP A07:2025 con MITRE T1110?",
-];
+const STARTER_KEYS = ["chat_starter_1", "chat_starter_2", "chat_starter_3"] as const;
 
 function SourcePill({ id }: { id: string }) {
   const [kind, ref] = id.split(":");
@@ -128,16 +124,19 @@ export default function ChatPage() {
         <div className="space-y-2">
           <p className="text-xs text-slate-500">{t("chat_starters_label")}</p>
           <div className="flex flex-col gap-2">
-            {STARTERS.map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => send(s)}
-                className="rounded border border-slate-700 bg-slate-900 px-3 py-2 text-left text-sm hover:border-slate-500"
-              >
-                {s}
-              </button>
-            ))}
+            {STARTER_KEYS.map((k) => {
+              const s = t(k);
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => send(s)}
+                  className="rounded border border-slate-700 bg-slate-900 px-3 py-2 text-left text-sm hover:border-slate-500"
+                >
+                  {s}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

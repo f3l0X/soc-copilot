@@ -11,13 +11,14 @@ import {
   MIN_STRENGTH_SCORE,
   PASSWORD_RULES,
   STRENGTH_COLORS,
-  STRENGTH_LABELS,
+  STRENGTH_LABEL_KEYS,
   type ZxcvbnFn,
 } from "@/lib/password";
-const LEVEL_OPTIONS: { value: UserLevel; label: string; hint: string }[] = [
-  { value: "L1", label: "Analista L1", hint: "Junior — el Copilot explica paso a paso" },
-  { value: "L2", label: "Analista L2", hint: "Senior — respuestas más concisas" },
-  { value: "INSTRUCTOR", label: "Instructor", hint: "Detalle completo sin filtros" },
+import type { TranslationKey } from "@/lib/i18n";
+const LEVEL_OPTIONS: { value: UserLevel; labelKey: TranslationKey; hintKey: TranslationKey }[] = [
+  { value: "L1", labelKey: "level_l1_label", hintKey: "level_l1_hint" },
+  { value: "L2", labelKey: "level_l2_label", hintKey: "level_l2_hint" },
+  { value: "INSTRUCTOR", labelKey: "level_instructor_label", hintKey: "level_instructor_hint" },
 ];
 
 function LoginInner() {
@@ -234,7 +235,7 @@ function LoginInner() {
                         ? "border-sky-500 bg-sky-950/40"
                         : "border-slate-700 hover:border-slate-500"
                     }`}
-                    title={opt.hint}
+                    title={t(opt.hintKey)}
                   >
                     <input
                       type="radio"
@@ -244,12 +245,15 @@ function LoginInner() {
                       onChange={() => setLevel(opt.value)}
                       className="sr-only"
                     />
-                    <span className="block text-xs font-medium">{opt.label}</span>
+                    <span className="block text-xs font-medium">{t(opt.labelKey)}</span>
                   </label>
                 ))}
               </div>
               <p className="mt-1 text-[11px] text-slate-500">
-                {LEVEL_OPTIONS.find((o) => o.value === level)?.hint}
+                {(() => {
+                  const opt = LEVEL_OPTIONS.find((o) => o.value === level);
+                  return opt ? t(opt.hintKey) : "";
+                })()}
               </p>
             </fieldset>
           </>
@@ -275,10 +279,10 @@ function LoginInner() {
                     : "text-slate-500"
               }`}
             >
-              {emailStatus === "checking" && "Comprobando disponibilidad…"}
-              {emailStatus === "available" && "✓ Email disponible"}
-              {emailStatus === "taken" && "✕ Ese email ya está registrado"}
-              {emailStatus === "invalid" && "Formato de email inválido"}
+              {emailStatus === "checking" && t("email_checking")}
+              {emailStatus === "available" && t("email_available")}
+              {emailStatus === "taken" && t("email_taken")}
+              {emailStatus === "invalid" && t("email_invalid")}
             </span>
           )}
         </label>
@@ -316,9 +320,7 @@ function LoginInner() {
                   passwordsMatch ? "text-emerald-400" : "text-rose-400"
                 }`}
               >
-                {passwordsMatch
-                  ? "✓ Las contraseñas coinciden"
-                  : "✕ Las contraseñas no coinciden"}
+                {passwordsMatch ? t("pwmatch_ok") : t("pwmatch_ko")}
               </span>
             )}
           </label>
@@ -339,7 +341,7 @@ function LoginInner() {
               ))}
             </div>
             <p className="text-[11px] text-slate-400">
-              Fortaleza: <span className="font-medium text-slate-200">{STRENGTH_LABELS[strengthScore]}</span>
+              {t("strength_label")}: <span className="font-medium text-slate-200">{t(STRENGTH_LABEL_KEYS[strengthScore])}</span>
               {strengthFeedback ? ` — ${strengthFeedback}` : ""}
             </p>
             <ul className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px]">
@@ -348,7 +350,7 @@ function LoginInner() {
                   key={r.id}
                   className={r.ok ? "text-emerald-400" : "text-slate-500"}
                 >
-                  {r.ok ? "✓" : "○"} {r.label}
+                  {r.ok ? "✓" : "○"} {t(r.labelKey)}
                 </li>
               ))}
             </ul>
