@@ -11,6 +11,7 @@ import {
   sendChat,
 } from "@/lib/api";
 import { useRequireAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 import { useModel } from "@/lib/useModel";
 
 const STARTERS = [
@@ -55,6 +56,7 @@ export default function ChatPage() {
   const { selected: model } = useModel();
   const scrollRef = useRef<HTMLDivElement>(null);
   const auth = useRequireAuth();
+  const { t } = useI18n();
 
   useEffect(() => {
     kbStatus()
@@ -94,39 +96,37 @@ export default function ChatPage() {
   }
 
   if (!auth.ready) {
-    return <div className="p-8 text-slate-500 text-sm">Verificando sesión…</div>;
+    return <div className="p-8 text-slate-500 text-sm">{t("alerts_loading")}</div>;
   }
 
   return (
     <div className="p-6 max-w-4xl mx-auto flex flex-col gap-4">
       <div className="flex items-baseline justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Chat IA</h1>
-          <p className="text-slate-400 mt-1 text-sm">
-            Mentor SOC con RAG sobre MITRE ATT&CK + OWASP Top 10.
-          </p>
+          <h1 className="text-3xl font-bold tracking-tight">{t("chat_title")}</h1>
+          <p className="text-slate-400 mt-1 text-sm">{t("chat_subtitle")}</p>
         </div>
         <div className="flex flex-col items-end gap-1 text-xs">
           {kb ? (
             <span className="text-slate-400">
-              KB: {kb.total} docs ({kb.mitre} MITRE · {kb.owasp} OWASP)
+              KB: {kb.total} {t("chat_kb_docs")} ({kb.mitre} MITRE · {kb.owasp} OWASP)
             </span>
           ) : (
-            <span className="text-amber-400">KB no disponible</span>
+            <span className="text-amber-400">{t("chat_kb_unavailable")}</span>
           )}
           <ModelSelector compact />
-          <Link 
-            href="/alerts" 
+          <Link
+            href="/alerts"
             className="px-3 py-2 rounded-md text-xs border border-ink-700 bg-ink-850 hover:bg-ink-800 text-slate-300"
           >
-            ← Alertas
+            {t("chat_back_alerts")}
           </Link>
         </div>
       </div>
 
       {messages.length === 0 && (
         <div className="space-y-2">
-          <p className="text-xs text-slate-500">Empieza con uno de estos:</p>
+          <p className="text-xs text-slate-500">{t("chat_starters_label")}</p>
           <div className="flex flex-col gap-2">
             {STARTERS.map((s) => (
               <button
@@ -156,19 +156,19 @@ export default function ChatPage() {
             }`}
           >
             <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">
-              {m.role === "user" ? "Tú" : "Mentor"}
+              {m.role === "user" ? t("chat_you") : t("chat_mentor")}
             </div>
             <p className="whitespace-pre-line">{m.content}</p>
           </div>
         ))}
         {loading && (
-          <div className="text-xs text-slate-500">Mentor está pensando…</div>
+          <div className="text-xs text-slate-500">{t("chat_thinking")}</div>
         )}
       </div>
 
       {lastSources.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-slate-500">Fuentes citables:</span>
+          <span className="text-slate-500">{t("chat_sources")}</span>
           {lastSources.map((id) => (
             <SourcePill key={id} id={id} />
           ))}
@@ -177,7 +177,7 @@ export default function ChatPage() {
 
       {error && (
         <div className="rounded border border-rose-700 bg-rose-950/40 p-3 text-xs text-rose-300">
-          <strong>Error:</strong> {error}
+          <strong>{t("alerts_error")}</strong> {error}
         </div>
       )}
 
@@ -187,14 +187,14 @@ export default function ChatPage() {
           onClick={() => setShowLogContext((v) => !v)}
           className="self-start text-xs text-slate-400 hover:text-slate-200"
         >
-          {showLogContext ? "▼" : "▶"} contexto del log (opcional)
+          {showLogContext ? "▼" : "▶"} {t("chat_log_context_toggle")}
         </button>
         {showLogContext && (
           <textarea
             value={logContext}
             onChange={(e) => setLogContext(e.target.value)}
             rows={4}
-            placeholder="Pega aquí un log o alerta para que el mentor lo tenga en cuenta…"
+            placeholder={t("chat_log_context_placeholder")}
             className="w-full rounded bg-slate-900 border border-slate-700 px-3 py-2 font-mono text-xs"
           />
         )}
@@ -208,7 +208,7 @@ export default function ChatPage() {
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Escribe tu pregunta…"
+            placeholder={t("chat_input_placeholder")}
             disabled={loading}
             className="flex-1 rounded bg-slate-900 border border-slate-700 px-3 py-2 text-sm"
           />
@@ -217,7 +217,7 @@ export default function ChatPage() {
             disabled={loading || !input.trim()}
             className="rounded bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-700 px-4 text-sm font-medium"
           >
-            Enviar
+            {t("chat_send_btn")}
           </button>
         </form>
       </div>

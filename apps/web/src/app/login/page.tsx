@@ -5,6 +5,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 
 import { ApiError, checkEmail, register, UserLevel } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 import {
   loadZxcvbn,
   MIN_STRENGTH_SCORE,
@@ -24,6 +25,7 @@ function LoginInner() {
   const params = useSearchParams();
   const next = params.get("next") || "/";
   const auth = useAuth();
+  const { t } = useI18n();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -174,11 +176,9 @@ function LoginInner() {
         className="w-full max-w-md space-y-4 rounded-lg border border-slate-800 bg-slate-900/40 p-6"
       >
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">SOC Copilot</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t("login_title")}</h1>
           <p className="text-sm text-slate-400 mt-1">
-            {mode === "login"
-              ? "Inicia sesión para continuar."
-              : "Crea una cuenta. El primer usuario es admin."}
+            {mode === "login" ? t("login_subtitle") : t("login_register_subtitle")}
           </p>
         </div>
 
@@ -211,7 +211,7 @@ function LoginInner() {
             </div>
 
             <label className="block text-sm">
-              <span className="text-slate-400">Nombre</span>
+              <span className="text-slate-400">{t("login_name")}</span>
               <input
                 type="text"
                 value={name}
@@ -224,7 +224,7 @@ function LoginInner() {
             </label>
 
             <fieldset className="block text-sm">
-              <legend className="text-slate-400 mb-1">Nivel SOC</legend>
+              <legend className="text-slate-400 mb-1">{t("login_level")}</legend>
               <div className="grid grid-cols-3 gap-2">
                 {LEVEL_OPTIONS.map((opt) => (
                   <label
@@ -256,7 +256,7 @@ function LoginInner() {
         )}
 
         <label className="block text-sm">
-          <span className="text-slate-400">Email</span>
+          <span className="text-slate-400">{t("login_email")}</span>
           <input
             type="email"
             value={email}
@@ -284,7 +284,7 @@ function LoginInner() {
         </label>
 
         <label className="block text-sm">
-          <span className="text-slate-400">Contraseña</span>
+          <span className="text-slate-400">{t("login_password")}</span>
           <input
             type="password"
             value={password}
@@ -300,7 +300,7 @@ function LoginInner() {
 
         {mode === "register" && (
           <label className="block text-sm">
-            <span className="text-slate-400">Confirmar contraseña</span>
+            <span className="text-slate-400">{t("login_confirm_password")}</span>
             <input
               type="password"
               value={passwordConfirm}
@@ -372,10 +372,10 @@ function LoginInner() {
           className="w-full rounded bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium"
         >
           {loading
-            ? "…"
+            ? t("login_loading_btn")
             : mode === "login"
-              ? "Iniciar sesión"
-              : "Crear cuenta"}
+              ? t("login_btn")
+              : t("login_register_btn")}
         </button>
 
         <button
@@ -389,8 +389,8 @@ function LoginInner() {
           className="block w-full text-center text-xs text-slate-400 hover:text-slate-200"
         >
           {mode === "login"
-            ? "¿No tienes cuenta? Regístrate"
-            : "Ya tengo cuenta"}
+            ? t("login_switch_to_register")
+            : t("login_switch_to_login")}
         </button>
       </form>
     </main>

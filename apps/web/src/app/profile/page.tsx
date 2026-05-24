@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { ApiError, updateProfile, UserLevel } from "@/lib/api";
 import { useAuth, useRequireAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 
 const LEVEL_OPTIONS: { value: UserLevel; label: string; hint: string }[] = [
   {
@@ -26,6 +27,7 @@ const LEVEL_OPTIONS: { value: UserLevel; label: string; hint: string }[] = [
 export default function ProfilePage() {
   const auth = useRequireAuth();
   const { refresh } = useAuth();
+  const { t } = useI18n();
 
   const [name, setName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -71,7 +73,7 @@ export default function ProfilePage() {
   }
 
   if (!auth.ready) {
-    return <div className="p-8 text-slate-500 text-sm">Verificando sesión…</div>;
+    return <div className="p-8 text-slate-500 text-sm">{t("alerts_loading")}</div>;
   }
 
   const u = auth.user!;
@@ -90,11 +92,8 @@ export default function ProfilePage() {
   return (
     <div className="p-6 max-w-xl mx-auto space-y-6">
       <header>
-        <h1 className="text-3xl font-bold tracking-tight">Mi Perfil</h1>
-        <p className="text-slate-400 mt-2">
-          Edita tu información personal. La contraseña y el rol se gestionan desde
-          el panel de administración.
-        </p>
+        <h1 className="text-3xl font-bold tracking-tight">{t("profile_title")}</h1>
+        <p className="text-slate-400 mt-2">{t("profile_subtitle")}</p>
       </header>
 
       <section className="bg-ink-900/60 border border-ink-700 rounded-lg p-6 space-y-4">
@@ -112,7 +111,7 @@ export default function ProfilePage() {
 
         <form onSubmit={onSubmit} className="space-y-4">
           <label className="block text-sm">
-            <span className="text-slate-400">Nombre</span>
+            <span className="text-slate-400">{t("profile_name")}</span>
             <input
               type="text"
               required
@@ -125,7 +124,7 @@ export default function ProfilePage() {
           </label>
 
           <label className="block text-sm">
-            <span className="text-slate-400">Apellidos</span>
+            <span className="text-slate-400">{t("profile_lastname")}</span>
             <input
               type="text"
               maxLength={100}
@@ -137,7 +136,7 @@ export default function ProfilePage() {
           </label>
 
           <label className="block text-sm">
-            <span className="text-slate-400">Email</span>
+            <span className="text-slate-400">{t("profile_email")}</span>
             <input
               type="email"
               required
@@ -233,14 +232,14 @@ export default function ProfilePage() {
               }}
               className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200 disabled:opacity-40"
             >
-              Descartar
+              {t("profile_discard")}
             </button>
             <button
               type="submit"
               disabled={!dirty || saving}
               className="px-4 py-2 text-sm bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-700 rounded font-medium"
             >
-              {saving ? "Guardando..." : "Guardar cambios"}
+              {saving ? t("profile_saving") : t("profile_save")}
             </button>
           </div>
         </form>
