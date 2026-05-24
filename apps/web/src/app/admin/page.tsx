@@ -25,6 +25,7 @@ import {
   updatePermissions,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 import {
   evaluatePassword,
   loadZxcvbn,
@@ -68,8 +69,16 @@ const BASELINE_CAPS: { area: string; action: string }[] = [
   { area: "Logs", action: "Subir y filtrar archivos locales" },
 ];
 
+const TAB_LABEL_KEY: Record<Tab, TranslationKey> = {
+  usuarios: "admin_tab_usuarios",
+  roles: "admin_tab_roles",
+  permisos: "admin_tab_permisos",
+  auditoria: "admin_tab_auditoria",
+};
+
 export default function AdminPage() {
   const auth = useAuth();
+  const { t } = useI18n();
   const [tab, setTab] = useState<Tab>("usuarios");
   const [users, setUsers] = useState<AdminUserView[]>([]);
   const [loading, setLoading] = useState(true);
@@ -418,33 +427,31 @@ export default function AdminPage() {
       <header className="flex items-end justify-between">
         <div>
           <div className="text-[11px] uppercase tracking-widest text-rose-300/80 mb-1">
-            Zona de administración
+            {t("admin_zone")}
           </div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-100">
-            Administración
+            {t("admin_title")}
           </h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Gestión de usuarios, roles y permisos del sistema.
-          </p>
+          <p className="text-sm text-slate-400 mt-1">{t("admin_subtitle")}</p>
         </div>
         <div className="text-xs font-mono text-slate-500 text-right">
-          {users.length} cuentas
+          {users.length} {t("admin_accounts_suffix")}
         </div>
       </header>
 
       <nav className="inline-flex gap-1 p-1 rounded-lg border border-ink-700 bg-ink-900/60">
-        {(["usuarios", "roles", "permisos", "auditoria"] as Tab[]).map((t) => (
+        {(["usuarios", "roles", "permisos", "auditoria"] as Tab[]).map((tk) => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
+            key={tk}
+            onClick={() => setTab(tk)}
             className={
-              "px-4 py-1.5 text-xs capitalize rounded-md transition " +
-              (tab === t
+              "px-4 py-1.5 text-xs rounded-md transition " +
+              (tab === tk
                 ? "bg-cyan-500/15 text-cyan-300 border border-cyan-500/30"
                 : "text-slate-400 hover:text-slate-200 border border-transparent")
             }
           >
-            {t}
+            {t(TAB_LABEL_KEY[tk])}
           </button>
         ))}
       </nav>
@@ -463,14 +470,14 @@ export default function AdminPage() {
           <section className="bg-ink-900/60 border border-ink-700 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
               <h3 className="text-sm font-semibold text-slate-100">
-                Registro público
+                {t("admin_public_reg_title")}
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
                 {appSettings === null
-                  ? "Cargando estado..."
+                  ? t("admin_public_reg_loading")
                   : appSettings.public_registration_enabled
-                  ? "Abierto: cualquier persona con el enlace puede crear una cuenta. Recuerda cerrarlo cuando termines la prueba."
-                  : "Cerrado: solo se pueden crear cuentas desde aquí (botón \"+ Crear usuario\")."}
+                  ? t("admin_public_reg_open_desc")
+                  : t("admin_public_reg_closed_desc")}
               </p>
               {appSettingsError && (
                 <p className="text-xs text-rose-300 mt-1">{appSettingsError}</p>
@@ -484,7 +491,7 @@ export default function AdminPage() {
                     : "bg-slate-500/10 text-slate-300 border-slate-500/30"
                 }`}
               >
-                {appSettings?.public_registration_enabled ? "Abierto" : "Cerrado"}
+                {appSettings?.public_registration_enabled ? t("admin_public_reg_open") : t("admin_public_reg_closed")}
               </span>
               <button
                 type="button"
@@ -502,10 +509,10 @@ export default function AdminPage() {
                 }`}
               >
                 {appSettingsSaving
-                  ? "Aplicando..."
+                  ? t("admin_applying")
                   : appSettings?.public_registration_enabled
-                  ? "Cerrar registro"
-                  : "Abrir registro"}
+                  ? t("admin_public_reg_close_btn")
+                  : t("admin_public_reg_open_btn")}
               </button>
             </div>
           </section>
@@ -513,8 +520,8 @@ export default function AdminPage() {
         <section className="bg-ink-900/60 border border-ink-700 rounded-xl overflow-hidden">
           <div className="p-4 border-b border-ink-700 bg-ink-900/60 flex justify-between items-center">
             <div className="flex items-baseline gap-3">
-              <h2 className="text-xl font-semibold">Usuarios Registrados</h2>
-              <span className="text-xs text-slate-500">{users.length} cuentas</span>
+              <h2 className="text-xl font-semibold">{t("admin_users_registered")}</h2>
+              <span className="text-xs text-slate-500">{users.length} {t("admin_accounts_suffix")}</span>
             </div>
             <button
               onClick={() => {
@@ -523,7 +530,7 @@ export default function AdminPage() {
               }}
               className="px-3 py-1.5 text-sm bg-cyan-500 text-ink-950 hover:bg-cyan-400 rounded-md font-medium"
             >
-              + Crear usuario
+              {t("admin_create_user_btn")}
             </button>
           </div>
 
@@ -540,25 +547,25 @@ export default function AdminPage() {
                 onClick={() => setRowNotice(null)}
                 className="text-xs text-emerald-300 hover:text-emerald-200"
               >
-                cerrar
+                {t("admin_close")}
               </button>
             </div>
           )}
 
           {loading ? (
-            <div className="p-8 text-center text-slate-400">Cargando usuarios...</div>
+            <div className="p-8 text-center text-slate-400">{t("admin_loading_users")}</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm whitespace-nowrap">
                 <thead className="bg-ink-850 text-slate-400">
                   <tr>
-                    <th className="px-4 py-3 font-medium">ID</th>
-                    <th className="px-4 py-3 font-medium">Nombre</th>
-                    <th className="px-4 py-3 font-medium">Email</th>
-                    <th className="px-4 py-3 font-medium">Rol</th>
-                    <th className="px-4 py-3 font-medium">Nivel SOC</th>
-                    <th className="px-4 py-3 font-medium">Cuota hoy</th>
-                    <th className="px-4 py-3 font-medium text-right">Acciones</th>
+                    <th className="px-4 py-3 font-medium">{t("admin_col_id")}</th>
+                    <th className="px-4 py-3 font-medium">{t("admin_col_name")}</th>
+                    <th className="px-4 py-3 font-medium">{t("admin_col_email")}</th>
+                    <th className="px-4 py-3 font-medium">{t("admin_col_role")}</th>
+                    <th className="px-4 py-3 font-medium">{t("admin_col_level")}</th>
+                    <th className="px-4 py-3 font-medium">{t("admin_col_quota_today")}</th>
+                    <th className="px-4 py-3 font-medium text-right">{t("admin_col_actions")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-ink-700/60">
@@ -586,7 +593,7 @@ export default function AdminPage() {
                         <td className="px-4 py-3 font-medium text-slate-200">
                           {u.name}
                           {isSelf && (
-                            <span className="ml-2 text-xs text-cyan-400">(tú)</span>
+                            <span className="ml-2 text-xs text-cyan-400">{t("admin_you")}</span>
                           )}
                         </td>
                         <td className="px-4 py-3 text-slate-400">{u.email}</td>
@@ -660,21 +667,21 @@ export default function AdminPage() {
                             {confirmingReset ? (
                               <>
                                 <span className="self-center text-xs text-amber-300">
-                                  ¿Resetear?
+                                  {t("admin_reset_q")}
                                 </span>
                                 <button
                                   disabled={busy}
                                   onClick={() => handleResetQuota(u)}
                                   className="rounded border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-300 transition-colors hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                                 >
-                                  Sí
+                                  {t("common_yes")}
                                 </button>
                                 <button
                                   disabled={busy}
                                   onClick={() => setConfirmResetId(null)}
                                   className="rounded border border-ink-700 bg-ink-800/40 px-2.5 py-1 text-xs font-medium text-slate-300 transition-colors hover:bg-ink-800/70 disabled:cursor-not-allowed disabled:opacity-40"
                                 >
-                                  No
+                                  {t("common_no")}
                                 </button>
                               </>
                             ) : (
@@ -696,7 +703,7 @@ export default function AdminPage() {
                                       : "Pone el contador del día a 0"
                                 }
                               >
-                                Resetear cuota
+                                {t("admin_reset_quota")}
                               </button>
                             )}
                             <button
@@ -711,26 +718,26 @@ export default function AdminPage() {
                               }}
                               className="rounded border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1 text-xs font-medium text-cyan-300 transition-colors hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                             >
-                              Resetear contraseña
+                              {t("admin_reset_password")}
                             </button>
                             {confirmingDelete ? (
                               <>
                                 <span className="self-center text-xs text-rose-300">
-                                  ¿Eliminar?
+                                  {t("admin_delete_q")}
                                 </span>
                                 <button
                                   disabled={busy}
                                   onClick={() => handleDelete(u)}
                                   className="rounded border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-300 transition-colors hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                                 >
-                                  Sí
+                                  {t("common_yes")}
                                 </button>
                                 <button
                                   disabled={busy}
                                   onClick={() => setConfirmDeleteId(null)}
                                   className="rounded border border-ink-700 bg-ink-800/40 px-2.5 py-1 text-xs font-medium text-slate-300 transition-colors hover:bg-ink-800/70 disabled:cursor-not-allowed disabled:opacity-40"
                                 >
-                                  No
+                                  {t("common_no")}
                                 </button>
                               </>
                             ) : (
@@ -748,7 +755,7 @@ export default function AdminPage() {
                                     : "Eliminar usuario — acción no reversible"
                                 }
                               >
-                                Eliminar
+                                {t("admin_delete")}
                               </button>
                             )}
                           </div>
@@ -788,7 +795,7 @@ export default function AdminPage() {
                   </header>
                   <p className="text-sm text-slate-400">{info.blurb}</p>
                   <p className="text-xs text-slate-500">
-                    Usuarios con este rol: <span className="text-slate-300">{count}</span>
+                    {t("admin_users_with_role")} <span className="text-slate-300">{count}</span>
                   </p>
                 </article>
               );
@@ -806,7 +813,7 @@ export default function AdminPage() {
         <section className="bg-ink-900/60 border border-ink-700 rounded-xl overflow-hidden">
           <div className="p-4 border-b border-ink-700 bg-ink-900/60 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-xl font-semibold">Matriz de Permisos</h2>
+              <h2 className="text-xl font-semibold">{t("admin_perms_title")}</h2>
               <p className="text-xs text-slate-500 mt-1">
                 Activa o desactiva cada acción por rol. Las filas marcadas como
                 <span className="mx-1 px-1 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30">locked</span>
@@ -821,14 +828,14 @@ export default function AdminPage() {
                 disabled={permsSaving || permsLoading}
                 className="px-3 py-1.5 text-sm bg-ink-900 border border-ink-700 hover:border-cyan-500/40 disabled:opacity-50 rounded-md"
               >
-                Descartar
+                {t("admin_discard")}
               </button>
               <button
                 onClick={() => void savePermissions()}
                 disabled={permsSaving || permsLoading}
                 className="px-3 py-1.5 text-sm bg-cyan-500 text-ink-950 hover:bg-cyan-400 disabled:bg-ink-800 disabled:text-slate-500 rounded-md font-medium"
               >
-                {permsSaving ? "Guardando..." : "Guardar cambios"}
+                {permsSaving ? t("admin_saving") : t("admin_save_changes")}
               </button>
             </div>
           </div>
@@ -840,14 +847,14 @@ export default function AdminPage() {
           )}
 
           {permsLoading ? (
-            <div className="p-8 text-center text-slate-400">Cargando matriz...</div>
+            <div className="p-8 text-center text-slate-400">{t("admin_perms_loading")}</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="bg-ink-850 text-slate-400">
                   <tr>
-                    <th className="px-4 py-3 font-medium">Área</th>
-                    <th className="px-4 py-3 font-medium">Acción</th>
+                    <th className="px-4 py-3 font-medium">{t("admin_perms_col_area")}</th>
+                    <th className="px-4 py-3 font-medium">{t("admin_perms_col_action")}</th>
                     <th className="px-4 py-3 font-medium text-center">Analyst</th>
                     <th className="px-4 py-3 font-medium text-center">Admin</th>
                   </tr>
@@ -921,15 +928,12 @@ export default function AdminPage() {
         <section className="bg-ink-900/60 border border-ink-700 rounded-xl overflow-hidden">
           <div className="p-4 border-b border-ink-700 bg-ink-900/60 flex flex-wrap gap-3 items-end justify-between">
             <div>
-              <h2 className="text-xl font-semibold">Registro de Auditoría</h2>
-              <p className="text-xs text-slate-500 mt-1">
-                Acciones administrativas registradas en orden cronológico inverso.
-                Solo lectura.
-              </p>
+              <h2 className="text-xl font-semibold">{t("admin_audit_title")}</h2>
+              <p className="text-xs text-slate-500 mt-1">{t("admin_audit_subtitle")}</p>
             </div>
             <div className="flex flex-wrap gap-3 items-end">
               <label className="block text-xs">
-                <span className="text-slate-400 block mb-1">Acción</span>
+                <span className="text-slate-400 block mb-1">{t("admin_action")}</span>
                 <select
                   value={auditAction}
                   onChange={(e) => setAuditAction(e.target.value)}
@@ -937,13 +941,13 @@ export default function AdminPage() {
                 >
                   {ACTION_OPTIONS.map((a) => (
                     <option key={a} value={a}>
-                      {a === "" ? "(todas)" : a}
+                      {a === "" ? t("admin_audit_all") : a}
                     </option>
                   ))}
                 </select>
               </label>
               <label className="block text-xs">
-                <span className="text-slate-400 block mb-1">Actor (email)</span>
+                <span className="text-slate-400 block mb-1">{t("admin_actor_email")}</span>
                 <input
                   type="text"
                   value={auditActor}
@@ -959,7 +963,7 @@ export default function AdminPage() {
                 onClick={() => void loadAudit(0)}
                 className="px-3 py-1.5 text-sm bg-cyan-500 text-ink-950 hover:bg-cyan-400 rounded-md font-medium"
               >
-                Aplicar
+                {t("admin_apply")}
               </button>
             </div>
           </div>
@@ -971,22 +975,22 @@ export default function AdminPage() {
           )}
 
           {auditLoading ? (
-            <div className="p-8 text-center text-slate-400">Cargando registros...</div>
+            <div className="p-8 text-center text-slate-400">{t("admin_audit_loading")}</div>
           ) : audit.length === 0 ? (
             <div className="p-8 text-center text-slate-500">
-              No hay registros para los filtros actuales.
+              {t("admin_audit_empty")}
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-ink-850 text-slate-400">
                   <tr>
-                    <th className="px-3 py-2 font-medium whitespace-nowrap">Fecha</th>
-                    <th className="px-3 py-2 font-medium">Actor</th>
-                    <th className="px-3 py-2 font-medium">Acción</th>
-                    <th className="px-3 py-2 font-medium">Objetivo</th>
-                    <th className="px-3 py-2 font-medium">Detalles</th>
-                    <th className="px-3 py-2 font-medium">IP</th>
+                    <th className="px-3 py-2 font-medium whitespace-nowrap">{t("admin_audit_col_date")}</th>
+                    <th className="px-3 py-2 font-medium">{t("admin_audit_col_actor")}</th>
+                    <th className="px-3 py-2 font-medium">{t("admin_audit_col_action")}</th>
+                    <th className="px-3 py-2 font-medium">{t("admin_audit_col_target")}</th>
+                    <th className="px-3 py-2 font-medium">{t("admin_audit_col_details")}</th>
+                    <th className="px-3 py-2 font-medium">{t("admin_audit_col_ip")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-ink-700/60 font-mono">
@@ -1037,17 +1041,17 @@ export default function AdminPage() {
               disabled={auditOffset === 0 || auditLoading}
               className="px-3 py-1 bg-ink-900 border border-ink-700 hover:border-cyan-500/40 disabled:opacity-50 rounded-md"
             >
-              Anterior
+              {t("admin_prev")}
             </button>
             <span className="text-slate-400">
-              Mostrando {audit.length} registros desde offset {auditOffset}
+              {t("admin_audit_showing")} {audit.length} {t("admin_audit_records_from")} {auditOffset}
             </span>
             <button
               onClick={() => void loadAudit(auditOffset + AUDIT_PAGE_SIZE)}
               disabled={!auditHasMore || auditLoading}
               className="px-3 py-1 bg-ink-900 border border-ink-700 hover:border-cyan-500/40 disabled:opacity-50 rounded-md"
             >
-              Siguiente
+              {t("admin_next")}
             </button>
           </div>
         </section>
@@ -1059,7 +1063,7 @@ export default function AdminPage() {
             onSubmit={handleCreateUser}
             className="w-full max-w-sm bg-ink-900 border border-ink-700 rounded-xl shadow-xl p-6 space-y-4"
           >
-            <h3 className="text-lg font-bold">Crear Usuario</h3>
+            <h3 className="text-lg font-bold">{t("admin_create_user_title")}</h3>
 
             {createError && (
               <div className="text-xs bg-rose-500/10 text-rose-300 p-2 rounded border border-rose-500/30">
@@ -1068,7 +1072,7 @@ export default function AdminPage() {
             )}
 
             <label className="block text-sm">
-              <span className="text-slate-400">Nombre</span>
+              <span className="text-slate-400">{t("admin_col_name")}</span>
               <input
                 type="text"
                 required
@@ -1081,7 +1085,7 @@ export default function AdminPage() {
             </label>
 
             <label className="block text-sm">
-              <span className="text-slate-400">Email</span>
+              <span className="text-slate-400">{t("admin_col_email")}</span>
               <input
                 type="email"
                 required
@@ -1092,7 +1096,7 @@ export default function AdminPage() {
             </label>
 
             <label className="block text-sm">
-              <span className="text-slate-400">Contraseña</span>
+              <span className="text-slate-400">{t("admin_password")}</span>
               <input
                 type="password"
                 required
@@ -1101,12 +1105,12 @@ export default function AdminPage() {
                 value={createForm.password}
                 onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
                 className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-white"
-                placeholder="Mín. 10 chars · mayús/minús/dígito/símbolo"
+                placeholder={t("admin_password_placeholder")}
               />
             </label>
 
             <label className="block text-sm">
-              <span className="text-slate-400">Rol</span>
+              <span className="text-slate-400">{t("admin_col_role")}</span>
               <select
                 value={createForm.role}
                 onChange={(e) =>
@@ -1128,14 +1132,14 @@ export default function AdminPage() {
                 }}
                 className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200"
               >
-                Cancelar
+                {t("common_cancel")}
               </button>
               <button
                 type="submit"
                 disabled={createLoading}
                 className="px-4 py-2 text-sm bg-cyan-500 text-ink-950 hover:bg-cyan-400 disabled:bg-ink-800 disabled:text-slate-500 rounded-md font-medium"
               >
-                {createLoading ? "Creando..." : "Crear"}
+                {createLoading ? t("admin_creating") : t("admin_create")}
               </button>
             </div>
           </form>
@@ -1148,13 +1152,11 @@ export default function AdminPage() {
             onSubmit={handleChangePassword}
             className="w-full max-w-sm bg-ink-900 border border-ink-700 rounded-xl shadow-xl p-6 space-y-4"
           >
-            <h3 className="text-lg font-bold">Resetear contraseña</h3>
+            <h3 className="text-lg font-bold">{t("admin_pw_modal_title")}</h3>
             <p className="text-sm text-slate-400">
-              Usuario: <span className="text-slate-200">{pwUser.email}</span>
+              {t("admin_pw_user_label")} <span className="text-slate-200">{pwUser.email}</span>
             </p>
-            <p className="text-xs text-amber-400">
-              Tras el cambio, las sesiones activas del usuario quedan invalidadas.
-            </p>
+            <p className="text-xs text-amber-400">{t("admin_pw_warning")}</p>
 
             {pwError && (
               <div className="text-xs bg-rose-500/10 text-rose-300 p-2 rounded border border-rose-500/30">
@@ -1163,7 +1165,7 @@ export default function AdminPage() {
             )}
 
             <label className="block text-sm">
-              <span className="text-slate-400">Nueva contraseña</span>
+              <span className="text-slate-400">{t("admin_new_password")}</span>
               <input
                 type="password"
                 required
@@ -1176,7 +1178,7 @@ export default function AdminPage() {
             </label>
 
             <label className="block text-sm">
-              <span className="text-slate-400">Confirmar contraseña</span>
+              <span className="text-slate-400">{t("admin_confirm_password")}</span>
               <input
                 type="password"
                 required
@@ -1192,9 +1194,7 @@ export default function AdminPage() {
                     pwMatch ? "text-emerald-400" : "text-rose-400"
                   }`}
                 >
-                  {pwMatch
-                    ? "✓ Las contraseñas coinciden"
-                    : "✕ Las contraseñas no coinciden"}
+                  {pwMatch ? t("admin_pw_match") : t("admin_pw_nomatch")}
                 </span>
               )}
             </label>
@@ -1246,14 +1246,14 @@ export default function AdminPage() {
                 }}
                 className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200"
               >
-                Cancelar
+                {t("common_cancel")}
               </button>
               <button
                 type="submit"
                 disabled={pwLoading || !pwCanSubmit}
                 className="px-4 py-2 text-sm bg-cyan-500 text-ink-950 hover:bg-cyan-400 disabled:bg-ink-800 disabled:text-slate-500 disabled:cursor-not-allowed rounded-md font-medium"
               >
-                {pwLoading ? "Guardando..." : "Guardar"}
+                {pwLoading ? t("admin_saving") : t("common_save")}
               </button>
             </div>
           </form>
