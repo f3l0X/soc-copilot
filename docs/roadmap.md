@@ -23,7 +23,7 @@ y aporta material visual fuerte para la demo y el informe.
 
 ### Backend
 
-- [ ] `GET /api/stats` (auth requerida) que devuelve agregados sobre las
+- [x] `GET /api/stats` (auth requerida) que devuelve agregados sobre las
       alertas del usuario (analyst) o de todos (admin):
   - `totals`: alertas, recomendaciones, sesiones de chat (si aplica).
   - `by_risk`: conteo por `risk_level` (low / medium / high / critical).
@@ -32,31 +32,31 @@ y aporta material visual fuerte para la demo y el informe.
   - `daily_last_30d`: serie temporal de alertas/día.
   - `by_user` (sólo admin): alertas por analista.
   - `model_usage`: distribución de modelos LLM usados.
-- [ ] Una sola query SQL por bloque, con `GROUP BY` + `date_trunc('day', …)`.
+- [x] Una sola query SQL por bloque, con `GROUP BY` + `date_trunc('day', …)`.
       Cachear en memoria 60 s para evitar martillear Postgres en demo.
-- [ ] Tests unit con fixtures: ownership (analyst no ve datos de otros),
+- [x] Tests unit con fixtures: ownership (analyst no ve datos de otros),
       shape de la respuesta, agregaciones correctas.
 
 ### Frontend
 
-- [ ] `/dashboard` protegida por `useRequireAuth`.
-- [ ] Recharts (~50 KB gz) como dep en `apps/web`.
-- [ ] 4-5 widgets:
+- [x] `/dashboard` protegida por `useRequireAuth`.
+- [x] Recharts (~50 KB gz) como dep en `apps/web`.
+- [x] 4-5 widgets:
   1. KPIs en tarjetas (totales + variación 7d).
   2. Donut/bar de distribución por `risk_level`.
   3. Línea temporal alertas/día (30d).
   4. Bar horizontal top técnicas MITRE.
   5. (Admin) tabla por usuario.
-- [ ] Estado vacío amigable cuando no hay datos.
-- [ ] Botón export CSV de la tabla MITRE para reusar en el informe.
-- [ ] Link al dashboard desde el `GlobalHeader` (sólo si el usuario
+- [x] Estado vacío amigable cuando no hay datos.
+- [x] Botón export CSV de la tabla MITRE para reusar en el informe.
+- [x] Link al dashboard desde el `GlobalHeader` (sólo si el usuario
       tiene al menos 1 alerta, evita pantalla vacía recién registrado).
 
 ### Verificación
 
-- [ ] Smoke: crear 5 alertas con riesgos mezclados → todas las gráficas
+- [x] Smoke: crear 5 alertas con riesgos mezclados → todas las gráficas
       reflejan los conteos.
-- [ ] Tiempo de carga < 500 ms con DB de 1k alertas.
+- [x] Tiempo de carga < 500 ms con DB de 1k alertas.
 - [ ] Captura del dashboard incluida en el informe PDF.
 
 ## Fase 5 — checklist operativa (✅ cerrada 18/05/2026)
@@ -111,7 +111,7 @@ Runbook de operación: [operations.md](operations.md)
 - [x] Rate limit aplica por IP del cliente (no por la de Caddy).
 - [x] Cookie `Secure` + `httpOnly` + `SameSite=Strict` presente en `/auth/login`.
 - [x] Smoke parcial: login → chat con citas → registro nuevo con verificación email → toggle registro abierto/cerrado → migración 0004 aplicada.
-- [ ] Smoke E2E con un compañero del grupo (pendiente para antes de la demo).
+- [x] Smoke E2E con un compañero del grupo (pendiente para antes de la demo).
 
 ## Fase 6 — checklist informe + demo
 
