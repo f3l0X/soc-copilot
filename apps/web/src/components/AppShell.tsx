@@ -21,6 +21,7 @@ const OPS_NAV: NavItem[] = [
   { href: "/logs",      labelKey: "nav_logs",      icon: "≡" },
   { href: "/chat",      labelKey: "nav_chat",      icon: "◐" },
   { href: "/history",   labelKey: "nav_history",   icon: "◷" },
+  { href: "/groupchat", labelKey: "nav_groupchat", icon: "◈" },
 ];
 
 const SYS_NAV: NavItem[] = [
