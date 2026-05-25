@@ -10,9 +10,11 @@ import {
   updateLLMSettings,
 } from "@/lib/api";
 import { useRequireAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 
 export default function LLMSettingsPage() {
   const auth = useRequireAuth();
+  const { t } = useI18n();
   const [settings, setSettings] = useState<LLMSettings | null>(null);
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
@@ -30,9 +32,7 @@ export default function LLMSettingsPage() {
       })
       .catch((err) =>
         setError(
-          err instanceof ApiError
-            ? err.detail
-            : "No se pudo cargar la configuración de LLM",
+          err instanceof ApiError ? err.detail : t("err_load_llm"),
         ),
       );
   }, [auth.ready, auth.user]);
@@ -52,7 +52,7 @@ export default function LLMSettingsPage() {
       setInfo("Modelo predeterminado actualizado.");
     } catch (err) {
       setError(
-        err instanceof ApiError ? err.detail : "No se pudo guardar el modelo",
+        err instanceof ApiError ? err.detail : t("err_save_model"),
       );
     } finally {
       setBusy(false);
@@ -73,9 +73,7 @@ export default function LLMSettingsPage() {
       setInfo("Clave validada y guardada cifrada.");
     } catch (err) {
       setError(
-        err instanceof ApiError
-          ? err.detail
-          : "No se pudo guardar la API key",
+        err instanceof ApiError ? err.detail : t("err_save_apikey"),
       );
     } finally {
       setBusy(false);
@@ -95,7 +93,7 @@ export default function LLMSettingsPage() {
       setInfo("Clave eliminada. Volviste a la clave del servidor.");
     } catch (err) {
       setError(
-        err instanceof ApiError ? err.detail : "No se pudo eliminar la clave",
+        err instanceof ApiError ? err.detail : t("err_clear_apikey"),
       );
     } finally {
       setBusy(false);
@@ -103,7 +101,7 @@ export default function LLMSettingsPage() {
   }
 
   if (!auth.ready) {
-    return <div className="p-8 text-slate-500 text-sm">Verificando sesión…</div>;
+    return <div className="p-8 text-slate-500 text-sm">{t("alerts_loading")}</div>;
   }
   if (!settings) {
     return (
@@ -121,11 +119,8 @@ export default function LLMSettingsPage() {
   return (
     <div className="p-6 max-w-2xl mx-auto space-y-6">
       <header>
-        <h1 className="text-3xl font-bold tracking-tight">Configuración de IA</h1>
-        <p className="text-slate-400 mt-2">
-          Usa la clave compartida del proyecto (con cuota diaria) o trae la tuya
-          de Google AI Studio para no compartir cuota con el resto del equipo.
-        </p>
+        <h1 className="text-3xl font-bold tracking-tight">{t("settings_title")}</h1>
+        <p className="text-slate-400 mt-2">{t("settings_subtitle")}</p>
       </header>
 
       {error && (
@@ -142,11 +137,8 @@ export default function LLMSettingsPage() {
       {/* ── Model ─────────────────────────────────────────────────────── */}
       <section className="bg-ink-900/60 border border-ink-700 rounded-lg p-6 space-y-4">
         <div>
-          <h2 className="text-lg font-semibold">Modelo predeterminado</h2>
-          <p className="text-sm text-slate-400 mt-1">
-            Se usará en explicaciones, recomendaciones y chat cuando no
-            selecciones otro explícitamente.
-          </p>
+          <h2 className="text-lg font-semibold">{t("settings_default_model")}</h2>
+          <p className="text-sm text-slate-400 mt-1">{t("settings_model_desc")}</p>
         </div>
         <select
           value={model}
@@ -166,7 +158,7 @@ export default function LLMSettingsPage() {
             onClick={onSaveModel}
             className="px-4 py-2 text-sm bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-700 rounded font-medium"
           >
-            Guardar modelo
+            {t("settings_save_model")}
           </button>
         </div>
       </section>
@@ -174,7 +166,7 @@ export default function LLMSettingsPage() {
       {/* ── API key ───────────────────────────────────────────────────── */}
       <section className="bg-ink-900/60 border border-ink-700 rounded-lg p-6 space-y-4">
         <div>
-          <h2 className="text-lg font-semibold">Tu API key de Gemini</h2>
+          <h2 className="text-lg font-semibold">{t("settings_api_key")}</h2>
           <p className="text-sm text-slate-400 mt-1">
             Se guarda <strong>cifrada</strong> en el servidor (Fernet) y solo
             se descifra para hacer tus llamadas. Nunca se devuelve al

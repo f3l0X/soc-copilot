@@ -6,9 +6,9 @@ from app.db import DbSession
 from app.middleware.auth import CurrentUser
 from app.middleware.ratelimit import rate_limit
 from app.schemas.alerts import ChatRequest, ChatResponse
+from app.services.audit import log_audit
 from app.services.chat import chat as chat_service
 from app.services.llm import LLMProviderError, LLMResponseError
-from app.services.audit import log_audit
 
 logger = logging.getLogger(__name__)
 router = APIRouter(

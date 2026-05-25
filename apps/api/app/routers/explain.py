@@ -8,9 +8,9 @@ from app.middleware.auth import CurrentUser
 from app.middleware.ratelimit import rate_limit
 from app.models import Alert
 from app.schemas.alerts import ExplainRequest, ExplainResponse
+from app.services.audit import log_audit
 from app.services.explainer import explain
 from app.services.llm import LLMProviderError, LLMResponseError
-from app.services.audit import log_audit
 
 logger = logging.getLogger(__name__)
 router = APIRouter(

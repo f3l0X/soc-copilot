@@ -4,16 +4,16 @@
 
 export type PasswordRule = {
   id: string;
-  label: string;
+  labelKey: "pwrule_len" | "pwrule_upper" | "pwrule_lower" | "pwrule_digit" | "pwrule_symbol";
   test: (pw: string) => boolean;
 };
 
 export const PASSWORD_RULES: PasswordRule[] = [
-  { id: "len", label: "Al menos 10 caracteres", test: (p) => p.length >= 10 },
-  { id: "upper", label: "Incluye mayúscula", test: (p) => /[A-Z]/.test(p) },
-  { id: "lower", label: "Incluye minúscula", test: (p) => /[a-z]/.test(p) },
-  { id: "digit", label: "Incluye dígito", test: (p) => /\d/.test(p) },
-  { id: "symbol", label: "Incluye símbolo", test: (p) => /[^A-Za-z0-9]/.test(p) },
+  { id: "len", labelKey: "pwrule_len", test: (p) => p.length >= 10 },
+  { id: "upper", labelKey: "pwrule_upper", test: (p) => /[A-Z]/.test(p) },
+  { id: "lower", labelKey: "pwrule_lower", test: (p) => /[a-z]/.test(p) },
+  { id: "digit", labelKey: "pwrule_digit", test: (p) => /\d/.test(p) },
+  { id: "symbol", labelKey: "pwrule_symbol", test: (p) => /[^A-Za-z0-9]/.test(p) },
 ];
 
 // Minimum zxcvbn score required (0-4). 2 == "Aceptable".
@@ -27,13 +27,13 @@ export const STRENGTH_COLORS = [
   "bg-emerald-400",
 ];
 
-export const STRENGTH_LABELS = [
-  "Muy débil",
-  "Débil",
-  "Aceptable",
-  "Fuerte",
-  "Excelente",
-];
+export const STRENGTH_LABEL_KEYS = [
+  "strength_0",
+  "strength_1",
+  "strength_2",
+  "strength_3",
+  "strength_4",
+] as const;
 
 export type ZxcvbnFn = (pw: string) => {
   score: number;

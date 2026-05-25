@@ -4,23 +4,270 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── Tema oscuro (por defecto) ──────────────────────────────────────── */
 :root {
   color-scheme: dark;
+  --bg-base:        #070b13;
+  --bg-900:         #0b1220;
+  --bg-850:         #0f172a;
+  --bg-800:         #131c2e;
+  --bg-700:         #1e293b;
+  --border-color:   rgba(30, 41, 59, 1);
+  --text-primary:   #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted:     #475569;
+  --sidebar-bg:     rgba(11, 18, 32, 0.85);
+  --topbar-bg:      rgba(11, 18, 32, 0.75);
+  --search-bg:      #0f172a;
+  --card-bg:        rgba(11, 18, 32, 0.6);
+  --status-bg:      #0f172a;
+  --grid-line:      rgba(34, 211, 238, 0.04);
+  --hero-from:      rgba(34, 211, 238, 0.10);
+  --hero-via:       rgba(11, 18, 32, 0.60);
+  --hero-to:        rgba(139, 92, 246, 0.10);
+  --hero-border:    rgba(30, 41, 59, 1);
+  --hero-title:     #f1f5f9;
+  --hero-subtitle:  #94a3b8;
+  --module-bg:      rgba(11, 18, 32, 0.60);
+  --module-border:  rgba(30, 41, 59, 1);
+  --module-title:   #f1f5f9;
+  --module-desc:    #94a3b8;
 }
 
+/* ─── Tema claro ─────────────────────────────────────────────────────── */
+[data-theme="light"] {
+  color-scheme: light;
+  --bg-base:        #f0f4f8;
+  --bg-900:         #ffffff;
+  --bg-850:         #f8fafc;
+  --bg-800:         #f0f4f8;
+  --bg-700:         #e2e8f0;
+  --border-color:   #cbd5e1;
+  --text-primary:   #1e293b;
+  --text-secondary: #475569;
+  --text-muted:     #94a3b8;
+  --sidebar-bg:     rgba(255, 255, 255, 0.97);
+  --topbar-bg:      rgba(255, 255, 255, 0.95);
+  --search-bg:      #f8fafc;
+  --card-bg:        rgba(255, 255, 255, 0.90);
+  --status-bg:      #f8fafc;
+  --grid-line:      rgba(99, 179, 237, 0.08);
+  --hero-from:      rgba(186, 230, 253, 0.60);
+  --hero-via:       rgba(224, 242, 254, 0.80);
+  --hero-to:        rgba(216, 180, 254, 0.30);
+  --hero-border:    #bae6fd;
+  --hero-title:     #0f172a;
+  --hero-subtitle:  #475569;
+  --module-bg:      #ffffff;
+  --module-border:  #e2e8f0;
+  --module-title:   #1e293b;
+  --module-desc:    #64748b;
+}
+
+/* ─── Base ───────────────────────────────────────────────────────────── */
 body {
-  @apply text-slate-200 font-sans;
-  background: radial-gradient(ellipse at top, #0b1220 0%, #070b13 60%);
+  @apply font-sans;
+  color: var(--text-primary);
   min-height: 100vh;
+  transition: background 0.25s ease, color 0.25s ease;
 }
 
+[data-theme="dark"] body {
+  background: radial-gradient(ellipse at top, #0b1220 0%, #070b13 60%);
+}
+
+[data-theme="light"] body {
+  background: linear-gradient(135deg, #f0f9ff 0%, #f0f4f8 50%, #faf5ff 100%);
+}
+
+/* ─── Sidebar ────────────────────────────────────────────────────────── */
+.sidebar {
+  background: var(--sidebar-bg);
+  border-color: var(--border-color) !important;
+  color: var(--text-primary);
+  backdrop-filter: blur(8px);
+}
+
+/* ─── Topbar ─────────────────────────────────────────────────────────── */
+.topbar {
+  background: var(--topbar-bg);
+  border-color: var(--border-color) !important;
+  color: var(--text-primary);
+}
+
+/* ─── Search ─────────────────────────────────────────────────────────── */
+.search-box {
+  background: var(--search-bg);
+  border-color: var(--border-color) !important;
+  color: var(--text-secondary);
+}
+
+/* ─── Status widget ──────────────────────────────────────────────────── */
+.status-widget {
+  background: var(--status-bg);
+  border-color: var(--border-color) !important;
+}
+
+/* ─── Botones topbar ─────────────────────────────────────────────────── */
+.theme-toggle,
+.model-btn {
+  border-color: var(--border-color) !important;
+  color: var(--text-secondary);
+  background: var(--search-bg);
+}
+
+/* ─── Language selector ──────────────────────────────────────────────── */
+.lang-selector {
+  border-color: var(--border-color) !important;
+  background: var(--search-bg);
+  color: var(--text-secondary);
+}
+
+/* ─── Hero banner ────────────────────────────────────────────────────── */
+[data-theme="light"] .hero-section {
+  background: linear-gradient(135deg, var(--hero-from), var(--hero-via), var(--hero-to)) !important;
+  border-color: var(--hero-border) !important;
+}
+
+[data-theme="light"] .hero-section h1,
+[data-theme="light"] .hero-section .text-slate-100 {
+  color: var(--hero-title) !important;
+}
+
+[data-theme="light"] .hero-section p,
+[data-theme="light"] .hero-section .text-slate-400 {
+  color: var(--hero-subtitle) !important;
+}
+
+[data-theme="light"] .hero-section .text-cyan-300\/80 {
+  color: #0284c7 !important;
+}
+
+[data-theme="light"] .hero-section .text-cyan-300 {
+  color: #0ea5e9 !important;
+}
+
+/* ─── Module cards ───────────────────────────────────────────────────── */
+[data-theme="light"] .module-card {
+  background: var(--module-bg) !important;
+  border-color: var(--module-border) !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+}
+
+[data-theme="light"] .module-card:hover {
+  border-color: #7dd3fc !important;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.15);
+}
+
+[data-theme="light"] .module-card .font-medium {
+  color: var(--module-title) !important;
+}
+
+[data-theme="light"] .module-card p {
+  color: var(--module-desc) !important;
+}
+
+/* ─── Borders ink en modo claro ──────────────────────────────────────── */
+[data-theme="light"] .border-ink-700 {
+  border-color: var(--border-color) !important;
+}
+
+/* ─── Fondos ink en modo claro ───────────────────────────────────────── */
+[data-theme="light"] .bg-ink-900\/60,
+[data-theme="light"] .bg-ink-900\/80,
+[data-theme="light"] .bg-ink-900 {
+  background-color: rgba(255, 255, 255, 0.92) !important;
+}
+
+[data-theme="light"] .bg-ink-850 {
+  background-color: #f8fafc !important;
+}
+
+[data-theme="light"] .bg-ink-800 {
+  background-color: #f0f4f8 !important;
+}
+
+[data-theme="light"] .bg-slate-950\/40,
+[data-theme="light"] .bg-slate-950 {
+  background-color: #f8fafc !important;
+}
+
+[data-theme="light"] .bg-slate-900\/40,
+[data-theme="light"] .bg-slate-900 {
+  background-color: #ffffff !important;
+}
+
+[data-theme="light"] .bg-slate-800\/70 {
+  background-color: #f1f5f9 !important;
+}
+
+/* ─── Textos en modo claro ───────────────────────────────────────────── */
+[data-theme="light"] .text-slate-100 {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .text-slate-200 {
+  color: #1e293b !important;
+}
+
+[data-theme="light"] .text-slate-300 {
+  color: #334155 !important;
+}
+
+[data-theme="light"] .text-slate-400 {
+  color: #64748b !important;
+}
+
+[data-theme="light"] .text-slate-500 {
+  color: #94a3b8 !important;
+}
+
+/* ─── Inputs en modo claro ───────────────────────────────────────────── */
+[data-theme="light"] input,
+[data-theme="light"] textarea,
+[data-theme="light"] select {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #1e293b !important;
+}
+
+[data-theme="light"] input::placeholder,
+[data-theme="light"] textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* ─── Borders slate en modo claro ────────────────────────────────────── */
+[data-theme="light"] .border-slate-700,
+[data-theme="light"] .border-slate-800 {
+  border-color: #cbd5e1 !important;
+}
+
+/* ─── Nav activo en modo claro ───────────────────────────────────────── */
+[data-theme="light"] .bg-cyan-500\/10 {
+  background-color: rgba(186, 230, 253, 0.5) !important;
+}
+
+[data-theme="light"] .border-cyan-500\/20 {
+  border-color: #7dd3fc !important;
+}
+
+[data-theme="light"] .text-cyan-300 {
+  color: #0284c7 !important;
+}
+
+[data-theme="light"] .hover\:bg-ink-800:hover {
+  background-color: #e2e8f0 !important;
+}
+
+/* ─── Grid background ────────────────────────────────────────────────── */
 .grid-bg {
   background-image:
-    linear-gradient(rgba(34, 211, 238, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(34, 211, 238, 0.04) 1px, transparent 1px);
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
   background-size: 32px 32px;
 }
 
+/* ─── Animaciones ────────────────────────────────────────────────────── */
 .pulse-dot::before {
   content: "";
   position: absolute;

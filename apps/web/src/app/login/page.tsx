@@ -5,18 +5,20 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 
 import { ApiError, checkEmail, register, UserLevel } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 import {
   loadZxcvbn,
   MIN_STRENGTH_SCORE,
   PASSWORD_RULES,
   STRENGTH_COLORS,
-  STRENGTH_LABELS,
+  STRENGTH_LABEL_KEYS,
   type ZxcvbnFn,
 } from "@/lib/password";
-const LEVEL_OPTIONS: { value: UserLevel; label: string; hint: string }[] = [
-  { value: "L1", label: "Analista L1", hint: "Junior — el Copilot explica paso a paso" },
-  { value: "L2", label: "Analista L2", hint: "Senior — respuestas más concisas" },
-  { value: "INSTRUCTOR", label: "Instructor", hint: "Detalle completo sin filtros" },
+import type { TranslationKey } from "@/lib/i18n";
+const LEVEL_OPTIONS: { value: UserLevel; labelKey: TranslationKey; hintKey: TranslationKey }[] = [
+  { value: "L1", labelKey: "level_l1_label", hintKey: "level_l1_hint" },
+  { value: "L2", labelKey: "level_l2_label", hintKey: "level_l2_hint" },
+  { value: "INSTRUCTOR", labelKey: "level_instructor_label", hintKey: "level_instructor_hint" },
 ];
 
 function LoginInner() {
@@ -24,6 +26,7 @@ function LoginInner() {
   const params = useSearchParams();
   const next = params.get("next") || "/";
   const auth = useAuth();
+  const { t } = useI18n();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -139,25 +142,20 @@ function LoginInner() {
       router.replace(next);
     } catch (err) {
       if (err instanceof ApiError) {
-        if (err.status === 401) setError("Credenciales inválidas.");
+        if (err.status === 401) setError(t("err_login_invalid"));
         else if (err.status === 403) {
           // 403 means different things on each endpoint:
           //   - register: ALLOW_PUBLIC_REGISTRATION is off on the server.
           //   - login:    the account exists but the email isn't verified yet.
-          // The backend detail is in English; we surface a Spanish copy
-          // tailored to the current form mode.
           if (mode === "register") {
-            setError(
-              "El registro está cerrado temporalmente. Contacta con un administrador para que cree tu cuenta.",
-            );
+            setError(t("err_login_403_register"));
           } else {
-            setError("Acceso denegado. ¿Tienes el email verificado?");
+            setError(t("err_login_403_unverified"));
           }
         }
-        else if (err.status === 409) setError("Ese email ya está registrado.");
-        else if (err.status === 422) setError("Datos inválidos. Revisa los requisitos.");
-        else if (err.status === 429)
-          setError("Demasiados intentos. Espera un minuto.");
+        else if (err.status === 409) setError(t("err_email_in_use"));
+        else if (err.status === 422) setError(t("err_invalid_data"));
+        else if (err.status === 429) setError(t("err_too_many_tries"));
         else setError(err.detail.slice(0, 200));
       } else {
         setError(err instanceof Error ? err.message : String(err));
@@ -174,11 +172,9 @@ function LoginInner() {
         className="w-full max-w-md space-y-4 rounded-lg border border-slate-800 bg-slate-900/40 p-6"
       >
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">SOC Copilot</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t("login_title")}</h1>
           <p className="text-sm text-slate-400 mt-1">
-            {mode === "login"
-              ? "Inicia sesión para continuar."
-              : "Crea una cuenta. El primer usuario es admin."}
+            {mode === "login" ? t("login_subtitle") : t("login_register_subtitle")}
           </p>
         </div>
 
@@ -211,7 +207,7 @@ function LoginInner() {
             </div>
 
             <label className="block text-sm">
-              <span className="text-slate-400">Nombre</span>
+              <span className="text-slate-400">{t("login_name")}</span>
               <input
                 type="text"
                 value={name}
@@ -224,7 +220,7 @@ function LoginInner() {
             </label>
 
             <fieldset className="block text-sm">
-              <legend className="text-slate-400 mb-1">Nivel SOC</legend>
+              <legend className="text-slate-400 mb-1">{t("login_level")}</legend>
               <div className="grid grid-cols-3 gap-2">
                 {LEVEL_OPTIONS.map((opt) => (
                   <label
@@ -234,7 +230,7 @@ function LoginInner() {
                         ? "border-sky-500 bg-sky-950/40"
                         : "border-slate-700 hover:border-slate-500"
                     }`}
-                    title={opt.hint}
+                    title={t(opt.hintKey)}
                   >
                     <input
                       type="radio"
@@ -244,19 +240,22 @@ function LoginInner() {
                       onChange={() => setLevel(opt.value)}
                       className="sr-only"
                     />
-                    <span className="block text-xs font-medium">{opt.label}</span>
+                    <span className="block text-xs font-medium">{t(opt.labelKey)}</span>
                   </label>
                 ))}
               </div>
               <p className="mt-1 text-[11px] text-slate-500">
-                {LEVEL_OPTIONS.find((o) => o.value === level)?.hint}
+                {(() => {
+                  const opt = LEVEL_OPTIONS.find((o) => o.value === level);
+                  return opt ? t(opt.hintKey) : "";
+                })()}
               </p>
             </fieldset>
           </>
         )}
 
         <label className="block text-sm">
-          <span className="text-slate-400">Email</span>
+          <span className="text-slate-400">{t("login_email")}</span>
           <input
             type="email"
             value={email}
@@ -275,16 +274,16 @@ function LoginInner() {
                     : "text-slate-500"
               }`}
             >
-              {emailStatus === "checking" && "Comprobando disponibilidad…"}
-              {emailStatus === "available" && "✓ Email disponible"}
-              {emailStatus === "taken" && "✕ Ese email ya está registrado"}
-              {emailStatus === "invalid" && "Formato de email inválido"}
+              {emailStatus === "checking" && t("email_checking")}
+              {emailStatus === "available" && t("email_available")}
+              {emailStatus === "taken" && t("email_taken")}
+              {emailStatus === "invalid" && t("email_invalid")}
             </span>
           )}
         </label>
 
         <label className="block text-sm">
-          <span className="text-slate-400">Contraseña</span>
+          <span className="text-slate-400">{t("login_password")}</span>
           <input
             type="password"
             value={password}
@@ -300,7 +299,7 @@ function LoginInner() {
 
         {mode === "register" && (
           <label className="block text-sm">
-            <span className="text-slate-400">Confirmar contraseña</span>
+            <span className="text-slate-400">{t("login_confirm_password")}</span>
             <input
               type="password"
               value={passwordConfirm}
@@ -316,9 +315,7 @@ function LoginInner() {
                   passwordsMatch ? "text-emerald-400" : "text-rose-400"
                 }`}
               >
-                {passwordsMatch
-                  ? "✓ Las contraseñas coinciden"
-                  : "✕ Las contraseñas no coinciden"}
+                {passwordsMatch ? t("pwmatch_ok") : t("pwmatch_ko")}
               </span>
             )}
           </label>
@@ -339,7 +336,7 @@ function LoginInner() {
               ))}
             </div>
             <p className="text-[11px] text-slate-400">
-              Fortaleza: <span className="font-medium text-slate-200">{STRENGTH_LABELS[strengthScore]}</span>
+              {t("strength_label")}: <span className="font-medium text-slate-200">{t(STRENGTH_LABEL_KEYS[strengthScore])}</span>
               {strengthFeedback ? ` — ${strengthFeedback}` : ""}
             </p>
             <ul className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px]">
@@ -348,7 +345,7 @@ function LoginInner() {
                   key={r.id}
                   className={r.ok ? "text-emerald-400" : "text-slate-500"}
                 >
-                  {r.ok ? "✓" : "○"} {r.label}
+                  {r.ok ? "✓" : "○"} {t(r.labelKey)}
                 </li>
               ))}
             </ul>
@@ -372,10 +369,10 @@ function LoginInner() {
           className="w-full rounded bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium"
         >
           {loading
-            ? "…"
+            ? t("login_loading_btn")
             : mode === "login"
-              ? "Iniciar sesión"
-              : "Crear cuenta"}
+              ? t("login_btn")
+              : t("login_register_btn")}
         </button>
 
         <button
@@ -389,8 +386,8 @@ function LoginInner() {
           className="block w-full text-center text-xs text-slate-400 hover:text-slate-200"
         >
           {mode === "login"
-            ? "¿No tienes cuenta? Regístrate"
-            : "Ya tengo cuenta"}
+            ? t("login_switch_to_register")
+            : t("login_switch_to_login")}
         </button>
       </form>
     </main>

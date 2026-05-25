@@ -20,6 +20,7 @@ import {
 
 import { getStats, type StatsResponse } from "@/lib/api";
 import { useRequireAuth } from "@/lib/auth";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 
 const RISK_COLORS: Record<string, string> = {
   low: "#22c55e",
@@ -29,12 +30,12 @@ const RISK_COLORS: Record<string, string> = {
   unknown: "#64748b",
 };
 
-const RISK_LABEL: Record<string, string> = {
-  low: "Bajo",
-  medium: "Medio",
-  high: "Alto",
-  critical: "Crítico",
-  unknown: "Desconocido",
+const RISK_LABEL_KEY: Record<string, TranslationKey> = {
+  low: "risk_low",
+  medium: "risk_medium",
+  high: "risk_high",
+  critical: "risk_critical",
+  unknown: "risk_unknown",
 };
 
 function Card({
@@ -120,6 +121,7 @@ function exportMitreCsv(rows: { technique: string; count: number }[]) {
 
 export default function DashboardPage() {
   const auth = useRequireAuth();
+  const { t } = useI18n();
   const [stats, setStats] = useState<StatsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -178,7 +180,7 @@ export default function DashboardPage() {
 
   if (!auth.ready) {
     return (
-      <div className="p-8 text-slate-500 text-sm">Verificando sesión…</div>
+      <div className="p-8 text-slate-500 text-sm">{t("alerts_loading")}</div>
     );
   }
 
@@ -187,13 +189,13 @@ export default function DashboardPage() {
       <div className="flex items-end justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-100">
-            Centro de operaciones
+            {t("dashboard_title")}
           </h1>
           <p className="text-sm text-slate-400">
-            Resumen en vivo · últimos 30 días
+            {t("dashboard_subtitle")}
             {stats && (
               <span className="ml-1 text-slate-500">
-                · {stats.scope === "all" ? "vista global" : "tus alertas"}
+                · {stats.scope === "all" ? t("dashboard_scope_all") : t("dashboard_scope_mine")}
               </span>
             )}
           </p>
@@ -205,14 +207,14 @@ export default function DashboardPage() {
               onClick={() => exportMitreCsv(stats.top_mitre)}
               className="px-3 py-2 rounded-md text-xs border border-ink-700 bg-ink-850 hover:bg-ink-800 text-slate-300"
             >
-              Exportar MITRE
+              {t("dashboard_export_mitre")}
             </button>
           )}
           <Link
             href="/alerts"
             className="px-3 py-2 rounded-md text-xs bg-cyan-500 text-ink-950 font-medium hover:bg-cyan-400"
           >
-            + Nueva alerta
+            {t("dashboard_new_alert")}
           </Link>
         </div>
       </div>
@@ -220,20 +222,18 @@ export default function DashboardPage() {
       {error && (
         <Card className="border-rose-700 bg-rose-950/40">
           <div className="text-sm text-rose-300">
-            <strong>Error:</strong> {error}
+            <strong>{t("common_error")}</strong> {error}
           </div>
         </Card>
       )}
 
       {!stats && !error && (
-        <p className="text-slate-400 text-sm">Cargando…</p>
+        <p className="text-slate-400 text-sm">{t("common_loading")}</p>
       )}
 
       {stats && stats.totals.alerts === 0 && (
         <Card>
-          <p className="text-sm text-slate-400">
-            Aún no hay datos. Crea tu primera alerta y vuelve aquí para ver las gráficas.
-          </p>
+          <p className="text-sm text-slate-400">{t("dashboard_empty")}</p>
         </Card>
       )}
 
@@ -241,7 +241,7 @@ export default function DashboardPage() {
         <>
           <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <KpiCard
-              label="Alertas 24h"
+              label={t("dashboard_kpi_alerts_24h")}
               value={last24h}
               hint={
                 trend7 !== null && (
@@ -259,10 +259,10 @@ export default function DashboardPage() {
             </KpiCard>
 
             <KpiCard
-              label="Riesgo crítico"
+              label={t("dashboard_kpi_critical")}
               value={criticalCount}
               accent="danger"
-              hint={`${highCount} altos`}
+              hint={`${highCount} ${t("dashboard_kpi_high_suffix")}`}
             >
               <div className="flex gap-1 h-2">
                 {Array.from({ length: 8 }).map((_, i) => {
@@ -281,25 +281,27 @@ export default function DashboardPage() {
             </KpiCard>
 
             <KpiCard
-              label="Recomendaciones"
+              label={t("dashboard_kpi_recommendations")}
               value={stats.totals.recommendations}
-              hint="generadas por IA"
+              hint={t("dashboard_kpi_recommendations_hint")}
             >
               <div className="text-xs text-slate-500">
-                ratio{" "}
+                {t("dashboard_kpi_ratio")}{" "}
                 <span className="font-mono text-slate-300">
                   {(
                     stats.totals.recommendations /
                     Math.max(1, stats.totals.alerts)
                   ).toFixed(2)}
                 </span>{" "}
-                / alerta
+                {t("dashboard_kpi_per_alert")}
               </div>
             </KpiCard>
 
             <KpiCard
               label={
-                stats.scope === "all" ? "Usuarios activos" : "Técnicas MITRE"
+                stats.scope === "all"
+                  ? t("dashboard_kpi_active_users")
+                  : t("dashboard_kpi_mitre_techniques")
               }
               value={
                 stats.scope === "all"
@@ -307,7 +309,9 @@ export default function DashboardPage() {
                   : stats.top_mitre.length
               }
               hint={
-                stats.scope === "all" ? "registrados" : "distintas detectadas"
+                stats.scope === "all"
+                  ? t("dashboard_kpi_users_hint")
+                  : t("dashboard_kpi_mitre_hint")
               }
             >
               <div className="h-1.5 rounded-full bg-ink-700 overflow-hidden">
@@ -331,10 +335,10 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h2 className="text-sm font-semibold text-slate-200">
-                    Volumen de alertas
+                    {t("dashboard_volume_title")}
                   </h2>
                   <p className="text-xs text-slate-500">
-                    últimos 30 días · serie diaria
+                    {t("dashboard_volume_subtitle")}
                   </p>
                 </div>
                 <div className="flex gap-1 text-[11px]">
@@ -399,23 +403,23 @@ export default function DashboardPage() {
                   ✦
                 </span>
                 <h2 className="text-sm font-semibold text-slate-100">
-                  Resumen del Copilot
+                  {t("dashboard_copilot_summary")}
                 </h2>
               </div>
               <p className="text-xs text-slate-300 leading-relaxed">
-                Detectadas{" "}
+                {t("dashboard_copilot_detected")}{" "}
                 <span className="text-rose-300 font-medium">
-                  {criticalCount} alertas críticas
+                  {criticalCount} {t("dashboard_copilot_critical_alerts")}
                 </span>{" "}
-                y {highCount} de severidad alta en la ventana actual.
+                {t("dashboard_copilot_and_high").replace("{n}", String(highCount))}
                 {stats.top_mitre[0] && (
                   <>
                     {" "}
-                    Técnica predominante{" "}
+                    {t("dashboard_copilot_top_technique")}{" "}
                     <span className="font-mono text-slate-200">
                       {stats.top_mitre[0].technique}
                     </span>{" "}
-                    ({stats.top_mitre[0].count} eventos).
+                    ({stats.top_mitre[0].count} {t("dashboard_copilot_events")}).
                   </>
                 )}
               </p>
@@ -424,13 +428,13 @@ export default function DashboardPage() {
                   href="/respond"
                   className="text-[11px] px-2.5 py-1.5 rounded-md bg-cyan-500 text-ink-950 font-medium hover:bg-cyan-400"
                 >
-                  Ir a Respond
+                  {t("dashboard_copilot_go_respond")}
                 </Link>
                 <Link
                   href="/chat"
                   className="text-[11px] px-2.5 py-1.5 rounded-md border border-ink-700 text-slate-300 hover:bg-ink-800"
                 >
-                  Consultar al IA
+                  {t("dashboard_copilot_ask_ai")}
                 </Link>
               </div>
               <div className="mt-3 text-[10px] text-slate-500 font-mono">
@@ -442,7 +446,7 @@ export default function DashboardPage() {
           <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Card>
               <h2 className="text-sm font-semibold text-slate-200 mb-3">
-                Distribución por riesgo
+                {t("dashboard_risk_distribution")}
               </h2>
               <div className="grid grid-cols-2 gap-4 items-center">
                 <div className="h-48">
@@ -489,7 +493,7 @@ export default function DashboardPage() {
                               RISK_COLORS[b.risk_level] ?? "#64748b",
                           }}
                         />
-                        {RISK_LABEL[b.risk_level] ?? b.risk_level}
+                        {RISK_LABEL_KEY[b.risk_level] ? t(RISK_LABEL_KEY[b.risk_level]) : b.risk_level}
                       </span>
                       <span className="font-mono text-slate-300">
                         {b.count}
@@ -503,15 +507,15 @@ export default function DashboardPage() {
             <Card>
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-sm font-semibold text-slate-200">
-                  Top técnicas MITRE
+                  {t("dashboard_top_mitre")}
                 </h2>
                 <span className="text-[11px] text-slate-500 font-mono">
-                  {stats.top_mitre.length} detectadas
+                  {stats.top_mitre.length} {t("dashboard_detected_count")}
                 </span>
               </div>
               {stats.top_mitre.length === 0 ? (
                 <p className="text-sm text-slate-500">
-                  Sin técnicas MITRE detectadas todavía.
+                  {t("dashboard_no_mitre")}
                 </p>
               ) : (
                 <div className="h-56">
@@ -559,13 +563,13 @@ export default function DashboardPage() {
           {stats.scope === "all" && stats.by_user && stats.by_user.length > 0 && (
             <Card>
               <h2 className="text-sm font-semibold text-slate-200 mb-3">
-                Alertas por usuario
+                {t("dashboard_alerts_by_user")}
               </h2>
               <table className="w-full text-sm">
                 <thead className="text-left text-[10px] uppercase tracking-widest text-slate-500">
                   <tr>
-                    <th className="px-3 py-2">Email</th>
-                    <th className="px-3 py-2 text-right">Alertas</th>
+                    <th className="px-3 py-2">{t("admin_col_email")}</th>
+                    <th className="px-3 py-2 text-right">{t("dashboard_col_alerts")}</th>
                   </tr>
                 </thead>
                 <tbody>

@@ -13,6 +13,7 @@ import {
   type RecommendResponse,
 } from "@/lib/api";
 import { useRequireAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 import { useModel } from "@/lib/useModel";
 
 function RespondInner() {
@@ -27,6 +28,7 @@ function RespondInner() {
   const [error, setError] = useState<string | null>(null);
   const { selected: model } = useModel();
   const auth = useRequireAuth();
+  const { t } = useI18n();
 
   useEffect(() => {
     if (!alertId) return;
@@ -68,17 +70,17 @@ function RespondInner() {
   }
 
   if (!auth.ready) {
-    return <div className="p-8 text-slate-500 text-sm">Verificando sesión…</div>;
+    return <div className="p-8 text-slate-500 text-sm">{t("alerts_loading")}</div>;
   }
 
   if (!alertId) {
     return (
       <div className="p-6 max-w-5xl mx-auto space-y-4">
-        <h1 className="text-3xl font-bold tracking-tight">Next Step Recommender</h1>
+        <h1 className="text-3xl font-bold tracking-tight">{t("respond_title")}</h1>
         <p className="text-slate-400">
-          Llega aquí desde una alerta. Empieza analizando un log en{" "}
+          {t("respond_no_alert")}{" "}
           <Link href="/alerts" className="text-cyan-400 hover:underline">
-            Alertas
+            {t("nav_alerts")}
           </Link>
           .
         </p>
@@ -90,26 +92,22 @@ function RespondInner() {
     <div className="p-6 max-w-5xl mx-auto space-y-6">
       <div className="flex items-baseline justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            Next Step Recommender
-          </h1>
-          <p className="text-slate-400 mt-1">
-            Acciones concretas para esta alerta, con justificación didáctica.
-          </p>
+          <h1 className="text-3xl font-bold tracking-tight">{t("respond_title")}</h1>
+          <p className="text-slate-400 mt-1">{t("respond_subtitle")}</p>
         </div>
         <div className="flex flex-col items-end gap-1">
           <ModelSelector compact />
           <Link href="/alerts" className="text-sm text-cyan-400 hover:underline">
-            ← nueva alerta
+            {t("respond_new_alert")}
           </Link>
         </div>
       </div>
 
-      {loading && <p className="text-slate-400">Cargando alerta #{alertId}…</p>}
+      {loading && <p className="text-slate-400">{t("respond_loading_alert")} #{alertId}…</p>}
 
       {error && (
         <div className="rounded border border-rose-700 bg-rose-950/40 p-4 text-sm text-rose-300">
-          <strong>Error:</strong> {error}
+          <strong>{t("alerts_error")}</strong> {error}
         </div>
       )}
 
@@ -143,10 +141,10 @@ function RespondInner() {
           className="rounded bg-emerald-700 hover:bg-emerald-600 disabled:bg-slate-700 px-4 py-2 text-sm font-medium"
         >
           {recommending
-            ? "Generando recomendaciones…"
+            ? t("respond_recommending_btn")
             : rec
-              ? "Generar otra recomendación"
-              : "Recomendar acciones"}
+              ? t("respond_another_btn")
+              : t("respond_recommend_btn")}
         </button>
       )}
 
@@ -154,7 +152,7 @@ function RespondInner() {
         <div className="rounded-lg border border-ink-700 bg-ink-900/60 p-6 space-y-4">
           <div className="flex items-baseline justify-between">
             <h2 className="text-lg font-semibold">
-              Recomendación{" "}
+              {t("respond_recommendation")}{" "}
               {rec.id != null && (
                 <span className="text-xs text-slate-500">#{rec.id}</span>
               )}
@@ -184,7 +182,7 @@ function RespondInner() {
           {rec.learning_notes && (
             <div className="rounded border border-sky-800 bg-sky-950/30 p-4 text-sm">
               <h3 className="font-semibold text-cyan-300 mb-1">
-                Modo aprendizaje
+                {t("respond_learning")}
               </h3>
               <p className="text-slate-300 whitespace-pre-line">
                 {rec.learning_notes}
