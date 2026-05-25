@@ -54,7 +54,7 @@ export default function ProfilePage() {
       setCurrentPassword("");
       setSuccess(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.detail : "No se pudo guardar el perfil");
+      setError(err instanceof ApiError ? err.detail : t("err_save_profile"));
     } finally {
       setSaving(false);
     }

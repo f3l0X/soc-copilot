@@ -174,7 +174,7 @@ function Topbar() {
         <Link
           href="/settings/llm"
           className="text-xs flex items-center gap-2 px-3 py-1.5 rounded-md border hover:border-cyan-500/30 model-btn"
-          title="Configuración del modelo"
+          title={t("tip_model_config")}
         >
           <span className="opacity-50">{t("topbar_model")}</span>
           <span className="text-cyan-300 font-medium">gemini-2.5-pro</span>
@@ -202,7 +202,7 @@ function Topbar() {
                     ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
                     : "bg-amber-500/10 text-amber-300 border-amber-500/30")
               }
-              title="Nivel SOC — ajusta el tono del Copilot (editable en Mi Perfil)"
+              title={t("tip_soc_level")}
             >
               {user.level}
             </span>
@@ -224,7 +224,7 @@ function Topbar() {
               type="button"
               onClick={() => void signOut()}
               className="rounded-md border px-2.5 py-1.5 text-xs transition hover:border-slate-500"
-              title="Cerrar sesión"
+              title={t("tip_signout")}
             >
               {t("topbar_signout")}
             </button>

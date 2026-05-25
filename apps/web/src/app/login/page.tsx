@@ -142,25 +142,20 @@ function LoginInner() {
       router.replace(next);
     } catch (err) {
       if (err instanceof ApiError) {
-        if (err.status === 401) setError("Credenciales inválidas.");
+        if (err.status === 401) setError(t("err_login_invalid"));
         else if (err.status === 403) {
           // 403 means different things on each endpoint:
           //   - register: ALLOW_PUBLIC_REGISTRATION is off on the server.
           //   - login:    the account exists but the email isn't verified yet.
-          // The backend detail is in English; we surface a Spanish copy
-          // tailored to the current form mode.
           if (mode === "register") {
-            setError(
-              "El registro está cerrado temporalmente. Contacta con un administrador para que cree tu cuenta.",
-            );
+            setError(t("err_login_403_register"));
           } else {
-            setError("Acceso denegado. ¿Tienes el email verificado?");
+            setError(t("err_login_403_unverified"));
           }
         }
-        else if (err.status === 409) setError("Ese email ya está registrado.");
-        else if (err.status === 422) setError("Datos inválidos. Revisa los requisitos.");
-        else if (err.status === 429)
-          setError("Demasiados intentos. Espera un minuto.");
+        else if (err.status === 409) setError(t("err_email_in_use"));
+        else if (err.status === 422) setError(t("err_invalid_data"));
+        else if (err.status === 429) setError(t("err_too_many_tries"));
         else setError(err.detail.slice(0, 200));
       } else {
         setError(err instanceof Error ? err.message : String(err));

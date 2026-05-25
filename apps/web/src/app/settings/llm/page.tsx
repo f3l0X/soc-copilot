@@ -32,9 +32,7 @@ export default function LLMSettingsPage() {
       })
       .catch((err) =>
         setError(
-          err instanceof ApiError
-            ? err.detail
-            : "No se pudo cargar la configuración de LLM",
+          err instanceof ApiError ? err.detail : t("err_load_llm"),
         ),
       );
   }, [auth.ready, auth.user]);
@@ -54,7 +52,7 @@ export default function LLMSettingsPage() {
       setInfo("Modelo predeterminado actualizado.");
     } catch (err) {
       setError(
-        err instanceof ApiError ? err.detail : "No se pudo guardar el modelo",
+        err instanceof ApiError ? err.detail : t("err_save_model"),
       );
     } finally {
       setBusy(false);
@@ -75,9 +73,7 @@ export default function LLMSettingsPage() {
       setInfo("Clave validada y guardada cifrada.");
     } catch (err) {
       setError(
-        err instanceof ApiError
-          ? err.detail
-          : "No se pudo guardar la API key",
+        err instanceof ApiError ? err.detail : t("err_save_apikey"),
       );
     } finally {
       setBusy(false);
@@ -97,7 +93,7 @@ export default function LLMSettingsPage() {
       setInfo("Clave eliminada. Volviste a la clave del servidor.");
     } catch (err) {
       setError(
-        err instanceof ApiError ? err.detail : "No se pudo eliminar la clave",
+        err instanceof ApiError ? err.detail : t("err_clear_apikey"),
       );
     } finally {
       setBusy(false);

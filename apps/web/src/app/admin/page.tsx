@@ -117,7 +117,7 @@ export default function AdminPage() {
       .then(setAppSettings)
       .catch((err) =>
         setAppSettingsError(
-          err instanceof ApiError ? err.detail : "Error cargando ajustes"
+          err instanceof ApiError ? err.detail : t("err_load_settings")
         )
       );
   }, []);
@@ -130,7 +130,7 @@ export default function AdminPage() {
       setAppSettings(updated);
     } catch (err) {
       setAppSettingsError(
-        err instanceof ApiError ? err.detail : "No se pudo actualizar"
+        err instanceof ApiError ? err.detail : t("err_update_failed")
       );
     } finally {
       setAppSettingsSaving(false);
@@ -210,7 +210,7 @@ export default function AdminPage() {
       setAuditHasMore(data.length === AUDIT_PAGE_SIZE);
     } catch (err) {
       setAuditError(
-        err instanceof ApiError ? err.detail : "Error cargando auditoría"
+        err instanceof ApiError ? err.detail : t("err_load_audit")
       );
     } finally {
       setAuditLoading(false);
@@ -236,7 +236,7 @@ export default function AdminPage() {
       });
       setPermsDraft(draft);
     } catch (err) {
-      setPermsError(err instanceof ApiError ? err.detail : "Error cargando permisos");
+      setPermsError(err instanceof ApiError ? err.detail : t("err_load_perms"));
     } finally {
       setPermsLoading(false);
     }
@@ -269,7 +269,7 @@ export default function AdminPage() {
       });
       setPermsDraft(draft);
     } catch (err) {
-      setPermsError(err instanceof ApiError ? err.detail : "No se pudieron guardar los cambios");
+      setPermsError(err instanceof ApiError ? err.detail : t("err_save_perms"));
     } finally {
       setPermsSaving(false);
     }
@@ -290,7 +290,7 @@ export default function AdminPage() {
       const data = await getAdminUsers();
       setUsers(data);
     } catch {
-      setError("Error cargando usuarios");
+      setError(t("err_load_users"));
     } finally {
       setLoading(false);
     }
@@ -300,9 +300,7 @@ export default function AdminPage() {
     e.preventDefault();
     if (!pwUser) return;
     if (!pwCanSubmit) {
-      setPwError(
-        "La contraseña no cumple la política de seguridad (revisa los requisitos).",
-      );
+      setPwError(t("err_pw_policy"));
       return;
     }
     setPwLoading(true);
@@ -315,7 +313,7 @@ export default function AdminPage() {
       setPwStrengthScore(0);
       setPwStrengthFeedback("");
     } catch (err) {
-      setPwError(err instanceof ApiError ? err.detail : "Error al actualizar la contraseña");
+      setPwError(err instanceof ApiError ? err.detail : t("err_change_password"));
     } finally {
       setPwLoading(false);
     }
@@ -331,7 +329,7 @@ export default function AdminPage() {
       await loadUsers();
     } catch (err) {
       setRowError(
-        err instanceof ApiError ? err.detail : "No se pudo cambiar el rol"
+        err instanceof ApiError ? err.detail : t("err_change_role")
       );
     } finally {
       setBusyId(null);
@@ -355,7 +353,7 @@ export default function AdminPage() {
       await loadUsers();
     } catch (err) {
       setRowError(
-        err instanceof ApiError ? err.detail : "No se pudo asignar el nivel",
+        err instanceof ApiError ? err.detail : t("err_assign_level"),
       );
     } finally {
       setBusyId(null);
@@ -373,7 +371,7 @@ export default function AdminPage() {
       setCreateForm({ name: "", email: "", password: "", role: "analyst" });
     } catch (err) {
       setCreateError(
-        err instanceof ApiError ? err.detail : "No se pudo crear el usuario"
+        err instanceof ApiError ? err.detail : t("err_create_user")
       );
     } finally {
       setCreateLoading(false);
@@ -392,7 +390,7 @@ export default function AdminPage() {
       await loadUsers();
     } catch (err) {
       setRowError(
-        err instanceof ApiError ? err.detail : "No se pudo resetear la cuota",
+        err instanceof ApiError ? err.detail : t("err_reset_quota"),
       );
     } finally {
       setConfirmResetId(null);
@@ -408,7 +406,7 @@ export default function AdminPage() {
       setUsers((prev) => prev.filter((u) => u.id !== target.id));
     } catch (err) {
       setRowError(
-        err instanceof ApiError ? err.detail : "No se pudo eliminar el usuario"
+        err instanceof ApiError ? err.detail : t("err_delete_user")
       );
     } finally {
       setConfirmDeleteId(null);
@@ -646,7 +644,7 @@ export default function AdminPage() {
                           {u.byo_key_configured ? (
                             <span
                               className="px-2 py-0.5 rounded border text-xs bg-cyan-500/10 text-cyan-300 border-cyan-500/30"
-                              title="Usuario con BYO key — no consume cuota del servidor"
+                              title={t("tip_byo_key")}
                             >
                               BYO
                             </span>
@@ -693,10 +691,10 @@ export default function AdminPage() {
                                 className="rounded border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-300 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                                 title={
                                   u.byo_key_configured
-                                    ? "El usuario tiene BYO key — la cuota del servidor no aplica"
+                                    ? t("tip_byo_no_quota")
                                     : used === 0
-                                      ? "Sin consumo hoy — nada que resetear"
-                                      : "Pone el contador del día a 0"
+                                      ? t("tip_no_consumption")
+                                      : t("tip_reset_counter")
                                 }
                               >
                                 {t("admin_reset_quota")}
@@ -747,8 +745,8 @@ export default function AdminPage() {
                                 className="rounded border border-rose-500/40 bg-rose-500/10 px-2.5 py-1 text-xs font-medium text-rose-300 transition-colors hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                                 title={
                                   isSelf
-                                    ? "No puedes eliminar tu propia cuenta"
-                                    : "Eliminar usuario — acción no reversible"
+                                    ? t("tip_cannot_delete_self")
+                                    : t("tip_delete_user")
                                 }
                               >
                                 {t("admin_delete")}
