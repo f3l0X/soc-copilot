@@ -11,6 +11,7 @@ from app.routers import (
     auth,
     chat,
     explain,
+    groupchat,
     health,
     kb,
     llm,
@@ -80,6 +81,7 @@ app.include_router(admin.router, prefix="/api")
 app.include_router(explain.router, prefix="/api")
 app.include_router(recommend.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
+app.include_router(groupchat.router, prefix="/api")
 app.include_router(alerts.router, prefix="/api")
 app.include_router(stats.router, prefix="/api")
 app.include_router(kb.router, prefix="/api")

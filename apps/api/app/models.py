@@ -291,3 +291,28 @@ class RolePermission(Base):
         default=lambda: datetime.now(UTC),
         onupdate=lambda: datetime.now(UTC),
     )
+
+
+class GroupMessage(Base):
+    """Mensajes del chat grupal — visible para todos los usuarios autenticados.
+
+    Guardamos `user_email` y `user_name` snapshot al momento del envío para
+    que el historial siga siendo legible aunque la cuenta se elimine
+    después (la FK usa ON DELETE SET NULL).
+    """
+
+    __tablename__ = "group_messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    user_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    user_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        default=lambda: datetime.now(UTC),
+        index=True,
+    )
