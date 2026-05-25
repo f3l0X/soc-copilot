@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
+import { FloatingActions } from "@/components/FloatingActions";
 import { LocaleThemeControls } from "@/components/LocaleThemeControls";
 
 type NavItem = {
@@ -19,7 +20,8 @@ const OPS_NAV: NavItem[] = [
   { href: "/dashboard", labelKey: "nav_dashboard", icon: "▦", shortcut: "⌘1" },
   { href: "/alerts",    labelKey: "nav_alerts",    icon: "▲" },
   { href: "/logs",      labelKey: "nav_logs",      icon: "≡" },
-  { href: "/chat",      labelKey: "nav_chat",      icon: "◐" },
+  // /chat moved to the floating-action button bottom-right of the AppShell
+  // (see <FloatingActions />). Keep the nav focused on triage-first paths.
   { href: "/history",   labelKey: "nav_history",   icon: "◷" },
   { href: "/groupchat", labelKey: "nav_groupchat", icon: "◈" },
 ];
@@ -219,6 +221,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="flex-1 flex flex-col min-w-0">
         <Topbar />
         <main className="flex-1 overflow-auto">{children}</main>
+        <FloatingActions />
       </div>
     </div>
   );
