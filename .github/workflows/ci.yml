@@ -8,6 +8,30 @@ jobs:
   api-lint-test:
     name: API lint & test
     runs-on: ubuntu-latest
+    # Some smoke tests hit endpoints that persist via SQLAlchemy/psycopg
+    # (e.g. /api/chat). A real Postgres makes them deterministic without
+    # having to mock the DbSession in every test.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: soc
+          POSTGRES_PASSWORD: ci_only_not_a_real_secret
+          POSTGRES_DB: soc_copilot
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U soc -d soc_copilot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      POSTGRES_USER: soc
+      POSTGRES_PASSWORD: ci_only_not_a_real_secret
+      POSTGRES_DB: soc_copilot
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      GEMINI_API_KEY: dummy_for_ci_no_real_calls
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -23,11 +47,12 @@ jobs:
       # NOTE: `ruff format --check` deliberately omitted — the existing
       # codebase isn't ruff-formatted yet. Run `ruff format apps/api` in
       # a dedicated PR and add this step back once the diff is in.
+      - name: Alembic upgrade head
+        working-directory: apps/api
+        run: alembic upgrade head
       - name: Pytest (smoke, no e2e)
         working-directory: apps/api
         run: pytest --ignore=tests/test_e2e.py -v
-        env:
-          GEMINI_API_KEY: dummy_for_ci_no_real_calls
 
   web-lint-build:
     name: Web lint & build

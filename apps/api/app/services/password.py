@@ -64,7 +64,11 @@ def check_password(password: str, *, email: str | None = None) -> StrengthResult
         failed.append("Debe incluir un dígito.")
     if not _SYMBOL.search(password):
         failed.append("Debe incluir un símbolo.")
-    if password.lower() in _COMMON:
+    # Strip non-alphanumerics before checking so trivial bypasses like
+    # "Password123!" (which lowercased is "password123!") still match the
+    # block-list entry "password123".
+    normalized = re.sub(r"[^a-z0-9]", "", password.lower())
+    if normalized in _COMMON:
         failed.append("Contraseña demasiado común.")
     if email:
         local = email.split("@", 1)[0].lower()
