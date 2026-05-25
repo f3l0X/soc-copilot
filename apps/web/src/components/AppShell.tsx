@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
-import { useAuth } from "@/lib/auth";
-import { useI18n } from "@/lib/i18n";
 import { FloatingActions } from "@/components/FloatingActions";
 import { LocaleThemeControls } from "@/components/LocaleThemeControls";
+import { useAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 
 type NavItem = {
   href: string;
@@ -31,7 +32,15 @@ const SYS_NAV: NavItem[] = [
   { href: "/admin",        labelKey: "nav_admin",     icon: "◇" },
 ];
 
-function Sidebar() {
+const SIDEBAR_COLLAPSED_KEY = "soc:sidebar_collapsed";
+
+function Sidebar({
+  collapsed,
+  onToggle,
+}: {
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
   const pathname = usePathname();
   const { user } = useAuth();
   const { t } = useI18n();
@@ -45,25 +54,29 @@ function Sidebar() {
 
   const renderItem = (it: NavItem) => {
     const active = isActive(it.href);
+    const label = t(it.labelKey as Parameters<typeof t>[0]);
     return (
       <Link
         key={it.href}
         href={it.href}
         className={
-          "flex items-center gap-3 px-3 py-2 rounded-md text-sm transition " +
+          "flex items-center gap-3 rounded-md text-sm transition " +
+          (collapsed ? "px-2 py-2 justify-center " : "px-3 py-2 ") +
           (active
             ? "bg-cyan-500/10 text-cyan-300 border border-cyan-500/20"
             : "text-slate-300 hover:bg-ink-800 border border-transparent")
         }
+        title={collapsed ? label : undefined}
+        aria-label={collapsed ? label : undefined}
       >
         <span className="w-4 text-center">{it.icon}</span>
-        <span>{t(it.labelKey as Parameters<typeof t>[0])}</span>
-        {it.badge && (
+        {!collapsed && <span>{label}</span>}
+        {!collapsed && it.badge && (
           <span className="ml-auto text-[10px] font-mono px-1.5 rounded bg-rose-500/20 text-rose-300">
             {it.badge}
           </span>
         )}
-        {it.shortcut && !it.badge && active && (
+        {!collapsed && it.shortcut && !it.badge && active && (
           <span className="ml-auto text-[10px] font-mono text-cyan-300/70">
             {it.shortcut}
           </span>
@@ -73,45 +86,90 @@ function Sidebar() {
   };
 
   return (
-    <aside className="sidebar w-64 shrink-0 border-r flex flex-col">
-      <Link
-        href="/"
-        className="px-5 py-5 border-b flex items-center gap-3"
+    <aside
+      className={
+        "sidebar shrink-0 border-r flex flex-col transition-[width] duration-200 " +
+        (collapsed ? "w-14" : "w-64")
+      }
+    >
+      <div
+        className={
+          "border-b flex items-center gap-3 " +
+          (collapsed ? "px-2 py-3 justify-center" : "px-5 py-5")
+        }
       >
-        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-400 to-cyan-700 flex items-center justify-center text-ink-950 font-bold">
-          S
-        </div>
-        <div>
-          <div className="font-semibold tracking-tight">SOC Copilot</div>
-          <div className="text-[11px] font-mono opacity-50">v0.4.2 · prod</div>
-        </div>
-      </Link>
+        <Link
+          href="/"
+          className="flex items-center gap-3 min-w-0"
+          title={collapsed ? "SOC Copilot" : undefined}
+        >
+          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-400 to-cyan-700 flex items-center justify-center text-ink-950 font-bold shrink-0">
+            S
+          </div>
+          {!collapsed && (
+            <div className="min-w-0">
+              <div className="font-semibold tracking-tight">SOC Copilot</div>
+              <div className="text-[11px] font-mono opacity-50">v0.4.2 · prod</div>
+            </div>
+          )}
+        </Link>
+        {!collapsed && (
+          <button
+            type="button"
+            onClick={onToggle}
+            className="ml-auto w-7 h-7 rounded-md border opacity-50 hover:opacity-100 hover:border-cyan-500/40 transition flex items-center justify-center text-xs"
+            title={t("sidebar_collapse")}
+            aria-label={t("sidebar_collapse")}
+          >
+            ‹
+          </button>
+        )}
+      </div>
 
-      <nav className="px-3 py-4 space-y-1">
-        <div className="px-3 pb-2 text-[10px] uppercase tracking-widest opacity-50">
-          {t("nav_ops")}
-        </div>
+      {collapsed && (
+        <button
+          type="button"
+          onClick={onToggle}
+          className="mx-2 mt-2 h-7 rounded-md border opacity-50 hover:opacity-100 hover:border-cyan-500/40 transition flex items-center justify-center text-xs"
+          title={t("sidebar_expand")}
+          aria-label={t("sidebar_expand")}
+        >
+          ›
+        </button>
+      )}
+
+      <nav className={"py-4 space-y-1 " + (collapsed ? "px-2" : "px-3")}>
+        {!collapsed && (
+          <div className="px-3 pb-2 text-[10px] uppercase tracking-widest opacity-50">
+            {t("nav_ops")}
+          </div>
+        )}
         {OPS_NAV.map(renderItem)}
 
-        <div className="px-3 pt-5 pb-2 text-[10px] uppercase tracking-widest opacity-50">
-          {t("nav_system")}
-        </div>
+        {!collapsed && (
+          <div className="px-3 pt-5 pb-2 text-[10px] uppercase tracking-widest opacity-50">
+            {t("nav_system")}
+          </div>
+        )}
+        {collapsed && <div className="my-3 border-t opacity-20" />}
         {sysNav.map(renderItem)}
       </nav>
 
-      <div className="mt-auto m-3 rounded-lg border p-3 text-xs status-widget">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="relative inline-block w-2 h-2 rounded-full bg-emerald-400 pulse-dot" />
-          <span>{t("status_backend")}</span>
+      {!collapsed && (
+        <div className="mt-auto m-3 rounded-lg border p-3 text-xs status-widget">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="relative inline-block w-2 h-2 rounded-full bg-emerald-400 pulse-dot" />
+            <span>{t("status_backend")}</span>
+          </div>
+          <div className="font-mono opacity-50 leading-5">
+            api &nbsp; · 142 ms
+            <br />
+            chroma · 38 ms
+            <br />
+            gemini · ok
+          </div>
         </div>
-        <div className="font-mono opacity-50 leading-5">
-          api &nbsp; · 142 ms
-          <br />
-          chroma · 38 ms
-          <br />
-          gemini · ok
-        </div>
-      </div>
+      )}
     </aside>
   );
 }
@@ -210,6 +268,23 @@ function Topbar() {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user } = useAuth();
+  const [collapsed, setCollapsed] = useState(false);
+
+  // Hydrate the persisted preference once on mount. Stays false on first
+  // render to keep server/client markup matching and avoid hydration
+  // warnings; the flip happens after mount.
+  useEffect(() => {
+    const saved = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+    if (saved === "1") setCollapsed(true);
+  }, []);
+
+  function toggle() {
+    setCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? "1" : "0");
+      return next;
+    });
+  }
 
   if (pathname === "/login" || !user) {
     return <>{children}</>;
@@ -217,7 +292,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen grid-bg">
-      <Sidebar />
+      <Sidebar collapsed={collapsed} onToggle={toggle} />
       <div className="flex-1 flex flex-col min-w-0">
         <Topbar />
         <main className="flex-1 overflow-auto">{children}</main>
