@@ -117,11 +117,11 @@ function Sidebar({
           <button
             type="button"
             onClick={onToggle}
-            className="ml-auto w-7 h-7 rounded-md border opacity-50 hover:opacity-100 hover:border-cyan-500/40 transition flex items-center justify-center text-xs"
+            className="ml-auto w-8 h-8 rounded-md bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/20 hover:border-cyan-500/60 hover:text-cyan-200 transition flex items-center justify-center text-base font-bold leading-none"
             title={t("sidebar_collapse")}
             aria-label={t("sidebar_collapse")}
           >
-            ‹
+            ‹‹
           </button>
         )}
       </div>
@@ -130,11 +130,11 @@ function Sidebar({
         <button
           type="button"
           onClick={onToggle}
-          className="mx-2 mt-2 h-7 rounded-md border opacity-50 hover:opacity-100 hover:border-cyan-500/40 transition flex items-center justify-center text-xs"
+          className="mx-2 mt-3 h-8 rounded-md bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/20 hover:border-cyan-500/60 hover:text-cyan-200 transition flex items-center justify-center text-base font-bold leading-none"
           title={t("sidebar_expand")}
           aria-label={t("sidebar_expand")}
         >
-          ›
+          ››
         </button>
       )}
 
