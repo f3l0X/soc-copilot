@@ -6,6 +6,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, checkEmail, register, UserLevel } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
+import { LocaleThemeControls } from "@/components/LocaleThemeControls";
 import {
   loadZxcvbn,
   MIN_STRENGTH_SCORE,
@@ -166,7 +167,10 @@ function LoginInner() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-8">
+    <main className="min-h-screen flex items-center justify-center p-8 relative">
+      <div className="absolute top-4 right-4 z-10">
+        <LocaleThemeControls />
+      </div>
       <form
         onSubmit={onSubmit}
         className="w-full max-w-md space-y-4 rounded-lg border border-slate-800 bg-slate-900/40 p-6"
