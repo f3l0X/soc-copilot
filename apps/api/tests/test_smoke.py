@@ -16,18 +16,43 @@ from app.services import explainer, recommender
 from app.services.llm import LLMAdapter, LLMProviderError, LLMResponseError
 from app.services.rag import KBDoc
 
+_FAKE_USER_ID = 1
+_FAKE_USER_EMAIL = "t@example.com"
+
 
 def _fake_user() -> User:
     """Synthetic admin user used as the auth principal in unit tests."""
-    return User(id=1, email="t@example.com", hashed_password="x", role=UserRole.ADMIN)
+    return User(
+        id=_FAKE_USER_ID,
+        email=_FAKE_USER_EMAIL,
+        hashed_password="x",
+        role=UserRole.ADMIN,
+    )
 
 
 @pytest.fixture(autouse=True)
 def _bypass_auth():
-    """Override the auth dependency module-wide so existing smoke tests
-    (validation, LLM error sanitization, rate limit) can hit protected
-    POST endpoints without spinning up Postgres. Cleared per test."""
+    """Override the auth dependency module-wide and make sure the synthetic
+    principal exists in the DB.
+
+    The endpoint handlers reach DbSession even for tests that mock the LLM
+    (e.g. /api/chat writes an audit_logs row via log_audit). Inserting the
+    user once per test session keeps the FK from users → audit_logs happy
+    without rewriting the smoke suite to mock the whole DB layer.
+    """
     app.dependency_overrides[get_current_user] = _fake_user
+
+    # Idempotent upsert of the synthetic user into the real DB.
+    from app.db import _SessionLocal  # type: ignore[attr-defined]
+
+    db = _SessionLocal()
+    try:
+        if db.get(User, _FAKE_USER_ID) is None:
+            db.add(_fake_user())
+            db.commit()
+    finally:
+        db.close()
+
     yield
     app.dependency_overrides.pop(get_current_user, None)
 
