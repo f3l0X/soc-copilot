@@ -4,8 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { useAuth } from "@/lib/auth";
-import { useTheme } from "@/lib/theme";
-import { useI18n, type Locale, LOCALE_LABELS } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
+import { LocaleThemeControls } from "@/components/LocaleThemeControls";
 
 type NavItem = {
   href: string;
@@ -115,8 +115,7 @@ function Sidebar() {
 
 function Topbar() {
   const { user, signOut } = useAuth();
-  const { theme, toggleTheme } = useTheme();
-  const { locale, setLocale, t } = useI18n();
+  const { t } = useI18n();
 
   const initials = user
     ? `${(user.name?.[0] ?? user.email[0]).toUpperCase()}${
@@ -126,8 +125,6 @@ function Topbar() {
   const fullName = user
     ? [user.name, user.last_name].filter(Boolean).join(" ") || user.email
     : "";
-
-  const locales: Locale[] = ["es", "en", "fr"];
 
   return (
     <header className="topbar h-14 border-b backdrop-blur flex items-center px-6 gap-4 sticky top-0 z-40">
@@ -141,35 +138,7 @@ function Topbar() {
       </div>
 
       <div className="ml-auto flex items-center gap-3">
-        {/* ── Language selector ─────────────────────────────── */}
-        <div className="flex items-center rounded-md border overflow-hidden text-xs lang-selector">
-          {locales.map((l) => (
-            <button
-              key={l}
-              type="button"
-              onClick={() => setLocale(l)}
-              className={
-                "px-2 py-1.5 font-medium transition " +
-                (locale === l
-                  ? "bg-cyan-500 text-ink-950"
-                  : "opacity-50 hover:opacity-80")
-              }
-              title={LOCALE_LABELS[l]}
-            >
-              {l.toUpperCase()}
-            </button>
-          ))}
-        </div>
-
-        {/* ── Theme toggle ──────────────────────────────────── */}
-        <button
-          type="button"
-          onClick={toggleTheme}
-          className="rounded-md border px-2.5 py-1.5 text-xs font-medium transition hover:border-cyan-500/40 theme-toggle"
-          title={theme === "dark" ? t("theme_light") : t("theme_dark")}
-        >
-          {theme === "dark" ? t("theme_light") : t("theme_dark")}
-        </button>
+        <LocaleThemeControls />
 
         <Link
           href="/settings/llm"
