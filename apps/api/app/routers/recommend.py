@@ -8,9 +8,9 @@ from app.middleware.auth import CurrentUser
 from app.middleware.ratelimit import rate_limit
 from app.models import Alert, Recommendation, UserRole
 from app.schemas.alerts import RecommendRequest, RecommendResponse
+from app.services.audit import log_audit
 from app.services.llm import LLMProviderError, LLMResponseError
 from app.services.recommender import recommend
-from app.services.audit import log_audit
 
 logger = logging.getLogger(__name__)
 router = APIRouter(

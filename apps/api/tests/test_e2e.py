@@ -183,6 +183,7 @@ def test_login_locks_after_threshold_failures():
     # bootstrap one BEFORE the lockout block).
     # Instead, just check the audit table directly.
     from sqlalchemy import select, text  # noqa: F401
+
     from app.db import _SessionLocal
     from app.models import AuditLog
 
@@ -269,10 +270,11 @@ def test_verification_token_expired():
     from datetime import UTC, datetime, timedelta
 
     from sqlalchemy import select
+
     from app.config import get_settings
     from app.db import _SessionLocal
-    from app.models import User
     from app.middleware import ratelimit as rl
+    from app.models import User
     from app.services.auth import generate_verification_token
 
     # Bootstrap admin → auto-verified; we need a SECOND user to inject a

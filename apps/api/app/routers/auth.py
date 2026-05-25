@@ -27,6 +27,7 @@ from app.schemas.auth import (
     UserMe,
     VerifyEmailRequest,
 )
+from app.services.audit import log_audit
 from app.services.auth import (
     generate_verification_token,
     hash_password,
@@ -34,7 +35,6 @@ from app.services.auth import (
     issue_token,
     verify_password,
 )
-from app.services.audit import log_audit
 from app.services.email import send_verification_email
 from app.services.llm import GeminiAdapter, LLMProviderError
 from app.services.secrets import EncryptionDisabled, encrypt, last4

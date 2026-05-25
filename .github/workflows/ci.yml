@@ -59,6 +59,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # docker-compose.yml references `../.env`; create a stub from the
+      # example so `compose config` can resolve env_file paths.
+      - name: Stub .env for compose validation
+        run: cp .env.example .env
       - name: Validate dev compose
         run: docker compose -f infra/docker-compose.yml config -q
       - name: Validate prod example compose

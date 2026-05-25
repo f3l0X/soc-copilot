@@ -28,7 +28,6 @@ from app.services.security import (
     sanitize_name,
 )
 
-
 # ─── Password strength ──────────────────────────────────────────────────
 
 
@@ -76,7 +75,7 @@ def test_register_request_rejects_weak_password():
         RegisterRequest(
             name="Ana",
             email="ana@example.com",
-            password="short1!",  # noqa: S106 — intentionally weak in test
+            password="short1!",
         )
 
 
