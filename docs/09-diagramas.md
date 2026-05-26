@@ -159,6 +159,8 @@ otro LLM es escribir un sibling de `GeminiAdapter`.
 erDiagram
     USERS ||--o{ ALERTS : creates
     USERS ||--o{ AUDIT_LOGS : actor_of
+    USERS ||--o{ GROUP_MESSAGES : posts
+    USERS ||--o{ APP_SETTINGS : updated_by
     ALERTS ||--o{ RECOMMENDATIONS : has
 
     USERS {
@@ -169,6 +171,21 @@ erDiagram
         string hashed_password
         int password_version
         enum role "analyst|admin"
+        enum level "L1|L2|INSTRUCTOR"
+        enum requested_level
+        bool level_approved
+        bool is_verified
+        string email_verification_token
+        timestamptz email_verification_sent_at
+        timestamptz email_verified_at
+        int failed_login_attempts
+        timestamptz locked_until
+        bytea gemini_api_key_ciphertext "Fernet"
+        string gemini_key_last4
+        timestamptz gemini_key_validated_at
+        string preferred_chat_model
+        int server_llm_calls_today
+        date server_llm_quota_date
         timestamptz created_at
     }
     ALERTS {
@@ -209,6 +226,20 @@ erDiagram
         bool allowed
         timestamptz updated_at
     }
+    APP_SETTINGS {
+        string key PK
+        string value
+        timestamptz updated_at
+        int updated_by FK "nullable, ON DELETE SET NULL"
+    }
+    GROUP_MESSAGES {
+        int id PK
+        int user_id FK "nullable, ON DELETE SET NULL"
+        string user_email "snapshot al enviar"
+        string user_name "snapshot al enviar"
+        text content
+        timestamptz created_at "indexed"
+    }
 ```
 
 Reglas:
@@ -221,6 +252,20 @@ Reglas:
   para preservar el rastro tras eliminaciones.
 - `role_permissions` solo guarda **deviaciones** del default; tabla
   vacía = política original de la registry.
+- `app_settings` es un store key/value de flags mutables en runtime
+  (única clave actual: `public_registration_enabled`). La fila gana al
+  valor del `.env` cuando existe.
+- `group_messages.user_id` es nullable con `ON DELETE SET NULL`: el
+  snapshot de `user_email`/`user_name` se persiste en el momento del
+  envío para que el historial siga siendo legible aunque la cuenta del
+  autor se elimine después.
+- `users.gemini_api_key_ciphertext` se cifra con Fernet
+  (`APP_ENCRYPTION_KEY`); solo se muestran al usuario los últimos 4
+  caracteres (`gemini_key_last4`).
+- `users.level` ≠ `users.role`: la seniority (L1/L2/Instructor) modula
+  el tono del Copilot pero no autoriza nada. Hasta que un admin la
+  apruebe (`level_approved=false`), el usuario queda fijado en L1
+  independientemente de su `requested_level`.
 
 ---
 

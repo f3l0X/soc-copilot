@@ -121,7 +121,76 @@ Body (todos los campos opcionales; envía solo lo que cambias):
 - 422: `name` <2 chars / email inválido.
 
 No bumpea `password_version`: cambiar email o nombre **no** invalida tu
-sesión.
+sesión. Campo `level` opcional: solo lo aceptan admins (los analysts
+reciben 403); el nivel SOC del resto de usuarios lo asigna un admin
+desde `PUT /api/admin/users/{id}/level`.
+
+### `GET /api/auth/check-email?email=foo@bar.com`
+
+Comprueba si un email está libre para registro. Rate-limit estricto
+(10/min/IP) y tiempo de respuesta normalizado (~150 ms) para evitar
+enumeración. Devuelve `{"available": true|false}` sin filtrar
+información del usuario existente.
+
+### `POST /api/auth/verify-email`
+
+Activa la cuenta a partir del token recibido por email. Body:
+
+```json
+{"token": "<urlsafe-32B>"}
+```
+
+- 200: `UserMe` con `is_verified=true`.
+- 400: token desconocido o caducado (no se distinguen los dos casos
+  para no exponer estado).
+
+El TTL del token lo define `EMAIL_VERIFICATION_TTL_HOURS` (24 h por
+defecto). Cada intento queda en auditoría (`auth.email_verified` o
+`auth.verify_failed`).
+
+### `GET /api/auth/me/llm`
+
+Devuelve la configuración LLM por usuario.
+
+```json
+{
+  "configured": true,
+  "key_last4": "FpMpY",
+  "key_validated_at": "2026-05-20T10:11:22Z",
+  "preferred_chat_model": "gemini-2.5-flash",
+  "available_models": ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+  "default_model": "gemini-2.5-flash-lite",
+  "server_quota_used": 12,
+  "server_quota_limit": 50
+}
+```
+
+`server_quota_used` solo cuenta llamadas que consumieron la **clave
+compartida del servidor**. Cuando hay BYO key, se queda a 0.
+
+### `PUT /api/auth/me/llm`
+
+Setea/actualiza la BYO key y/o el modelo por defecto del usuario. Body
+(ambos campos opcionales):
+
+```json
+{"api_key": "AIza…", "preferred_chat_model": "gemini-2.5-flash"}
+```
+
+- La key se valida con una llamada *ping* a Gemini **antes** de
+  cifrarla (Fernet con `APP_ENCRYPTION_KEY`) y persistirla.
+- `400` si la key es demasiado corta, si Gemini la rechaza, o si el
+  modelo no está en la allowlist.
+- `503` si `APP_ENCRYPTION_KEY` no está configurada.
+
+Cada cambio se audita como `auth.llm_settings_updated` con el flag
+`key_changed`.
+
+### `DELETE /api/auth/me/llm`
+
+Borra la BYO key del usuario. Vuelve a usar la clave compartida con
+cuota diaria. El `preferred_chat_model` se preserva. Auditado como
+`auth.llm_key_cleared`.
 
 ## Alert Explainer
 
@@ -269,6 +338,44 @@ Respuesta:
 Chroma. El frontend los renderiza como pills clicables a
 attack.mitre.org / owasp.org.
 
+## Chat grupal del equipo
+
+Canal único compartido por todos los usuarios autenticados de la
+instancia. Sin DMs, sin hilos, sin adjuntos. Persistencia simple en
+`group_messages` (snapshot de `user_email` y `user_name` al enviar).
+
+### `GET /api/groupchat?limit=N&before_id=M`
+
+Auth requerida. Devuelve los últimos `N` mensajes (default 50, máx 200),
+ordenados cronológicamente (más antiguo primero). Si se pasa `before_id`
+se devuelven los mensajes con `id < before_id` para paginar hacia atrás.
+
+```json
+[
+  {
+    "id": 17,
+    "user_id": 3,
+    "user_email": "alice@example.com",
+    "user_name": "Alice Smith",
+    "content": "He visto bruteforce SSH desde 1.2.3.4",
+    "created_at": "2026-05-24T08:31:02Z"
+  }
+]
+```
+
+### `POST /api/groupchat`
+
+Auth requerida. Body `{"content": "..."}` (`1 ≤ len ≤ 2000`, se hace
+`strip()` antes de persistir). 201 con el `GroupMessageOut` recién
+creado. El servidor compone `user_name` a partir de `name + last_name`,
+con fallback al `email`.
+
+### `GET /api/groupchat/poll?after_id=N`
+
+Auth requerida. Devuelve hasta 100 mensajes con `id > N`, en orden
+ascendente. Pensado para polling ligero desde el frontend; no abre
+WebSocket.
+
 ## Histórico de alertas
 
 ### `GET /api/alerts?limit=N&offset=M`
@@ -407,6 +514,37 @@ Permiso: `users.update_role`. Body: `{"role": "admin" | "analyst"}`.
 - 200: `UserMe` actualizado. Bumpea `password_version` → la nueva
   política aplica al siguiente request del target. Auditado como
   `user.role_change` con `details.from`/`details.to`.
+
+### `PUT /api/admin/users/{id}/level`
+
+Permiso: `users.update_role` (mismo gate que el cambio de rol; la
+seniority es una decisión organizativa equivalente). Body:
+
+```json
+{"level": "L1" | "L2" | "INSTRUCTOR"}
+```
+
+- 200: `AdminUserView` con el nuevo nivel y `level_approved=true`. Si
+  el usuario tenía un `requested_level` distinto, deja de aparecer como
+  pendiente.
+- 404: no existe.
+
+Auditado como `user.level_change` con `details.from`/`details.to`. No
+bumpea `password_version` — el nivel solo influye en el tono del
+Copilot, no en la autorización.
+
+### `POST /api/admin/users/{id}/reset-llm-quota`
+
+Permiso: `users.update_role`. Resetea el contador
+`server_llm_calls_today` del usuario a 0 sin esperar al rollover diario
+UTC. Pensado para desbloquear a un compañero que se quedó sin cuota
+durante una demo o un examen.
+
+- 200: `{"status": "ok", "user_id": N}`.
+- 404: no existe.
+
+Auditado como `user.llm_quota_reset`. No afecta a usuarios con BYO key
+(esos no consumen del contador compartido).
 
 ### `DELETE /api/admin/users/{id}`
 

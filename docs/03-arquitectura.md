@@ -22,19 +22,19 @@ soc-copilot/
 │   │   │   ├── config.py      env-driven Settings
 │   │   │   ├── db.py          SQLAlchemy engine + init_db (idempotente)
 │   │   │   ├── models.py      User, Alert, Recommendation
-│   │   │   ├── routers/       auth, alerts, explain, recommend, chat, kb, llm, health
+│   │   │   ├── routers/       auth, admin, alerts, explain, recommend, chat, groupchat, kb, llm, stats, health
 │   │   │   ├── schemas/       Pydantic
-│   │   │   ├── services/      llm, explainer, recommender, chat, rag, auth
-│   │   │   └── middleware/    ratelimit, auth (Depends)
+│   │   │   ├── services/      llm, explainer, recommender, chat, rag, auth, audit, permissions, settings, email, password, secrets, security, stats, audience
+│   │   │   └── middleware/    ratelimit, auth (Depends), origin (same-origin guard)
 │   │   ├── scripts/           ingest_kb (MITRE+OWASP) + owasp_top10 dataset
 │   │   ├── tests/             test_smoke (unit) + test_auth (unit) + test_e2e
 │   │   ├── ruff.toml
 │   │   └── Dockerfile
 │   └── web/                Frontend Next.js
 │       ├── src/
-│       │   ├── app/           login, alerts, respond, history, chat, page (home)
-│       │   ├── components/    AuthGate, ModelSelector, RiskBadge
-│       │   └── lib/           api, auth, useModel
+│       │   ├── app/           login, alerts, respond, history, chat, groupchat, logs, profile, settings/llm, verify, dashboard, admin, page (home)
+│       │   ├── components/    AuthGate, AppShell, ModelSelector, RiskBadge
+│       │   └── lib/           api, auth, i18n, useModel, password
 │       ├── eslint.config.mjs  flat config (next/core-web-vitals)
 │       └── Dockerfile         multi-stage: deps → dev / builder → runner
 ├── infra/
@@ -63,7 +63,7 @@ Tecnologías:
 | `app/main.py` | Construye la app FastAPI, registra routers, ejecuta `init_db()` en lifespan startup |
 | `app/config.py` | Settings tipadas (env). Define defaults seguros para dev y allowlist de modelos LLM |
 | `app/db.py` | Engine + sessionmaker + `init_db()` que ejecuta `alembic upgrade head` en Postgres (con bridge `alembic stamp head` para DBs legacy creadas vía `create_all`); SQLite cae a `create_all` para tests |
-| `app/models.py` | `User` (incluye `name`, `last_name`, `password_version`), `Alert`, `Recommendation`, `AuditLog`, `RolePermission` |
+| `app/models.py` | `User` (incluye `name`, `last_name`, `password_version`, `level`/`requested_level`/`level_approved`, lockout, BYO Gemini key cifrada, cuota diaria), `Alert`, `Recommendation`, `AuditLog`, `RolePermission`, `AppSetting`, `GroupMessage` |
 | `app/services/llm.py` | `LLMAdapter` abstracto + `GeminiAdapter`. Errores se separan en `LLMProviderError` y `LLMResponseError`; routers los mapean a 502 genéricos |
 | `app/services/explainer.py` | Construye prompt con `BEGIN/END_UNTRUSTED_LOG` y schema JSON estricto |
 | `app/services/recommender.py` | Igual que explainer + reglas para evitar acciones destructivas sin aprobación humana |
@@ -87,21 +87,30 @@ Detalle completo en [docs/06-api-reference.md](06-api-reference.md). Resumen:
 | POST   | `/api/auth/register` | público | no | primer usuario = admin |
 | POST   | `/api/auth/login` | público | no | set-cookie httpOnly |
 | POST   | `/api/auth/logout` | público | no | clear-cookie |
+| GET    | `/api/auth/check-email` | público | sí (10/min/IP) | tiempo normalizado anti-enumeración |
+| POST   | `/api/auth/verify-email` | público | sí | activa la cuenta desde el link SMTP |
 | GET    | `/api/auth/me` | sesión | no | |
-| PUT    | `/api/auth/me` | sesión | no | edita `name`, `last_name`, `email` |
+| PUT    | `/api/auth/me` | sesión | no | edita `name`, `last_name`, `email` y `level` (solo admin) |
+| GET/PUT/DELETE | `/api/auth/me/llm` | sesión | no | BYO Gemini key cifrada + modelo preferido |
 | POST   | `/api/explain` | sesión | sí | persiste con user_id |
 | POST   | `/api/recommend` | sesión | sí | acepta `alert_id` o `log` |
 | POST   | `/api/chat` | sesión | sí | RAG sobre `soc_kb` |
 | GET    | `/api/alerts` | sesión | no | analyst ve los suyos, admin ve todo |
 | GET    | `/api/alerts/{id}` | sesión | no | con recommendations anidadas |
+| GET/POST | `/api/groupchat` | sesión | no | canal único del equipo |
+| GET    | `/api/groupchat/poll?after_id=N` | sesión | no | polling incremental |
 | GET    | `/api/admin/users` | `users.list` | no | listado completo |
 | POST   | `/api/admin/users` | `users.create` | no | crear con rol explícito |
 | PUT    | `/api/admin/users/{id}/password` | `users.update_password` | no | bumpea `password_version` |
 | PUT    | `/api/admin/users/{id}/role` | `users.update_role` | no | bumpea `password_version` |
+| PUT    | `/api/admin/users/{id}/level` | `users.update_role` | no | aprueba seniority L1/L2/Instructor |
+| POST   | `/api/admin/users/{id}/reset-llm-quota` | `users.update_role` | no | resetea contador diario sin esperar al rollover UTC |
 | DELETE | `/api/admin/users/{id}` | `users.delete` | no | bloquea último admin / self |
 | GET    | `/api/admin/audit` | `audit.view` | no | append-only, filtros action/actor |
 | GET    | `/api/admin/permissions` | `permissions.manage` | no | matriz role × key efectiva |
 | PUT    | `/api/admin/permissions` | `permissions.manage` | no | bulk update con audit diff |
+| GET    | `/api/admin/settings` | `permissions.manage` | no | flags mutables en runtime |
+| PUT    | `/api/admin/settings/public-registration` | `permissions.manage` | no | toggle de registro público |
 
 ## Frontend (Next.js)
 
@@ -119,6 +128,9 @@ Tecnologías: Next.js 15.5, React 19, TypeScript 5.9, Tailwind 3.4, ESLint 9 fla
 | `/history` | Histórico filtrado por ownership | requerida |
 | `/chat` | Conversación con RAG + citas | requerida |
 | `/profile` | Edición de nombre, apellidos y email | requerida |
+| `/settings/llm` | BYO Gemini key + modelo preferido por usuario | requerida |
+| `/groupchat` | Chat grupal del equipo (canal único, polling) | requerida |
+| `/verify` | Página de aterrizaje del link de verificación de email | pública |
 | `/admin` | Tabs Usuarios / Roles / Permisos / Auditoría | rol admin |
 
 ### Header global
@@ -165,10 +177,16 @@ documentadas en cabecera del archivo y en [security.md](security.md).
 
 ## Persistencia (PostgreSQL)
 
+> ER detallado (con todas las columnas de auth/level/BYO y las tablas
+> `group_messages` / `app_settings`) en
+> [09-diagramas.md §4](09-diagramas.md#4-esquema-de-base-de-datos). Aquí
+> se muestra una versión resumida.
+
 ```mermaid
 erDiagram
     USERS ||--o{ ALERTS : creates
     USERS ||--o{ AUDIT_LOGS : actor
+    USERS ||--o{ GROUP_MESSAGES : posts
     ALERTS ||--o{ RECOMMENDATIONS : has
 
     USERS {
@@ -218,6 +236,20 @@ erDiagram
         string permission_key
         bool allowed
         timestamptz updated_at
+    }
+    GROUP_MESSAGES {
+        int id PK
+        int user_id FK "nullable, SET NULL"
+        string user_email "snapshot"
+        string user_name "snapshot"
+        text content
+        timestamptz created_at
+    }
+    APP_SETTINGS {
+        string key PK
+        string value
+        timestamptz updated_at
+        int updated_by FK "nullable"
     }
 ```
 

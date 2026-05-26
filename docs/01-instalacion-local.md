@@ -74,8 +74,9 @@ Docker. El stack levanta todo en contenedores.
 
    Resultado esperado: 4 servicios healthy + `{"status":"ok"}`.
 
-   > Las migraciones de Alembic (incluidas la `0003_level_approval` y la
-   > `0004_app_settings`) se aplican automáticamente durante el primer
+   > Las cinco migraciones de Alembic actuales (`0001_initial_schema`,
+   > `0002_auth_hardening`, `0003_level_approval`, `0004_app_settings`,
+   > `0005_group_messages`) se aplican automáticamente durante el primer
    > arranque de la API. Si en un entorno ya existente añades una
    > migración nueva, fuérzala con
    > `docker compose exec api alembic upgrade head`.
@@ -100,11 +101,15 @@ Docker. El stack levanta todo en contenedores.
 8. Abrir la aplicacion:
 
    - Frontend: <http://localhost:13500>
+   - Dashboard: <http://localhost:13500/dashboard>
    - Alert Explainer: <http://localhost:13500/alerts>
+   - Analizador de logs: <http://localhost:13500/logs>
    - Next Step Recommender: <http://localhost:13500/respond?alert_id=N>
    - Histórico: <http://localhost:13500/history>
    - Chat IA: <http://localhost:13500/chat>
-   - API docs: <http://localhost:8080/docs>
+   - Chat grupal del equipo: <http://localhost:13500/groupchat>
+   - Perfil + BYO Gemini key: <http://localhost:13500/profile> y <http://localhost:13500/settings/llm>
+   - API docs (solo en dev): <http://localhost:8080/docs>
 
 ## Comandos utiles
 

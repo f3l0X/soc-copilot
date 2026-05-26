@@ -6,11 +6,21 @@
 |-------|---------|-------------|----------|-------------------|
 | Unit smoke | `tests/test_smoke.py` | no (fakes + dependency_overrides) | ~3 s | siempre |
 | Unit auth | `tests/test_auth.py` | no | ~2 s | siempre |
+| Unit BYO LLM | `tests/test_byo_llm.py` | no | ~2 s | siempre |
+| Unit logging | `tests/test_logging.py` | no | ~1 s | siempre |
+| Unit migrations | `tests/test_migrations.py` | sí (Postgres real) | ~3 s | siempre que haya DB |
+| Unit register security | `tests/test_register_security.py` | no | ~1 s | siempre |
 | E2E auth + ownership | `tests/test_e2e.py` | sí (Postgres real) | ~5 s | sólo con `RUN_E2E=1` |
+| E2E cuotas BYO | `tests/test_e2e_quota.py` | sí (Postgres real) | ~3 s | sólo con `RUN_E2E=1` |
+| E2E stats / dashboard | `tests/test_stats.py` | sí (Postgres real) | ~3 s | sólo con `RUN_E2E=1` |
+| E2E group chat | `tests/test_groupchat.py` | sí (Postgres real) | ~3 s | sólo con `RUN_E2E=1` |
 
-Total: 69 unit passed (+ 1 skipped E2E) y 2 E2E passed. Cobertura
-funcional: rutas de validación, sanitización de errores LLM, prompt
-injection, rate limit, allowlist de modelos, auth completa, ownership.
+Cobertura funcional: rutas de validación, sanitización de errores LLM,
+prompt injection, rate limit, allowlist de modelos, auth completa
+(incluyendo lockout, honeypot, email verification, check-email
+timing-safe), ownership, RBAC dinámico, BYO Gemini key cifrada con
+Fernet, cuota diaria por usuario, dashboard analítico y chat grupal
+con snapshot de identidad tras borrar al autor.
 
 ## Suite unit (sin DB)
 

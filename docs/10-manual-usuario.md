@@ -221,7 +221,26 @@ Acepta volcados grandes y permite filtrar por **IP, puerto, MAC, protocolo
 y ventana temporal** antes de mandar al Explainer únicamente las líneas
 relevantes. Reduce ruido y ahorra cuota de IA.
 
-### 4.6 Perfil
+### 4.6 Chat grupal (`/groupchat`)
+
+Canal único compartido con **todos los usuarios autenticados de la
+instancia**. Pensado para coordinar al equipo durante un ejercicio o
+una guardia sin salir de la app: avisos rápidos, IPs sospechosas,
+quién está cubriendo qué.
+
+- Sin DMs, sin hilos, sin adjuntos. Todo el mundo lee todo.
+- Mensajes de 1 a 2000 caracteres. Se envían con **Enter**.
+- Cada mensaje muestra avatar (iniciales del nombre) con color
+  determinístico por usuario, hora y autor.
+- Polling automático cada pocos segundos: los mensajes nuevos
+  aparecen sin recargar.
+- Si una cuenta se elimina, sus mensajes pasados se preservan con el
+  nombre/email *snapshot* en el momento del envío (el `user_id` se
+  pone a NULL).
+
+> No hay borrado por usuario. Trata el chat como auditable.
+
+### 4.7 Perfil
 
 `/profile` permite cambiar nombre, contraseña y preferencias de IA
 (modelo por defecto, BYOK).

@@ -35,9 +35,10 @@ analiza alertas con Gemini, persiste resultados en PostgreSQL, indexa MITRE
 ATT&CK y OWASP Top 10 en ChromaDB para RAG, y expone una API protegida con
 JWT en cookie httpOnly invalidable por `password_version`. El frontend
 Next.js sirve dashboard, explainer, recommender, analizador de logs con
-filtros (IP/puerto/MAC/protocolo/tiempo), histórico, chat con citas, panel
-de administración (usuarios, roles, matriz de permisos editable, auditoría)
-y página de perfil de usuario.
+filtros (IP/puerto/MAC/protocolo/tiempo), histórico, chat con citas, **chat
+grupal del equipo**, panel de administración (usuarios, roles, matriz de
+permisos editable, auditoría) y página de perfil con configuración LLM
+por usuario (BYO Gemini key cifrada + modelo preferido).
 
 **Despliegue productivo** en VPS Hetzner CPX22 (Nuremberg) con TLS
 automático (Caddy + Let's Encrypt), backups Postgres diarios duplicados
@@ -45,5 +46,7 @@ automático (Caddy + Let's Encrypt), backups Postgres diarios duplicados
 admin para abrir/cerrar el registro público sin redeploy.
 
 Fases 0–4 y 4.5 (Dashboard) cerradas + ciclo de hardening admin + **fase
-5 (despliegue Hetzner) cerrada**. Fase 6 (informe + demo) en curso de
-cara a entrega del 25-mayo-2026.
+5 (despliegue Hetzner) cerrada** + ciclo post-fase-5 (BYO LLM key,
+workflow de niveles SOC L1/L2/Instructor, brute-force lockout, chat
+grupal del equipo). Fase 6 (informe + demo) en curso de cara a entrega
+del 25-mayo-2026.

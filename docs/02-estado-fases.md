@@ -227,6 +227,35 @@ CD on tag queda como mejora opcional post-entrega — actualmente el
 deploy es `bash /opt/soc-copilot/scripts/deploy.sh` sobre SSH, con el
 checklist documentado.
 
+### Ciclo post-fase-5: extensiones de producto — ✅ entregadas
+
+Cambios añadidos en producción entre el 18 y el 24 de mayo, sin
+re-abrir fases:
+
+- **BYO Gemini key por usuario** (`GET/PUT/DELETE /api/auth/me/llm`).
+  Clave cifrada con Fernet (`APP_ENCRYPTION_KEY`), validada con un
+  *ping* a Gemini antes de persistir, último 4 caracteres visibles en
+  UI. Permite a un compañero usar su propia cuota cuando se agota la
+  compartida. Página `/settings/llm` en el frontend.
+- **Cuota diaria por usuario** sobre la clave compartida del servidor
+  (`server_llm_calls_today` + `server_llm_quota_date`). Reset manual
+  por admin vía `POST /api/admin/users/{id}/reset-llm-quota`.
+- **Workflow de niveles SOC L1 / L2 / Instructor** ortogonal al RBAC.
+  El usuario solicita un nivel en `/register`; queda fijado a L1
+  hasta que un admin lo aprueba (`PUT /api/admin/users/{id}/level`).
+  El nivel modula el tono y la profundidad de las respuestas del
+  Copilot. Bootstrap admin se auto-aprueba como Instructor.
+- **Brute-force lockout** en `/auth/login`: tras
+  `AUTH_LOCKOUT_THRESHOLD` fallos consecutivos, la cuenta queda
+  bloqueada durante `AUTH_LOCKOUT_MINUTES` (mensaje opaco,
+  indistinguible de credenciales malas para no filtrar estado).
+- **Honeypot anti-bot** en registro (`payload.website`) + rate limit
+  por email además del de IP.
+- **Chat grupal del equipo** `/groupchat` (migración 0005). Canal
+  único compartido por todos los usuarios autenticados, polling
+  ligero vía `GET /api/groupchat/poll?after_id=N`, snapshot de
+  email/nombre para que los mensajes sobrevivan al borrado de cuentas.
+
 ### Fase 6: informe + presentación — pendiente
 
 - Informe PDF profesional siguiendo la rúbrica (vale 20% de la nota).
@@ -240,7 +269,8 @@ Snapshot del último commit en `main`:
 | Métrica | Valor |
 |---------|-------|
 | Tests backend (unit) | 67 passed (auth, byo_llm, logging, migrations, smoke) |
-| Tests backend (E2E con Postgres real) | 7 passed (e2e + e2e_quota + stats) |
+| Tests backend (E2E con Postgres real) | 7 + 5 nuevos en `test_groupchat.py` (auth, post/list cross-user, polling incremental, supervivencia al borrado del autor, validación de tamaño) |
+| Migraciones Alembic | 5 (0001 initial · 0002 auth_hardening · 0003 level_approval · 0004 app_settings · 0005 group_messages) |
 | ruff (`app` + `tests` + `scripts`) | clean |
 | ESLint flat config (frontend) | 0 errors / 0 warnings |
 | `npm audit --audit-level=high` | 0 critical, 0 high (2 moderate aceptados, ver security.md) |

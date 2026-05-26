@@ -15,15 +15,17 @@ El módulo registra eventos clasificados por su prefijo de acción (`action`):
 
 ### Autenticación (`auth.*`)
 * `auth.register`: Creación de un nuevo usuario (registra `verification_required`, `role`, `level`, `is_first` en `details`).
+* `auth.register_honeypot`: Bot que rellenó el campo trampa `website` del formulario de registro. La fila se persiste pero el usuario nunca se crea — el bot recibe un 201 falso.
 * `auth.email_verified`: El usuario completa el flujo de verificación clicando el link recibido por SMTP.
-* `auth.verify_failed`: Intento de verificación con token inválido o expirado.
-* `auth.login`: Inicio de sesión exitoso.
-* `auth.login_failed`: Intento de login fallido (registra IP y correo utilizado).
-* `auth.login_locked`: Bloqueo automático tras 4 fallos consecutivos (anti-bruteforce, 15 min de timeout).
+* `auth.verify_failed`: Intento de verificación con token inválido o expirado (`details.reason = "expired"` o ausente).
+* `auth.login`: Inicio de sesión exitoso (`details.level` con el nivel SOC efectivo).
+* `auth.login_failed`: Intento de login fallido (registra IP, correo intentado y, si la cuenta existe, el contador `attempts`).
+* `auth.lockout`: La N-ésima falla cruzó `AUTH_LOCKOUT_THRESHOLD` (default 4) y la cuenta queda bloqueada `AUTH_LOCKOUT_MINUTES` (default 15).
+* `auth.login_blocked`: Intento contra una cuenta que estaba bloqueada (`details.reason = "locked"`) o no verificada (`details.reason = "not_verified"`). Mensaje al usuario opaco e idéntico al de credenciales malas para no filtrar estado.
 * `auth.logout`: Cierre de sesión.
-* `auth.update_profile`: Modificación de nombre/apellidos/correo.
-* `auth.llm_settings_updated`: Configuración o actualización de la clave API de Gemini.
-* `auth.llm_key_cleared`: Eliminación de la clave API de Gemini.
+* `auth.update_profile`: Modificación de nombre/apellidos/correo (registra `email_changed`, `level_changed`, `level`).
+* `auth.llm_settings_updated`: Configuración o actualización de la clave API de Gemini (`details.key_changed`, `details.preferred_chat_model`).
+* `auth.llm_key_cleared`: Eliminación de la clave API de Gemini del usuario.
 
 ### Operaciones Administrativas (`user.*`, `permissions.*`, `settings.*`)
 * `user.create`: Administrador crea un analista.

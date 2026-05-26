@@ -23,6 +23,9 @@ en producción.
 | Secretos | `.env` con permisos 600 propiedad del usuario `soc`. Copia offline en Windows. No commiteado (`.gitignore`). |
 | Backups | Dump `pg_dump --clean --if-exists` diario en server (cron, 14 días retención) + tarea Windows que los descarga a `Documents/` (30 días retención). Snapshots Hetzner adicionales a nivel disco (7 días). |
 | Toggle de registro | El flag `public_registration_enabled` se persiste en BD (`app_settings`) y se audita en cada cambio. El admin puede cerrarlo desde la UI tras una demo sin reiniciar nada. |
+| Honeypot en registro | Campo `website` invisible para humanos en `/auth/register`. Si llega rellenado se devuelve un 201 falso (no se persiste user) y se audita como `auth.register_honeypot`. Capa adicional al rate-limit por IP/email. |
+| BYO Gemini key | La clave del usuario se cifra con Fernet (`APP_ENCRYPTION_KEY`) antes de persistirse en `users.gemini_api_key_ciphertext`. Solo se exponen los últimos 4 caracteres. Una rotación de `APP_ENCRYPTION_KEY` invalida todas las claves BYO existentes (los usuarios deben volver a introducirlas; el chat sigue funcionando con la clave compartida hasta entonces). |
+| Cuota diaria compartida | `SERVER_LLM_DAILY_QUOTA` (default 50) limita el consumo por usuario contra la clave del servidor. Usuarios con BYO key no se contabilizan. Admin puede resetear el contador puntualmente vía `POST /api/admin/users/{id}/reset-llm-quota`. |
 
 ## Mitigaciones aplicadas
 

@@ -20,6 +20,8 @@ junior durante la triage de alertas. Combina cuatro capacidades:
    MITRE ATT&CK Enterprise y OWASP Top 10 2025 (707 docs en ChromaDB).
 4. **Dashboard + panel admin** — KPIs, distribución por riesgo, gestión
    de usuarios, RBAC dinámico, auditoría inmutable.
+5. **Chat grupal del equipo** — canal único compartido por todos los
+   usuarios autenticados para coordinar guardias y triage en directo.
 
 La IA **no sustituye** al analista: propone hipótesis y referencias. La
 decisión final siempre es humana.
