@@ -33,8 +33,8 @@ soc-copilot/
 │   └── web/                Frontend Next.js
 │       ├── src/
 │       │   ├── app/           login, alerts, respond, history, chat, groupchat, logs, profile, settings/llm, verify, dashboard, admin, page (home)
-│       │   ├── components/    AuthGate, AppShell, ModelSelector, RiskBadge
-│       │   └── lib/           api, auth, i18n, useModel, password
+│       │   ├── components/    AppShell (Sidebar + Topbar), ModelSelector, RiskBadge, LocaleThemeControls, FloatingActions
+│       │   └── lib/           api, auth, i18n, theme, useModel, password
 │       ├── eslint.config.mjs  flat config (next/core-web-vitals)
 │       └── Dockerfile         multi-stage: deps → dev / builder → runner
 ├── infra/
@@ -43,7 +43,7 @@ soc-copilot/
 │   ├── caddy/Caddyfile
 │   └── postgres/init.sql
 ├── docs/
-└── .github/workflows/ci.yml   jobs: api, e2e (con Postgres service), web
+└── .github/workflows/    ci.yml (api-lint-test, web-lint-build, infra-validate) + e2e.yml (api-e2e con Postgres + Playwright frontend)
 ```
 
 ## Backend (FastAPI)
@@ -133,12 +133,21 @@ Tecnologías: Next.js 15.5, React 19, TypeScript 5.9, Tailwind 3.4, ESLint 9 fla
 | `/verify` | Página de aterrizaje del link de verificación de email | pública |
 | `/admin` | Tabs Usuarios / Roles / Permisos / Auditoría | rol admin |
 
-### Header global
+### Shell de navegación
 
-`<GlobalHeader>` (en `components/AuthGate.tsx`) está montado en
-`app/layout.tsx`, así que aparece en todas las páginas autenticadas:
-brand a `/`, botón **← Inicio** (oculto en `/`), badge clicable que va a
-`/profile`, botón Salir.
+`<AppShell>` (en `components/AppShell.tsx`) está montado en
+`app/layout.tsx` (envuelto por `ThemeProvider` / `I18nProvider` /
+`AuthProvider`). En `/login` o sin sesión solo renderiza el contenido;
+en el resto monta el layout autenticado:
+
+- **Sidebar** colapsable (ancho persistido en `localStorage`,
+  `soc:sidebar_collapsed`): brand → `/`, navegación de operaciones
+  (Dashboard, Alertas, Logs, Histórico, Chat grupal) y de sistema
+  (Ajustes IA, Admin — solo rol admin), más un widget de estado.
+- **Topbar** sticky: buscador, controles de idioma/tema
+  (`LocaleThemeControls`), acceso a `/settings/llm`, badges de rol y
+  nivel SOC, avatar con nombre que enlaza a `/profile` y botón Salir.
+- **FloatingActions**: botón flotante abajo-derecha que abre el Chat IA.
 
 ### Cliente API
 

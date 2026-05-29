@@ -20,7 +20,7 @@ Top 10) y selector de modelo LLM con allowlist en backend.
 - `infra/docker-compose.yml` con servicios `postgres`, `chroma`, `api`, `web`.
 - `infra/docker-compose.prod.example.yml` plantilla para Hetzner (sin
   puertos públicos, Caddy 2 con TLS automático).
-- CI en GitHub Actions con jobs api / e2e / web.
+- CI en GitHub Actions (`ci.yml`: api-lint-test / web-lint-build / infra-validate; `e2e.yml`: E2E + Playwright).
 - Variables de entorno documentadas en `.env.example`.
 - `.gitattributes` (LF) + `.gitignore` cubriendo `.env`, lockfiles, etc.
 
@@ -122,11 +122,11 @@ Iteración de hardening y producto sin cambio de versión mayor de roadmap.
 
 ### Frontend
 
-- **`GlobalHeader` sticky** (`components/AuthGate.tsx`) montado en
-  `app/layout.tsx`: presente en todas las páginas excepto `/login`, con
-  brand → home, botón **← Inicio** (oculto en `/`), badge con nombre
-  completo + email + rol + botón Salir. El nombre actúa como link a
-  `/profile`.
+- **Shell de navegación** (`components/AppShell.tsx`) montado en
+  `app/layout.tsx`: presente en todas las páginas excepto `/login`.
+  Sidebar colapsable (brand → home, nav de operaciones y sistema) +
+  Topbar sticky con badges de rol/nivel, avatar con nombre completo +
+  email (link a `/profile`) y botón Salir.
 - **Cross-tab auth sync**: `AuthProvider` escucha eventos `storage` y
   `focus` y hace `refresh()`. Logout en una pestaña echa a las demás sin
   necesidad de refrescar manualmente.
@@ -185,7 +185,7 @@ Iteración de hardening y producto sin cambio de versión mayor de roadmap.
 | Logs lifecycle: tests + scripts montados en compose | 4 | ✅ |
 | ESLint flat config (sustituye `next lint` deprecado) | 4 | ✅ |
 | `.env.example` documenta `JWT_*` y `COOKIE_*` | 4 | ✅ |
-| CI: `ruff check app tests` + `npm run lint` + `npm audit` | 4 | ✅ |
+| CI: `ruff check apps/api` + `npm run lint` + `npm audit` (informativo) + build | 4 | ✅ |
 | Mitigación de ReDoS (Regex wildcard cap) | post-fase-4 | ✅ |
 | Normalización de tiempos en Auth (Timing Attack) | post-fase-4 | ✅ |
 | Paginación forzada en lista de usuarios admin | post-fase-4 | ✅ |
@@ -211,12 +211,12 @@ estado entregado:
 |------|--------|
 | VPS Hetzner CPX22 (Nuremberg, ~8,5 €/mes con backups) | ✅ |
 | Dominio DuckDNS apuntando al VPS | ✅ |
-| `JWT_SECRET`, `APP_ENCRYPTION_KEY`, `POSTGRES_PASSWORD`, `NEXTAUTH_SECRET` rotados a valores producción (`openssl rand`) | ✅ |
+| `JWT_SECRET`, `APP_ENCRYPTION_KEY`, `POSTGRES_PASSWORD` rotados a valores producción (`openssl rand`) | ✅ |
 | `infra/docker-compose.prod.yml` desplegado a partir del example, con el bloque `web.build.args` forwardeando `NEXT_PUBLIC_API_URL` para que Next lo embeba en el bundle | ✅ |
 | Caddy 2 con `PUBLIC_DOMAIN=soc-copilot.duckdns.org` y `ACME_EMAIL` reales → certs Let's Encrypt automáticos, HTTP/3, HSTS preload | ✅ |
 | `cookie_secure=true`, `APP_ENV=production` (la API se niega a arrancar con defaults inseguros) | ✅ |
-| Hardening VPS: SSH key-only, `PermitRootLogin no`, `AllowUsers soc`, UFW 22/80/443, fail2ban activo, `unattended-upgrades` para parches de seguridad | ✅ |
-| Backups Postgres: `cron.daily` con dump `pg_dump --clean --if-exists` comprimido, retención 14 días en `/var/backups/soc-copilot/` | ✅ |
+| Hardening VPS: SSH key-only en **puerto 2222**, `PermitRootLogin no`, `AllowUsers soc`, UFW 2222/80/443 (+443/udp HTTP/3), fail2ban activo, `unattended-upgrades` para parches de seguridad | ✅ |
+| Backups Postgres (verificado en el VPS 2026-05-29): **cifrado vía systemd** `soc-copilot-backup.timer` @03:30 → `scripts/backup_postgres.sh` → `pg_dump\|gzip\|age` en `/var/backups/soc-copilot/{daily,weekly}/` (`*.sql.gz.age`, retención 7+4, offsite rclone opcional). El antiguo `cron.daily/soc-copilot-pgbackup` (gzip sin cifrar) se **retiró el 2026-05-29** junto a sus dumps planos | ✅ |
 | Backups offline: tarea programada en Windows que descarga los dumps a `Documents/soc-copilot-db-backups/` con retención 30 días | ✅ |
 | KB ingestada en Chroma de producción: 697 técnicas MITRE Enterprise + 10 OWASP 2025 = **707 docs** | ✅ |
 | SMTP cableado (Gmail App Password) para verificación de email en `/auth/register` | ✅ |
@@ -268,12 +268,13 @@ Snapshot del último commit en `main`:
 
 | Métrica | Valor |
 |---------|-------|
-| Tests backend (unit) | 67 passed (auth, byo_llm, logging, migrations, smoke) |
-| Tests backend (E2E con Postgres real) | 7 + 5 nuevos en `test_groupchat.py` (auth, post/list cross-user, polling incremental, supervivencia al borrado del autor, validación de tamaño) |
-| Migraciones Alembic | 5 (0001 initial · 0002 auth_hardening · 0003 level_approval · 0004 app_settings · 0005 group_messages) |
-| ruff (`app` + `tests` + `scripts`) | clean |
+| Tests backend (inventario) | 104 funciones en 10 archivos |
+| · Unit (sin RUN_E2E) | smoke 31 · register_security 19 · byo_llm 18 · auth 12 · logging 3 · migrations 3 |
+| · E2E con Postgres real (`RUN_E2E=1`) | e2e 8 · groupchat 5 · stats 4 · e2e_quota 1 |
+| Migraciones Alembic | 5 (0001 initial · 0002 auth_hardening · 0003 level_approval · 0004 app_settings · 0005 group_messages); `alembic check` en CI guarda contra drift |
+| ruff (`apps/api`) | clean |
 | ESLint flat config (frontend) | 0 errors / 0 warnings |
 | `npm audit --audit-level=high` | 0 critical, 0 high (2 moderate aceptados, ver security.md) |
 | TypeScript `tsc --noEmit` | clean |
-| `next build` | 9 rutas compiladas |
-| GitHub Actions | últimos runs success |
+| `next build` | 13 páginas (`/`, login, alerts, respond, history, chat, groupchat, dashboard, logs, profile, settings/llm, admin, verify) |
+| GitHub Actions | `ci.yml` + `e2e.yml` |

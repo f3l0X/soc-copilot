@@ -16,7 +16,7 @@ git pull --ff-only
 
 echo "==> guard: required env vars"
 required=(GEMINI_API_KEY POSTGRES_PASSWORD JWT_SECRET APP_ENCRYPTION_KEY \
-          NEXTAUTH_SECRET PUBLIC_DOMAIN ACME_EMAIL NEXT_PUBLIC_API_URL)
+          PUBLIC_DOMAIN ACME_EMAIL NEXT_PUBLIC_API_URL)
 missing=0
 for v in "${required[@]}"; do
   if ! grep -qE "^${v}=.+" .env; then

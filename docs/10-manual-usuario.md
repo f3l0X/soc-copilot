@@ -191,7 +191,8 @@ ATT&CK y OWASP Top 10 con citas.
 
 **Cómo se usa.**
 
-1. Abre **Chat** en el menú.
+1. Abre el **Chat** con el botón flotante de la esquina inferior derecha
+   (disponible en cualquier pantalla autenticada).
 2. Escribe la pregunta en lenguaje natural. Ejemplos:
    - *"¿Qué diferencia hay entre T1566.001 y T1566.002?"*
    - *"¿Cómo mitigo Broken Access Control en una API REST?"*
@@ -242,11 +243,15 @@ quién está cubriendo qué.
 
 ### 4.7 Perfil
 
-`/profile` permite cambiar nombre, contraseña y preferencias de IA
-(modelo por defecto, BYOK).
+`/profile` permite cambiar **nombre, apellidos y email**. Al cambiar el
+email debes confirmar tu **contraseña actual** (protección anti-secuestro
+de sesión). Las preferencias de IA (modelo por defecto y BYOK) se
+gestionan en **Ajustes → IA** (`/settings/llm`), no aquí.
 
-> Cambiar la contraseña incrementa el `password_version` y **invalida
-> todas las sesiones previas**. Tendrás que volver a iniciar sesión.
+> No hay cambio de contraseña self-service. Si necesitas resetear tu
+> contraseña, pídeselo a un admin (`/admin → Usuarios`); ese reset
+> incrementa el `password_version` e **invalida todas tus sesiones
+> previas**.
 
 ---
 

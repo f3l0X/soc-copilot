@@ -30,10 +30,10 @@ Trabajo universitario en grupo de 5 personas (línea Blue Team), con "alcance co
 ## 3. Stack técnico (decidido, no rebikeshear)
 
 - **Backend**: Python 3.12 + FastAPI. Adaptador LLM provider-agnostic (`LLMAdapter` / `GeminiAdapter`).
-- **LLM**: Gemini (free tier). Embeddings `text-embedding-004`. Chat `gemini-2.5-flash` y `gemini-2.5-flash-lite` con allowlist server-side.
+- **LLM**: Gemini (free tier). Embeddings `gemini-embedding-001` (3072d). Chat `gemini-2.5-flash` y `gemini-2.5-flash-lite` con allowlist server-side.
 - **RAG / vector store**: ChromaDB embebida, colección `soc_kb` (~700 docs: 691 MITRE + 10 OWASP).
 - **DB relacional**: PostgreSQL 16. Migraciones con **Alembic**.
-- **Frontend**: Next.js 15 (App Router) + TypeScript + Tailwind + shadcn/ui.
+- **Frontend**: Next.js 15 (App Router) + React 19 + TypeScript + Tailwind 3.4. Gráficas con `recharts`; fuerza de contraseña con `@zxcvbn-ts` (diccionario ES). No se usa shadcn/ui.
 - **Auth**: JWT HS256 + bcrypt, cookie `soc_session` httpOnly SameSite=Lax. RBAC dinámico (matriz editable por admin).
 - **Orquestación**: Docker Compose (dev y prod).
 - **Reverse proxy prod**: Caddy 2 (HTTPS automático).

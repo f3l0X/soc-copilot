@@ -34,7 +34,7 @@ Cualquier decisión de diseño tiene que caber aquí:
 | RAM | 4 GB | ~1,5 GB (pg + chroma + api + web + caddy) | ~2 GB + 2 GB swap |
 | Disco | 80 GB NVMe | ~8 GB | ~70 GB |
 | Red | 20 TB/mes | despreciable | sobra |
-| Backups | Hetzner snapshot diario + `pg_dump` cron | — | — |
+| Backups | Hetzner snapshot diario + `pg_dump` cifrado (age, systemd timer) | — | — |
 
 Esto descarta de entrada la opción "Wazuh completo" (manager +
 OpenSearch + dashboard ≈ 4-6 GB RAM él solo). Ver §4.1.
@@ -110,8 +110,10 @@ una `service_account` (nuevo rol `system`).
   persistente y acquisitions.yaml montado.
 - Servicio `forwarder` en mismo Compose (imagen propia,
   `apps/forwarder/Dockerfile`).
-- Migración Alembic 0005: rol `system`, tabla `alert_source` con
+- Migración Alembic 0006: rol `system`, tabla `alert_source` con
   campos `source_type` (manual/crowdsec/api) y `external_id`.
+  (La `0005` ya existe en Práctica 1 = `group_messages`; la numeración
+  de Práctica 2 arranca en `0006`.)
 - Endpoint `/api/explain` acepta header `X-Source: crowdsec` con
   service-account token y persiste el origen.
 - Página `/alerts` filtrable por origen (manual vs CrowdSec).
@@ -150,7 +152,7 @@ de la métrica que necesita el Eje 3 para comparar modelos.
 
 **Entregables**
 
-- Migración Alembic 0006: tabla `ai_feedback` con `alert_id`,
+- Migración Alembic 0007: tabla `ai_feedback` con `alert_id`,
   `user_id`, `model`, `vote` (+1/-1), `comment`, `created_at`,
   índice por `(model, created_at)`.
 - `POST /api/feedback` y `GET /api/feedback/summary?group_by=model|mitre`.
@@ -191,7 +193,7 @@ dos (alimenta el Eje 2). El comparador genera leaderboard.
 
 **Entregables**
 
-- Migración 0007: tabla `ab_run` con `alert_id`, `model_a`, `model_b`,
+- Migración 0008: tabla `ab_run` con `alert_id`, `model_a`, `model_b`,
   `response_a`, `response_b`, `latency_ms_a/b`, `tokens_a/b`,
   `winner` (null hasta voto).
 - Setting `AB_SAMPLE_RATE` (default 0.2) en `app_settings` editable
@@ -298,7 +300,7 @@ Asumiendo entrega de Práctica 2 ~4 semanas después de Práctica 1.
 
 | Semana | Hito |
 |--------|------|
-| 1 | Kickoff, ramas por eje, esqueleto de migraciones 0005-0007, mocks de servicios nuevos en Compose |
+| 1 | Kickoff, ramas por eje, esqueleto de migraciones 0006-0008, mocks de servicios nuevos en Compose |
 | 2 | Ejes 1 y 4 funcionales en dev local (CrowdSec ingesta + Prometheus emitiendo métricas básicas) |
 | 3 | Ejes 2 y 3 funcionales; integración cruzada (feedback alimenta leaderboard A/B) |
 | 4 | Despliegue Hetzner del stack completo, smoke E2E con los 4 ejes encadenados, redacción del informe |

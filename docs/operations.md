@@ -1,6 +1,7 @@
 # SOC Copilot — Manual de operaciones
 
-Servidor de producción: `soc@178.105.51.187` (Hetzner CPX22, Nuremberg)
+Servidor de producción: `soc@178.105.51.187:2222` (Hetzner CPX22, Nuremberg)
+(SSH escucha en el **puerto 2222**, no en el 22 — ver [ops/security-hardening-2026-05-19.md](ops/security-hardening-2026-05-19.md))
 URL pública: https://soc-copilot.duckdns.org
 Stack: Postgres 16 · ChromaDB · FastAPI · Next.js · Caddy 2 (TLS auto)
 
@@ -9,10 +10,10 @@ Stack: Postgres 16 · ChromaDB · FastAPI · Next.js · Caddy 2 (TLS auto)
 ## 1. Acceso al servidor
 
 ```bash
-ssh soc@178.105.51.187
+ssh -p 2222 soc@178.105.51.187
 ```
 
-- Login root deshabilitado. Solo usuario `soc` con clave SSH.
+- SSH en el **puerto 2222** (cambiado en el hardening). Login root deshabilitado. Solo usuario `soc` con clave SSH.
 - `soc` tiene `sudo` sin password (`NOPASSWD`).
 - Si pierdes la clave: Hetzner Console → tu servidor → **Rescue** → **Reset root password**, luego entras por la **consola web** y reañades tu key en `~soc/.ssh/authorized_keys`.
 
@@ -25,7 +26,7 @@ El código vive en `/opt/soc-copilot`. Todos los comandos de operación se ejecu
 Cuando se haya mergeado a `main` en GitHub:
 
 ```bash
-ssh soc@178.105.51.187
+ssh -p 2222 soc@178.105.51.187
 bash /opt/soc-copilot/scripts/deploy.sh
 ```
 
@@ -68,7 +69,12 @@ git checkout -- <archivo>                 # descarta
 
 ### Migraciones de base de datos
 
-Por defecto la API **no** corre `alembic upgrade head` al arrancar (solo aplica las que estaban presentes en el primer arranque). Después de cada deploy con migraciones nuevas, **fuerza la subida**:
+La API corre `alembic upgrade head` automáticamente en cada arranque
+(`init_db()` en el lifespan; ver `app/db.py`), así que al reconstruir o
+reiniciar el contenedor `api` tras un deploy las migraciones nuevas se
+aplican solas. Aun así, **conviene aplicarlas y verificarlas a mano** tras
+cada deploy con migraciones nuevas, para que un fallo de esquema aflore
+de forma clara antes de servir tráfico:
 
 ```bash
 cd /opt/soc-copilot/infra
@@ -188,29 +194,41 @@ dc exec postgres psql -U soc -d soc_copilot -c \
 
 ## 5. Backups
 
-### Postgres — dump diario automático
+### Postgres — backup cifrado automático (mecanismo actual)
 
-Instala una vez:
-```bash
-sudo tee /etc/cron.daily/soc-copilot-pgbackup > /dev/null <<'CRON'
-#!/bin/bash
-set -e
-BACKUP_DIR=/var/backups/soc-copilot
-mkdir -p "$BACKUP_DIR"
-cd /opt/soc-copilot/infra
-docker compose -f docker-compose.prod.yml --env-file ../.env exec -T postgres \
-  pg_dump -U soc -d soc_copilot --clean --if-exists \
-  | gzip > "$BACKUP_DIR/db-$(date +%Y%m%d).sql.gz"
-find "$BACKUP_DIR" -name "db-*.sql.gz" -mtime +14 -delete
-CRON
-sudo chmod +x /etc/cron.daily/soc-copilot-pgbackup
+El backup de Postgres corre vía **systemd timer** `soc-copilot-backup.timer`
+(diario a las **03:30**, +5min jitter), que ejecuta
+`scripts/backup_postgres.sh`:
+
+```
+pg_dump --no-owner --clean --if-exists | gzip -9 | age -r $BACKUP_AGE_RECIPIENT
+  → /var/backups/soc-copilot/daily/postgres-YYYYMMDD-HHMMSS.sql.gz.age
 ```
 
-Guarda 14 días. Verifica que corre:
+- **Cifrado con age**: solo se descifra con la privada `~/.age-key.txt`.
+- Retención **7 daily + 4 weekly** (snapshot weekly los domingos por hardlink).
+- Offsite opcional a `rclone` si defines `BACKUP_RCLONE_REMOTE`.
+- Requiere `BACKUP_AGE_RECIPIENT` (clave pública age) en `.env`.
+
+Instalar / reinstalar el timer:
 ```bash
-sudo run-parts --test /etc/cron.daily
-ls -lh /var/backups/soc-copilot/
+bash /opt/soc-copilot/scripts/install_backup_timer.sh
 ```
+
+Verificar y forzar una ejecución:
+```bash
+systemctl list-timers soc-copilot-backup.timer --no-pager
+sudo systemctl start soc-copilot-backup.service
+sudo ls -lh /var/backups/soc-copilot/daily/
+```
+
+**Restauración:** [ops/restore-postgres.md](ops/restore-postgres.md).
+
+> El antiguo `cron.daily/soc-copilot-pgbackup` (dump `gzip` **sin cifrar**,
+> retención 14 días) se **retiró el 2026-05-29** junto con sus `db-*.sql.gz`,
+> para no dejar copias de la BD en claro en disco. Si tenías una tarea en
+> Windows que descargaba esos `db-*.sql.gz` por `scp`, repúntala a los
+> `.sql.gz.age` de `daily/` (y guarda la clave age para poder restaurarlos).
 
 ### Dump manual a tu home
 ```bash
@@ -220,10 +238,15 @@ dc exec -T postgres pg_dump -U soc -d soc_copilot --clean --if-exists \
 ```
 
 ### Restaurar un dump
-```bash
-gunzip -c /ruta/al/db-YYYYMMDD.sql.gz | \
-  dc exec -T postgres psql -U soc -d soc_copilot
-```
+
+- Backups automáticos (cifrados `*.sql.gz.age`): ver
+  [ops/restore-postgres.md](ops/restore-postgres.md) (descifra con `age` +
+  `~/.age-key.txt`).
+- Un dump manual en claro (p.ej. el de arriba, `~/db-manual-*.sql.gz`):
+  ```bash
+  gunzip -c /ruta/al/db-manual-YYYYMMDD-HHMM.sql.gz | \
+    dc exec -T postgres psql -U soc -d soc_copilot
+  ```
 
 ### Snapshots Hetzner
 Diarios, retenidos 7 días. Restauración desde Hetzner Console → tu servidor → **Backups**. Estos son a nivel disco; el dump SQL es portable a otra máquina.
@@ -231,7 +254,7 @@ Diarios, retenidos 7 días. Restauración desde Hetzner Console → tu servidor 
 ### `.env` (secretos)
 **No está en git** (a propósito). Cópialo a tu Windows como respaldo offline:
 ```powershell
-scp soc@178.105.51.187:/opt/soc-copilot/.env $env:USERPROFILE\Documents\soc-copilot-env-backup\env-$(Get-Date -Format "yyyyMMdd").bak
+scp -P 2222 soc@178.105.51.187:/opt/soc-copilot/.env $env:USERPROFILE\Documents\soc-copilot-env-backup\env-$(Get-Date -Format "yyyyMMdd").bak
 ```
 
 ---
@@ -239,7 +262,7 @@ scp soc@178.105.51.187:/opt/soc-copilot/.env $env:USERPROFILE\Documents\soc-copi
 ## 6. Seguridad
 
 ### Firewall (UFW)
-Solo 22, 80, 443 abiertos. Estado:
+Solo 2222 (SSH), 80, 443 (+443/udp HTTP/3) abiertos. Estado:
 ```bash
 sudo ufw status verbose
 ```
@@ -325,7 +348,7 @@ dc exec postgres pg_isready -U soc -d soc_copilot
 
 ### Sesiones no persisten / cookies se pierden
 - Verifica `COOKIE_SECURE=true` y que entras por **https** (no http).
-- Verifica que `NEXTAUTH_URL=https://soc-copilot.duckdns.org` (sin trailing slash).
+- Verifica que `NEXT_PUBLIC_API_URL=https://soc-copilot.duckdns.org` (sin trailing slash).
 
 ### El navegador muestra contenido antiguo
 Cache. F12 → Network → Disable cache → Ctrl+Shift+R. Si persiste, modo incógnito.

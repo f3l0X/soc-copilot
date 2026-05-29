@@ -1,8 +1,14 @@
 # Restaurar un backup de Postgres
 
-Los backups viven en `/var/backups/soc-copilot/{daily,weekly}/` cifrados con
+Los backups del job **primario** viven en
+`/var/backups/soc-copilot/{daily,weekly}/` cifrados con
 [age](https://age-encryption.org). Solo se pueden descifrar con la clave
 privada que generaste al instalar el sistema (`~/.age-key.txt`).
+
+> **Nota:** este (age) es el **único** mecanismo de backup automático. El
+> antiguo cron que dejaba dumps `db-*.sql.gz` sin cifrar se retiró el
+> 2026-05-29. Para un dump manual puntual en claro, ver
+> [operations.md §5](../operations.md) ("Dump manual a tu home").
 
 ⚠️ **Haz un drill al menos una vez** — un backup que nunca se ha restaurado
 no es un backup, es un deseo.

@@ -369,14 +369,19 @@ POST /api/admin/users
   "email": "analista@empresa.com",
   "password": "<temporal-fuerte>",
   "name": "Nombre Apellido",
-  "role": "ANALYST"
+  "role": "analyst"
 }
 ```
 
+La `password` debe cumplir la política (10..128 chars + mayús/minús/
+dígito/símbolo). El valor de `role` es `analyst` o `admin` (en
+minúsculas, como el enum `UserRole`).
+
 UI: `/admin/users` → Nuevo usuario.
 
-El admin entrega la contraseña temporal por canal seguro; el usuario
-puede cambiarla después en `/settings`.
+El admin entrega la contraseña temporal por canal seguro. No hay cambio
+de contraseña self-service: si el usuario necesita rotarla, un admin la
+resetea desde `/admin → Usuarios` (eso invalida sus sesiones activas).
 
 ### 5.2 Vía registro público
 

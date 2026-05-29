@@ -162,8 +162,9 @@ alcance de un grupo de _[5]_ personas con un mes de trabajo:
   honeypot anti-bot.
 - **ONF-5.** Despliegue reproducible vía Docker Compose, con
   configuración separada para dev y producción.
-- **ONF-6.** Copias de seguridad diarias de la base de datos con
-  retención de 14 días en el VPS y 30 días offline.
+- **ONF-6.** Copias de seguridad diarias de la base de datos, **cifradas
+  con age** (systemd timer), con retención 7 diarias + 4 semanales en el
+  VPS, offsite opcional, y copia offline en Windows.
 
 ### 3.3. Mapeo con la rúbrica
 
@@ -361,8 +362,8 @@ sería contradictorio. Resumen del trabajo de hardening; detalle en
 
 ### 6.4. Infraestructura
 
-- **VPS endurecido**: SSH key-only, `PermitRootLogin no`,
-  `AllowUsers soc`, UFW (22/80/443), fail2ban sobre sshd,
+- **VPS endurecido**: SSH key-only en **puerto 2222**, `PermitRootLogin no`,
+  `AllowUsers soc`, UFW (2222/80/443 + 443/udp), fail2ban sobre sshd,
   `unattended-upgrades` automático.
 - **Caddy con HSTS preload, CSP, X-Frame-Options, X-Content-Type-Options,
   Referrer-Policy, Permissions-Policy**.
@@ -370,8 +371,9 @@ sería contradictorio. Resumen del trabajo de hardening; detalle en
   `.env` con permisos `600`, copia offline.
 - **Rate limit en memoria** por IP detrás del reverse proxy con
   `X-Forwarded-For` confiable (Caddy con `trusted_proxies`).
-- **Backups**: `pg_dump` diario en VPS (retención 14 días) + tarea
-  programada en Windows que descarga la copia (retención 30 días).
+- **Backups**: `pg_dump | gzip | age` diario vía systemd timer en el VPS
+  (cifrados, retención 7 diarias + 4 semanales, offsite rclone opcional)
+  + copia offline en Windows.
 
 ### 6.5. Vulnerabilidades detectadas y mitigadas durante el desarrollo
 
@@ -429,7 +431,8 @@ Resumen de pasos; manual completo en [operations.md](operations.md).
 6. **Caddy** autoemite certificado Let's Encrypt en el primer
    arranque.
 7. **Ingesta KB** en el contenedor `api` (707 docs en Chroma).
-8. **Cron diario de backup** instalado en `/etc/cron.daily/`.
+8. **Backup diario cifrado** (age) vía systemd timer
+   (`scripts/install_backup_timer.sh`).
 9. **SMTP** (Gmail App Password) configurado para verificación de
    email.
 
@@ -507,15 +510,16 @@ Snapshot del estado de calidad en la entrega:
 
 | Métrica | Valor |
 |---------|-------|
-| Tests backend (unit) | 67 passed |
-| Tests backend E2E (Postgres real en CI) | 12 (auth, alerts cross-user, RBAC, groupchat) |
-| Migraciones Alembic | 5 (0001 initial → 0005 group_messages) |
-| `ruff check app tests` | clean |
+| Tests backend (inventario) | 104 funciones en 10 archivos |
+| · Unit (sin DB / sin `RUN_E2E`) | 86 (smoke, auth, byo_llm, logging, migrations, register_security) |
+| · E2E con Postgres real (`RUN_E2E=1`) | 18 (e2e, groupchat, stats, e2e_quota) |
+| Migraciones Alembic | 5 (0001 initial → 0005 group_messages); `alembic check` guarda contra drift |
+| `ruff check apps/api` | clean |
 | ESLint flat config (frontend) | 0 errors / 0 warnings |
-| `npm audit --audit-level=high` | 0 critical, 0 high |
+| `npm audit --audit-level=high` | 0 critical, 0 high (2 moderate aceptados) |
 | TypeScript `tsc --noEmit` | clean |
-| `next build` | 9 rutas compiladas |
-| GitHub Actions | últimos runs success |
+| `next build` | 13 páginas compiladas |
+| GitHub Actions | `ci.yml` (push/PR) + `e2e.yml` (main) |
 
 Detalle de estrategia, fixtures y comandos en
 [07-testing.md](07-testing.md).
@@ -640,7 +644,7 @@ Pendiente de adjuntar (`docs/assets/`):
 - [ ] Auditoría con filtros aplicados.
 - [ ] Chat grupal con varios usuarios.
 - [ ] Certificado HTTPS de Let's Encrypt en navegador.
-- [ ] Salida del cron de backup en producción.
+- [ ] Salida del backup cifrado en producción (`systemctl list-timers soc-copilot-backup.timer` + `ls daily/`).
 
 ---
 

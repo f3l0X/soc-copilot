@@ -8,6 +8,7 @@ import { FloatingActions } from "@/components/FloatingActions";
 import { LocaleThemeControls } from "@/components/LocaleThemeControls";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
+import { useModel } from "@/lib/useModel";
 
 type NavItem = {
   href: string;
@@ -177,6 +178,7 @@ function Sidebar({
 function Topbar() {
   const { user, signOut } = useAuth();
   const { t } = useI18n();
+  const { selected } = useModel();
 
   const initials = user
     ? `${(user.name?.[0] ?? user.email[0]).toUpperCase()}${
@@ -207,7 +209,7 @@ function Topbar() {
           title={t("tip_model_config")}
         >
           <span className="opacity-50">{t("topbar_model")}</span>
-          <span className="text-cyan-300 font-medium">gemini-2.5-pro</span>
+          <span className="text-cyan-300 font-medium">{selected ?? "—"}</span>
           <span className="opacity-40">▾</span>
         </Link>
 

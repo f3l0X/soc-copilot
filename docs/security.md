@@ -19,9 +19,9 @@ en producción.
 | Email verification | `AUTH_REQUIRE_EMAIL_VERIFICATION=true`. SMTP saliente vía Gmail con App Password (no contraseña real). Si SMTP falla, el registro NO se aborta — el token queda en BD y un admin puede marcarlo verificado o reenviar. En producción la API nunca expone el link en la respuesta JSON. |
 | Anti-bruteforce | 4 intentos fallidos → bloqueo 15 minutos por cuenta. Contador se reinicia con login correcto o vencimiento. |
 | Rate limit | Por IP del cliente (XFF respetado). Buckets adicionales en `/auth/check-email` (10/60s por IP) y `/auth/register` (3/h por email). |
-| Servidor | UFW (22/80/443 only). fail2ban con jail `sshd`. SSH key-only, `PermitRootLogin no`, `AllowUsers soc`. `unattended-upgrades` para parches de seguridad. |
+| Servidor | UFW (2222/80/443 only, +443/udp HTTP/3). fail2ban con jail `sshd`. SSH key-only en **puerto 2222**, `PermitRootLogin no`, `AllowUsers soc`. `unattended-upgrades` para parches de seguridad. |
 | Secretos | `.env` con permisos 600 propiedad del usuario `soc`. Copia offline en Windows. No commiteado (`.gitignore`). |
-| Backups | Dump `pg_dump --clean --if-exists` diario en server (cron, 14 días retención) + tarea Windows que los descarga a `Documents/` (30 días retención). Snapshots Hetzner adicionales a nivel disco (7 días). |
+| Backups | **Cifrados con age** — systemd `soc-copilot-backup.timer` @03:30 → `pg_dump\|gzip\|age` en `/var/backups/soc-copilot/{daily,weekly}/` (`*.sql.gz.age`, retención 7+4, offsite rclone opcional; descifrado solo con la privada `~/.age-key.txt`). El antiguo cron de gzip **sin cifrar** y sus dumps planos se **retiraron el 2026-05-29** (ya no hay copias de la BD en claro en disco). Copia offline a Windows vía `scp`. Snapshots Hetzner a nivel disco (7 días). |
 | Toggle de registro | El flag `public_registration_enabled` se persiste en BD (`app_settings`) y se audita en cada cambio. El admin puede cerrarlo desde la UI tras una demo sin reiniciar nada. |
 | Honeypot en registro | Campo `website` invisible para humanos en `/auth/register`. Si llega rellenado se devuelve un 201 falso (no se persiste user) y se audita como `auth.register_honeypot`. Capa adicional al rate-limit por IP/email. |
 | BYO Gemini key | La clave del usuario se cifra con Fernet (`APP_ENCRYPTION_KEY`) antes de persistirse en `users.gemini_api_key_ciphertext`. Solo se exponen los últimos 4 caracteres. Una rotación de `APP_ENCRYPTION_KEY` invalida todas las claves BYO existentes (los usuarios deben volver a introducirlas; el chat sigue funcionando con la clave compartida hasta entonces). |
@@ -200,7 +200,7 @@ Se han implementado correcciones específicas basadas en el reporte de vulnerabi
 | **5** (deploy) | Hardening VPS | SSH key only, ufw, fail2ban, auto-actualizaciones |
 | **5** | TLS / certificados | Caddy 2 + Let's Encrypt automático |
 | **5** | Secret management | Variables fuera del repo, gestor (Hetzner secrets / age / sops) |
-| **5** | Backups Postgres | `pg_dump` cron + offsite |
+| **5** | Backups Postgres | `pg_dump` cifrado (age) vía systemd timer + offsite |
 | **5** | Rate limiter en multi-worker | Sustituir backing store por Redis (slowapi) |
 | **5** | Real client IP | `ProxyHeadersMiddleware` en uvicorn + `forwarded_allow_ips` apuntando al IP de Caddy |
 | **5** | Registro público + race condition | `AUTH_REGISTRATION_ENABLED=false` + admin seed CLI |

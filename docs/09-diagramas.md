@@ -536,8 +536,8 @@ flowchart TB
     C --> E[10 entries A01..A10]
     D --> F[Normaliza a {id, text, metadata}]
     E --> F
-    F --> G{Batches de 100}
-    G --> H[Gemini embed-001<br>3072 dim]
+    F --> G{Batches de 50<br>EMBED_BATCH}
+    G --> H[Gemini embedding-001<br>3072 dim]
     H --> I[Backoff exponencial<br>si rate-limit]
     I --> G
     G --> J[Chroma collection soc_kb<br>upsert]

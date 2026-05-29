@@ -145,33 +145,55 @@ Output esperado: `EXIT=0`.
 
 ## CI (GitHub Actions)
 
-`.github/workflows/ci.yml` define tres jobs paralelos:
+Hay **dos workflows**: `ci.yml` (en cada push y PR, rápido, sin E2E) y
+`e2e.yml` (en push a `main` y `workflow_dispatch`, suite completa con
+Postgres real + Playwright).
 
-### Job `api`
+### `ci.yml` — 3 jobs
+
+**`api-lint-test`** (con `services.postgres: postgres:16-alpine`):
 
 - `actions/setup-python@v5` con Python 3.12.
-- `pip install -r requirements.txt` (incluye ruff, pytest, passlib,
-  PyJWT, email-validator).
-- `ruff check app tests`.
-- Smoke import: `python -c "from app.main import app; print(app.title)"`.
-- `pytest -q` con `GEMINI_API_KEY=dummy_for_ci_no_real_calls`.
+- `pip install -r requirements.txt`.
+- `ruff check apps/api`.
+- `alembic upgrade head` contra el Postgres del servicio.
+- `pytest --ignore=tests/test_e2e.py -v` con
+  `GEMINI_API_KEY=dummy_for_ci_no_real_calls` (los módulos E2E que
+  hacen skip por `RUN_E2E != 1` no corren aquí).
 
-### Job `e2e`
+**`web-lint-build`**:
 
-- `services.postgres: postgres:16-alpine` con healthcheck.
-- Mismas deps Python.
-- `pytest -q tests/test_e2e.py` con `RUN_E2E=1` y env Postgres apuntando
-  al servicio.
-
-### Job `web`
-
-- `actions/setup-node@v4` con Node 22.
+- `actions/setup-node@v4` con **Node 22** (misma versión que el runtime Docker).
 - `npm ci --no-audit --no-fund`.
-- `npm audit --audit-level=high` (gate; falla si hay HIGH o CRITICAL).
+- `npm audit --audit-level=high` con `continue-on-error: true`
+  (**informativo**, no bloquea el merge; los avisos de deps transitivas
+  no deben frenar trabajo no relacionado).
 - `npm run lint`.
 - `npm run build` con `NEXT_TELEMETRY_DISABLED=1`.
 
-Todos deben pasar para mergear en `main`.
+**`infra-validate`**:
+
+- `docker compose -f infra/docker-compose.yml config -q` (dev).
+- `docker compose -f infra/docker-compose.prod.example.yml config -q`
+  (prod example, con `PUBLIC_DOMAIN`/`ACME_EMAIL` stub).
+
+### `e2e.yml` — 2 jobs
+
+**`api-e2e`** (con `services.postgres`):
+
+- `alembic upgrade head` + `alembic check` (guarda contra drift entre
+  modelos y migraciones).
+- `pytest tests/test_e2e.py tests/test_migrations.py -v` con `RUN_E2E=1`.
+
+**`e2e-frontend`** (Playwright):
+
+- Node 22, levanta el stack completo con `docker compose up -d --build`,
+  espera health de API y Next, siembra un admin vía `/api/auth/register`,
+  instala Chromium y corre `npm run e2e`. Sube el `playwright-report` y
+  los logs de compose como artefactos si falla.
+
+Para mergear en `main` deben pasar los jobs de `ci.yml`; `e2e.yml`
+corre además en cada push a `main`.
 
 ## Cómo añadir tests nuevos
 

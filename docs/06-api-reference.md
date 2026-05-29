@@ -54,13 +54,15 @@ Diagnóstico de la knowledge base. Errores se mapean a 503.
 Body:
 
 ```json
-{"name": "Alice", "email": "user@example.com", "password": "min8chars"}
+{"name": "Alice", "email": "user@example.com", "password": "Str0ng-Pass!2026"}
 ```
 
 - 201: usuario creado. **Primer registro = admin**, resto = analyst.
 - 409: email ya existe.
-- 422: email inválido (validación `EmailStr`) o password <8 chars o
-  `name` <2 chars.
+- 422: email inválido (validación `EmailStr`), `name` <2 chars, o
+  password que no cumple la política: 10..128 chars + mayúscula +
+  minúscula + dígito + símbolo, no estar en la blocklist y no contener
+  el email. Detalle en [security.md](security.md#validación-de-entrada).
 
 Respuesta (`UserMe`):
 
@@ -482,9 +484,13 @@ al rol `admin` y ninguna al rol `analyst`, pero un admin puede
 modificarla desde la matriz de permisos. Si tu rol no tiene la clave, el
 endpoint devuelve `403`.
 
-### `GET /api/admin/users`
+### `GET /api/admin/users?limit=N&offset=M`
 
-Permiso: `users.list`. Devuelve `list[UserMe]` ordenado por `id`.
+Permiso: `users.list`. Devuelve `list[AdminUserView]` ordenado por `id`
+(incluye nivel SOC, metadata de cuota LLM y BYO-key). Paginado:
+
+- `limit`: 1..500 (default 50).
+- `offset`: ≥0 (default 0).
 
 ### `POST /api/admin/users`
 
@@ -492,15 +498,19 @@ Permiso: `users.create`. Body:
 
 ```json
 {"name": "Alice", "last_name": "Smith", "email": "a@b.com",
- "password": "min8chars", "role": "analyst"}
+ "password": "Str0ng-Pass!2026", "role": "analyst"}
 ```
+
+La password sigue la misma política que el registro (10..128 chars +
+complejidad; ver [security.md](security.md#validación-de-entrada)).
 
 - 201: `UserMe` recién creado. Se audita como `user.create`.
 - 409: email duplicado.
 
 ### `PUT /api/admin/users/{id}/password`
 
-Permiso: `users.update_password`. Body: `{"new_password": "..."}` (≥8 chars).
+Permiso: `users.update_password`. Body: `{"new_password": "..."}` (misma
+política que el registro: 10..128 chars + complejidad).
 
 Bumpea `password_version` del target → todas sus sesiones JWT existentes
 quedan invalidadas en el siguiente request. Auditado como
@@ -676,14 +686,15 @@ al anterior no se escribe fila de auditoría (idempotente).
 ## Prueba rápida con curl
 
 ```bash
-# Register + login (capturar cookie)
+# Register + login (capturar cookie). La password debe cumplir la
+# política: 10..128 chars + mayúscula + minúscula + dígito + símbolo.
 curl -c /tmp/c.txt -X POST http://localhost:8080/api/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"name":"Alice","email":"a@b.com","password":"changeme123"}'
+  -d '{"name":"Alice","email":"a@b.com","password":"Str0ng-Pass!2026"}'
 
 curl -c /tmp/c.txt -X POST http://localhost:8080/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"a@b.com","password":"changeme123"}'
+  -d '{"email":"a@b.com","password":"Str0ng-Pass!2026"}'
 
 # Endpoint protegido con la cookie
 curl -b /tmp/c.txt -X POST http://localhost:8080/api/explain \

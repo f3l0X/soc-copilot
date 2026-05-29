@@ -43,8 +43,8 @@ netsh interface ipv4 show excludedportrange protocol=tcp
 Si tu rango excluido toca uno de los puertos host actuales:
 
 - Cambia el binding en `infra/docker-compose.yml` (`ports: "<nuevo>:<container>"`).
-- Actualiza `.env` (`API_CORS_ORIGINS`, `NEXT_PUBLIC_API_URL`,
-  `NEXTAUTH_URL`) si cambias el puerto del frontend.
+- Actualiza `.env` (`API_CORS_ORIGINS`, `NEXT_PUBLIC_API_URL`) si cambias
+  el puerto del frontend.
 
 ## La API responde 502 «AI provider error»
 

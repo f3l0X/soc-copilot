@@ -62,7 +62,9 @@ docker compose exec api ruff check app tests
 docker compose exec api pytest -q
 ```
 
-Resultado esperado: `All checks passed!` y `69 passed, 1 skipped`.
+Resultado esperado: `All checks passed!` y la suite unit en verde (86
+funciones; los módulos E2E hacen skip sin `RUN_E2E=1`). Inventario
+completo en [07-testing.md](07-testing.md).
 
 ### E2E con DB real (opcional, lento)
 
@@ -71,7 +73,7 @@ cd infra
 docker compose exec api sh -c "RUN_E2E=1 pytest -q tests/test_e2e.py"
 ```
 
-Resultado esperado: `2 passed`.
+Resultado esperado: `test_e2e.py` en verde (8 funciones).
 
 ### Frontend
 
@@ -82,7 +84,7 @@ docker compose exec web npm run lint
 docker compose exec web npm run build
 ```
 
-Resultado esperado: `Compiled successfully` + 9 rutas estáticas.
+Resultado esperado: `Compiled successfully` + 13 páginas compiladas.
 
 ### Auditoría de dependencias
 
@@ -134,9 +136,9 @@ Dos workflows:
 
 | Job | Steps |
 |-----|-------|
-| `api` | `pip install`, `ruff check app tests`, smoke import, `pytest -q` |
-| `web` | `npm ci`, `npm audit --audit-level=high`, `npm run lint`, `npm run build` |
-| `infra` | `docker compose config` (valida sintaxis del compose) |
+| `api-lint-test` | `pip install`, `ruff check apps/api`, `alembic upgrade head`, `pytest --ignore=tests/test_e2e.py -v` (Postgres como service) |
+| `web-lint-build` | `npm ci`, `npm audit --audit-level=high` (informativo, `continue-on-error`), `npm run lint`, `npm run build` |
+| `infra-validate` | `docker compose config` del compose dev y del prod example |
 
 `.github/workflows/e2e.yml` (push a `main` y `workflow_dispatch`): levanta
 Postgres 16, ejecuta `alembic upgrade head`, `alembic check` y la suite

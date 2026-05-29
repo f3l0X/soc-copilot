@@ -78,7 +78,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
 
@@ -113,8 +113,6 @@ jobs:
           APP_ENCRYPTION_KEY=m24ERtIpLGYhHLZ_TeXqXnXRUZ9GlMM_hwdPTSCDPQM=
           SERVER_LLM_DAILY_QUOTA=2
           NEXT_PUBLIC_API_URL=http://localhost:8080
-          NEXTAUTH_SECRET=ci-nextauth-secret-32+chars-1234567890
-          NEXTAUTH_URL=http://localhost:13000
           EOF
 
       - name: Bring up docker compose stack

@@ -13,7 +13,7 @@
 - **Línea elegida:** Blue Team.
 - **Producto:** *SOC Copilot* — asistente con IA para analistas SOC
   junior.
-- **Equipo:** 5 personas → la rúbrica exige "alcance completo"
+- **Equipo:** 4 personas → la rúbrica exige "alcance completo"
   (modularidad, documentación, funcionalidades diferenciadas por
   miembro).
 - **Fechas:** inicio 2026-04-25, entrega 2026-05-25.
@@ -93,7 +93,7 @@ selecciona.
 | Reverse proxy | Caddy 2 |
 | Hosting | Hetzner CPX22 (3 vCPU / 4 GB / 80 GB NVMe, Nuremberg, ~8,5 €/mes con backups) |
 | Dominio | DuckDNS `soc-copilot.duckdns.org` |
-| CI | GitHub Actions: ruff + pytest unit + pytest e2e (Postgres service) + ESLint + tsc + next build + npm audit |
+| CI | GitHub Actions: `ci.yml` (ruff `apps/api` + pytest unit + web lint/build + `npm audit` informativo + compose validate) y `e2e.yml` (pytest E2E con Postgres + Playwright frontend) |
 
 Repo monorepo: `apps/api`, `apps/web`, `infra`, `docs`, `scripts`.
 
@@ -237,10 +237,13 @@ Detalle completo en `docs/06-api-reference.md`.
   ≥ 10 chars, mayúscula, minúscula, dígito, símbolo, zxcvbn ≥ 2.
 - Same-origin guard (`enforce_same_origin`) en endpoints sensibles
   (`/auth/register`, `/auth/login`, `/auth/verify-email`).
-- VPS hardening: SSH key-only, `PermitRootLogin no`, `AllowUsers soc`,
-  UFW 22/80/443, fail2ban (jail sshd), unattended-upgrades, swap 2 GB.
-- Backups Postgres `cron.daily` con `pg_dump --clean --if-exists |
-  gzip`, retención 14 d en VPS + 30 d en Windows offline.
+- VPS hardening: SSH key-only en **puerto 2222**, `PermitRootLogin no`,
+  `AllowUsers soc`, UFW 2222/80/443, fail2ban (jail sshd),
+  unattended-upgrades, swap 2 GB.
+- Backups Postgres **cifrados con age** vía systemd timer
+  (`soc-copilot-backup.timer` @03:30 → `pg_dump | gzip | age`), retención
+  7 diarias + 4 semanales en VPS + offsite rclone opcional + copia
+  offline en Windows. Restore en `docs/ops/restore-postgres.md`.
 - Caddy: HTTPS auto, HTTP/3, HSTS preload, X-Content-Type-Options,
   X-Frame-Options, Referrer-Policy, Permissions-Policy.
 
@@ -265,20 +268,20 @@ Detalle completo en `docs/06-api-reference.md`.
 
 Snapshot de calidad sobre `main` (2026-05-26):
 
-- Backend unit tests: 67 passed (`test_smoke`, `test_auth`,
-  `test_byo_llm`, `test_logging`, `test_migrations`,
-  `test_register_security`).
-- Backend E2E con Postgres real: 7 + 5 nuevos en `test_groupchat.py`
-  (auth, post/list cross-user, polling incremental, supervivencia al
-  borrado del autor, validación de tamaño).
-- `ruff` (`app` + `tests` + `scripts`): clean.
+- Inventario de tests: 104 funciones en 10 archivos.
+  - Unit (sin `RUN_E2E`): 86 (`test_smoke` 31, `test_register_security`
+    19, `test_byo_llm` 18, `test_auth` 12, `test_logging` 3,
+    `test_migrations` 3).
+  - E2E con Postgres real (`RUN_E2E=1`): 18 (`test_e2e` 8,
+    `test_groupchat` 5, `test_stats` 4, `test_e2e_quota` 1).
+- `ruff check apps/api`: clean.
 - ESLint flat config: 0 errors / 0 warnings.
 - `npm audit --audit-level=high`: 0 critical, 0 high (2 moderate
   aceptados, ver `docs/security.md`).
 - `tsc --noEmit`: clean.
-- `next build`: ~12 rutas compiladas (incluyendo `/dashboard`,
+- `next build`: 13 páginas compiladas (incluyendo `/dashboard`,
   `/groupchat`, `/settings/llm`, `/verify`).
-- GitHub Actions: últimos runs verdes.
+- GitHub Actions: `ci.yml` (push/PR) + `e2e.yml` (main).
 
 ---
 
@@ -312,9 +315,9 @@ Snapshot de calidad sobre `main` (2026-05-26):
 - **Nivel SOC ≠ rol RBAC**: la seniority es ortogonal a la
   autorización; solo modula tono y profundidad. Un analyst Instructor
   ve la misma UI que un analyst L1; lo que cambia es el system prompt.
-- **Header global** montado en `app/layout.tsx` vía `<AuthGate>` que
-  decide qué renderizar según ruta y sesión; `/login` y `/verify`
-  quedan fuera.
+- **Shell de navegación** (`<AppShell>`, Sidebar colapsable + Topbar +
+  FloatingActions) montado en `app/layout.tsx`; decide qué renderizar
+  según ruta y sesión: en `/login` o sin usuario solo pinta el contenido.
 - **Cross-tab auth sync** con eventos `storage` y `focus` → logout en
   una pestaña echa al resto sin polling.
 - **Permission registry estática + tabla con desviaciones** evita seed

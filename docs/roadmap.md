@@ -49,8 +49,8 @@ y aporta material visual fuerte para la demo y el informe.
   5. (Admin) tabla por usuario.
 - [x] Estado vacío amigable cuando no hay datos.
 - [x] Botón export CSV de la tabla MITRE para reusar en el informe.
-- [x] Link al dashboard desde el `GlobalHeader` (sólo si el usuario
-      tiene al menos 1 alerta, evita pantalla vacía recién registrado).
+- [x] Link al dashboard desde la barra lateral (`Sidebar` en `AppShell`),
+      como primer ítem de la navegación de operaciones.
 
 ### Verificación
 
@@ -69,15 +69,15 @@ Runbook de operación: [operations.md](operations.md)
 - [x] VPS Hetzner **CPX22** (3 vCPU / 4 GB RAM / 80 GB NVMe / ~8,5 €/mes con backups) provisionado en Nuremberg.
 - [x] Dominio DuckDNS `soc-copilot.duckdns.org` apuntando al VPS.
 - [x] SSH key-only (`PermitRootLogin no`, `PasswordAuthentication no`, `AllowUsers soc`).
-- [x] `ufw` allow 22, 80, 443. Resto deny.
+- [x] `ufw` allow 2222 (SSH), 80, 443 (+443/udp HTTP/3). Resto deny.
 - [x] `fail2ban` activo con jail `sshd`.
 - [x] `unattended-upgrades` activo para parches de seguridad.
 - [x] Swap 2 GB en `/swapfile`.
-- [x] Backups Postgres: `cron.daily/soc-copilot-pgbackup`, `pg_dump --clean --if-exists | gzip` con retención 14 días en `/var/backups/soc-copilot/`. Copia adicional a Windows vía tarea programada con retención 30 días.
+- [x] Backups Postgres cifrados vía systemd `soc-copilot-backup.timer` @03:30 (`scripts/backup_postgres.sh` → `pg_dump|gzip|age`, `daily/`+`weekly/`, retención 7+4, offsite rclone opcional). El antiguo cron de gzip sin cifrar se retiró el 2026-05-29. Copia adicional a Windows vía `scp`. Restauración en [ops/restore-postgres.md](ops/restore-postgres.md).
 
 ### Configuración
 
-- [x] `JWT_SECRET`, `APP_ENCRYPTION_KEY`, `POSTGRES_PASSWORD`, `NEXTAUTH_SECRET` rotados a `openssl rand -base64 ...`.
+- [x] `JWT_SECRET`, `APP_ENCRYPTION_KEY`, `POSTGRES_PASSWORD` rotados a `openssl rand -base64 ...`.
 - [x] `COOKIE_SECURE=true`, `APP_ENV=production` (la API valida `validate_for_runtime` al arrancar y rechaza defaults inseguros).
 - [x] `RATE_LIMIT_*` mantiene 20 req/60s; rate limiter detrás de Caddy lee la IP del cliente vía X-Forwarded-For.
 - [x] `API_CORS_ORIGINS=https://soc-copilot.duckdns.org`.

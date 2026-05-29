@@ -34,7 +34,7 @@ docker compose exec api python -m scripts.ingest_kb
 
 **Producción (Hetzner):**
 ```bash
-ssh soc@178.105.51.187
+ssh -p 2222 soc@178.105.51.187
 docker compose -f /opt/soc-copilot/infra/docker-compose.prod.yml \
   --env-file /opt/soc-copilot/.env exec api python -m scripts.ingest_kb
 ```

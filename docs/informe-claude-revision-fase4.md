@@ -1,5 +1,15 @@
 # Informe para Claude Code - Revision Fase 4
 
+> **⚠️ DOCUMENTO HISTÓRICO — RESUELTO (2026-05-29).**
+> Esta fue una revisión puntual cuando la Fase 4 estaba a medias. **Los 10
+> problemas listados ya están todos resueltos** (Alembic adoptado, validación
+> de arranque en producción, toggle de registro público, `eslint .` en vez de
+> `next lint`, CI completo con `ruff check app tests` + `npm audit`, tests
+> montados en compose, `security.md` actualizado, etc.). Se conserva como
+> registro de la auditoría. El estado vigente está en
+> [02-estado-fases.md](02-estado-fases.md). Nota: las rutas tipo
+> `D:\Evolve\Nueva carpeta (2)\...` son de la ubicación antigua del proyecto.
+
 ## Contexto
 
 Proyecto: SOC Copilot.
