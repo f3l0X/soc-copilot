@@ -17,6 +17,7 @@ import {
   adminCreateUser,
   adminDeleteUser,
   adminResetLlmQuota,
+  adminResetMfa,
   getAdminUsers,
   getAppSettings,
   getAuditLog,
@@ -25,7 +26,7 @@ import {
   updatePermissions,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { useI18n, type TranslationKey } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
 import {
   evaluatePassword,
   loadZxcvbn,
@@ -46,13 +47,17 @@ const ACTION_OPTIONS = [
   "user.password_reset",
 ] as const;
 
-const ROLE_BLURB_KEY: Record<UserRole, TranslationKey> = {
-  analyst: "admin_role_analyst_blurb",
-  admin: "admin_role_admin_blurb",
-};
-const ROLE_TITLE: Record<UserRole, string> = {
-  analyst: "Analyst",
-  admin: "Admin",
+const ROLE_DESCRIPTIONS: Record<UserRole, { title: string; blurb: string }> = {
+  analyst: {
+    title: "Analyst",
+    blurb:
+      "Rol por defecto. Puede analizar logs, generar recomendaciones y consultar el chat con RAG. Solo ve sus propias alertas.",
+  },
+  admin: {
+    title: "Admin",
+    blurb:
+      "Acceso completo. Gestiona usuarios, roles y contraseñas. Ve todas las alertas, incluidas las huérfanas (sin propietario).",
+  },
 };
 
 // Capacidades baseline (no gated por backend; se aplican en código de los
@@ -64,13 +69,6 @@ const BASELINE_CAPS: { area: string; action: string }[] = [
   { area: "Chat", action: "Chat IA + RAG" },
   { area: "Logs", action: "Subir y filtrar archivos locales" },
 ];
-
-const TAB_LABEL_KEY: Record<Tab, TranslationKey> = {
-  usuarios: "admin_tab_usuarios",
-  roles: "admin_tab_roles",
-  permisos: "admin_tab_permisos",
-  auditoria: "admin_tab_auditoria",
-};
 
 export default function AdminPage() {
   const auth = useAuth();
@@ -117,7 +115,7 @@ export default function AdminPage() {
       .then(setAppSettings)
       .catch((err) =>
         setAppSettingsError(
-          err instanceof ApiError ? err.detail : t("err_load_settings")
+          err instanceof ApiError ? err.detail : "Error cargando ajustes"
         )
       );
   }, []);
@@ -130,7 +128,7 @@ export default function AdminPage() {
       setAppSettings(updated);
     } catch (err) {
       setAppSettingsError(
-        err instanceof ApiError ? err.detail : t("err_update_failed")
+        err instanceof ApiError ? err.detail : "No se pudo actualizar"
       );
     } finally {
       setAppSettingsSaving(false);
@@ -210,7 +208,7 @@ export default function AdminPage() {
       setAuditHasMore(data.length === AUDIT_PAGE_SIZE);
     } catch (err) {
       setAuditError(
-        err instanceof ApiError ? err.detail : t("err_load_audit")
+        err instanceof ApiError ? err.detail : "Error cargando auditoría"
       );
     } finally {
       setAuditLoading(false);
@@ -236,7 +234,7 @@ export default function AdminPage() {
       });
       setPermsDraft(draft);
     } catch (err) {
-      setPermsError(err instanceof ApiError ? err.detail : t("err_load_perms"));
+      setPermsError(err instanceof ApiError ? err.detail : "Error cargando permisos");
     } finally {
       setPermsLoading(false);
     }
@@ -269,7 +267,7 @@ export default function AdminPage() {
       });
       setPermsDraft(draft);
     } catch (err) {
-      setPermsError(err instanceof ApiError ? err.detail : t("err_save_perms"));
+      setPermsError(err instanceof ApiError ? err.detail : "No se pudieron guardar los cambios");
     } finally {
       setPermsSaving(false);
     }
@@ -290,7 +288,7 @@ export default function AdminPage() {
       const data = await getAdminUsers();
       setUsers(data);
     } catch {
-      setError(t("err_load_users"));
+      setError("Error cargando usuarios");
     } finally {
       setLoading(false);
     }
@@ -300,7 +298,9 @@ export default function AdminPage() {
     e.preventDefault();
     if (!pwUser) return;
     if (!pwCanSubmit) {
-      setPwError(t("err_pw_policy"));
+      setPwError(
+        "La contraseña no cumple la política de seguridad (revisa los requisitos).",
+      );
       return;
     }
     setPwLoading(true);
@@ -313,7 +313,7 @@ export default function AdminPage() {
       setPwStrengthScore(0);
       setPwStrengthFeedback("");
     } catch (err) {
-      setPwError(err instanceof ApiError ? err.detail : t("err_change_password"));
+      setPwError(err instanceof ApiError ? err.detail : "Error al actualizar la contraseña");
     } finally {
       setPwLoading(false);
     }
@@ -329,7 +329,7 @@ export default function AdminPage() {
       await loadUsers();
     } catch (err) {
       setRowError(
-        err instanceof ApiError ? err.detail : t("err_change_role")
+        err instanceof ApiError ? err.detail : "No se pudo cambiar el rol"
       );
     } finally {
       setBusyId(null);
@@ -353,7 +353,7 @@ export default function AdminPage() {
       await loadUsers();
     } catch (err) {
       setRowError(
-        err instanceof ApiError ? err.detail : t("err_assign_level"),
+        err instanceof ApiError ? err.detail : "No se pudo asignar el nivel",
       );
     } finally {
       setBusyId(null);
@@ -371,7 +371,7 @@ export default function AdminPage() {
       setCreateForm({ name: "", email: "", password: "", role: "analyst" });
     } catch (err) {
       setCreateError(
-        err instanceof ApiError ? err.detail : t("err_create_user")
+        err instanceof ApiError ? err.detail : "No se pudo crear el usuario"
       );
     } finally {
       setCreateLoading(false);
@@ -390,10 +390,31 @@ export default function AdminPage() {
       await loadUsers();
     } catch (err) {
       setRowError(
-        err instanceof ApiError ? err.detail : t("err_reset_quota"),
+        err instanceof ApiError ? err.detail : "No se pudo resetear la cuota",
       );
     } finally {
       setConfirmResetId(null);
+      setBusyId(null);
+    }
+  }
+
+  async function handleResetMfa(target: AdminUserView) {
+    if (
+      !window.confirm(
+        `¿Resetear el MFA de ${target.email}? Se cerrarán sus sesiones y deberá volver a escanear el QR.`,
+      )
+    )
+      return;
+    setBusyId(target.id);
+    setRowError(null);
+    setRowNotice(null);
+    try {
+      await adminResetMfa(target.id);
+      setRowNotice(`MFA reseteado para ${target.email}.`);
+      await loadUsers();
+    } catch (err) {
+      setRowError(err instanceof ApiError ? err.detail : "No se pudo resetear el MFA");
+    } finally {
       setBusyId(null);
     }
   }
@@ -406,7 +427,7 @@ export default function AdminPage() {
       setUsers((prev) => prev.filter((u) => u.id !== target.id));
     } catch (err) {
       setRowError(
-        err instanceof ApiError ? err.detail : t("err_delete_user")
+        err instanceof ApiError ? err.detail : "No se pudo eliminar el usuario"
       );
     } finally {
       setConfirmDeleteId(null);
@@ -421,31 +442,33 @@ export default function AdminPage() {
       <header className="flex items-end justify-between">
         <div>
           <div className="text-[11px] uppercase tracking-widest text-rose-300/80 mb-1">
-            {t("admin_zone")}
+            Zona de administración
           </div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-100">
-            {t("admin_title")}
+            Administración
           </h1>
-          <p className="text-sm text-slate-400 mt-1">{t("admin_subtitle")}</p>
+          <p className="text-sm text-slate-400 mt-1">
+            Gestión de usuarios, roles y permisos del sistema.
+          </p>
         </div>
         <div className="text-xs font-mono text-slate-500 text-right">
-          {users.length} {t("admin_accounts_suffix")}
+          {users.length} cuentas
         </div>
       </header>
 
       <nav className="inline-flex gap-1 p-1 rounded-lg border border-ink-700 bg-ink-900/60">
-        {(["usuarios", "roles", "permisos", "auditoria"] as Tab[]).map((tk) => (
+        {(["usuarios", "roles", "permisos", "auditoria"] as Tab[]).map((t) => (
           <button
-            key={tk}
-            onClick={() => setTab(tk)}
+            key={t}
+            onClick={() => setTab(t)}
             className={
-              "px-4 py-1.5 text-xs rounded-md transition " +
-              (tab === tk
+              "px-4 py-1.5 text-xs capitalize rounded-md transition " +
+              (tab === t
                 ? "bg-cyan-500/15 text-cyan-300 border border-cyan-500/30"
                 : "text-slate-400 hover:text-slate-200 border border-transparent")
             }
           >
-            {t(TAB_LABEL_KEY[tk])}
+            {t}
           </button>
         ))}
       </nav>
@@ -464,14 +487,14 @@ export default function AdminPage() {
           <section className="bg-ink-900/60 border border-ink-700 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
               <h3 className="text-sm font-semibold text-slate-100">
-                {t("admin_public_reg_title")}
+                Registro público
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
                 {appSettings === null
-                  ? t("admin_public_reg_loading")
+                  ? "Cargando estado..."
                   : appSettings.public_registration_enabled
-                  ? t("admin_public_reg_open_desc")
-                  : t("admin_public_reg_closed_desc")}
+                  ? "Abierto: cualquier persona con el enlace puede crear una cuenta. Recuerda cerrarlo cuando termines la prueba."
+                  : "Cerrado: solo se pueden crear cuentas desde aquí (botón \"+ Crear usuario\")."}
               </p>
               {appSettingsError && (
                 <p className="text-xs text-rose-300 mt-1">{appSettingsError}</p>
@@ -485,7 +508,7 @@ export default function AdminPage() {
                     : "bg-slate-500/10 text-slate-300 border-slate-500/30"
                 }`}
               >
-                {appSettings?.public_registration_enabled ? t("admin_public_reg_open") : t("admin_public_reg_closed")}
+                {appSettings?.public_registration_enabled ? "Abierto" : "Cerrado"}
               </span>
               <button
                 type="button"
@@ -503,10 +526,10 @@ export default function AdminPage() {
                 }`}
               >
                 {appSettingsSaving
-                  ? t("admin_applying")
+                  ? "Aplicando..."
                   : appSettings?.public_registration_enabled
-                  ? t("admin_public_reg_close_btn")
-                  : t("admin_public_reg_open_btn")}
+                  ? "Cerrar registro"
+                  : "Abrir registro"}
               </button>
             </div>
           </section>
@@ -514,8 +537,8 @@ export default function AdminPage() {
         <section className="bg-ink-900/60 border border-ink-700 rounded-xl overflow-hidden">
           <div className="p-4 border-b border-ink-700 bg-ink-900/60 flex justify-between items-center">
             <div className="flex items-baseline gap-3">
-              <h2 className="text-xl font-semibold">{t("admin_users_registered")}</h2>
-              <span className="text-xs text-slate-500">{users.length} {t("admin_accounts_suffix")}</span>
+              <h2 className="text-xl font-semibold">Usuarios Registrados</h2>
+              <span className="text-xs text-slate-500">{users.length} cuentas</span>
             </div>
             <button
               onClick={() => {
@@ -524,7 +547,7 @@ export default function AdminPage() {
               }}
               className="px-3 py-1.5 text-sm bg-cyan-500 text-ink-950 hover:bg-cyan-400 rounded-md font-medium"
             >
-              {t("admin_create_user_btn")}
+              + Crear usuario
             </button>
           </div>
 
@@ -541,25 +564,25 @@ export default function AdminPage() {
                 onClick={() => setRowNotice(null)}
                 className="text-xs text-emerald-300 hover:text-emerald-200"
               >
-                {t("admin_close")}
+                cerrar
               </button>
             </div>
           )}
 
           {loading ? (
-            <div className="p-8 text-center text-slate-400">{t("admin_loading_users")}</div>
+            <div className="p-8 text-center text-slate-400">Cargando usuarios...</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm whitespace-nowrap">
                 <thead className="bg-ink-850 text-slate-400">
                   <tr>
-                    <th className="px-4 py-3 font-medium">{t("admin_col_id")}</th>
-                    <th className="px-4 py-3 font-medium">{t("admin_col_name")}</th>
-                    <th className="px-4 py-3 font-medium">{t("admin_col_email")}</th>
-                    <th className="px-4 py-3 font-medium">{t("admin_col_role")}</th>
-                    <th className="px-4 py-3 font-medium">{t("admin_col_level")}</th>
-                    <th className="px-4 py-3 font-medium">{t("admin_col_quota_today")}</th>
-                    <th className="px-4 py-3 font-medium text-right">{t("admin_col_actions")}</th>
+                    <th className="px-4 py-3 font-medium">ID</th>
+                    <th className="px-4 py-3 font-medium">Nombre</th>
+                    <th className="px-4 py-3 font-medium">Email</th>
+                    <th className="px-4 py-3 font-medium">Rol</th>
+                    <th className="px-4 py-3 font-medium">Nivel SOC</th>
+                    <th className="px-4 py-3 font-medium">Cuota hoy</th>
+                    <th className="px-4 py-3 font-medium text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-ink-700/60">
@@ -587,7 +610,7 @@ export default function AdminPage() {
                         <td className="px-4 py-3 font-medium text-slate-200">
                           {u.name}
                           {isSelf && (
-                            <span className="ml-2 text-xs text-cyan-400">{t("admin_you")}</span>
+                            <span className="ml-2 text-xs text-cyan-400">(tú)</span>
                           )}
                         </td>
                         <td className="px-4 py-3 text-slate-400">{u.email}</td>
@@ -644,7 +667,7 @@ export default function AdminPage() {
                           {u.byo_key_configured ? (
                             <span
                               className="px-2 py-0.5 rounded border text-xs bg-cyan-500/10 text-cyan-300 border-cyan-500/30"
-                              title={t("tip_byo_key")}
+                              title="Usuario con BYO key — no consume cuota del servidor"
                             >
                               BYO
                             </span>
@@ -661,21 +684,21 @@ export default function AdminPage() {
                             {confirmingReset ? (
                               <>
                                 <span className="self-center text-xs text-amber-300">
-                                  {t("admin_reset_q")}
+                                  ¿Resetear?
                                 </span>
                                 <button
                                   disabled={busy}
                                   onClick={() => handleResetQuota(u)}
                                   className="rounded border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-300 transition-colors hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                                 >
-                                  {t("common_yes")}
+                                  Sí
                                 </button>
                                 <button
                                   disabled={busy}
                                   onClick={() => setConfirmResetId(null)}
                                   className="rounded border border-ink-700 bg-ink-800/40 px-2.5 py-1 text-xs font-medium text-slate-300 transition-colors hover:bg-ink-800/70 disabled:cursor-not-allowed disabled:opacity-40"
                                 >
-                                  {t("common_no")}
+                                  No
                                 </button>
                               </>
                             ) : (
@@ -691,15 +714,27 @@ export default function AdminPage() {
                                 className="rounded border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-300 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                                 title={
                                   u.byo_key_configured
-                                    ? t("tip_byo_no_quota")
+                                    ? "El usuario tiene BYO key — la cuota del servidor no aplica"
                                     : used === 0
-                                      ? t("tip_no_consumption")
-                                      : t("tip_reset_counter")
+                                      ? "Sin consumo hoy — nada que resetear"
+                                      : "Pone el contador del día a 0"
                                 }
                               >
-                                {t("admin_reset_quota")}
+                                Resetear cuota
                               </button>
                             )}
+                            <button
+                              disabled={busy || !u.mfa_enabled}
+                              onClick={() => void handleResetMfa(u)}
+                              className="rounded border border-violet-500/40 bg-violet-500/10 px-2.5 py-1 text-xs font-medium text-violet-300 transition-colors hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                              title={
+                                u.mfa_enabled
+                                  ? "Borra el segundo factor (móvil perdido). Cierra sus sesiones; deberá enrolarse de nuevo."
+                                  : "MFA aún no activado por el usuario"
+                              }
+                            >
+                              {u.mfa_enabled ? "Reset MFA" : "MFA pendiente"}
+                            </button>
                             <button
                               disabled={busy}
                               onClick={() => {
@@ -712,26 +747,26 @@ export default function AdminPage() {
                               }}
                               className="rounded border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1 text-xs font-medium text-cyan-300 transition-colors hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                             >
-                              {t("admin_reset_password")}
+                              Resetear contraseña
                             </button>
                             {confirmingDelete ? (
                               <>
                                 <span className="self-center text-xs text-rose-300">
-                                  {t("admin_delete_q")}
+                                  ¿Eliminar?
                                 </span>
                                 <button
                                   disabled={busy}
                                   onClick={() => handleDelete(u)}
                                   className="rounded border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-300 transition-colors hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                                 >
-                                  {t("common_yes")}
+                                  Sí
                                 </button>
                                 <button
                                   disabled={busy}
                                   onClick={() => setConfirmDeleteId(null)}
                                   className="rounded border border-ink-700 bg-ink-800/40 px-2.5 py-1 text-xs font-medium text-slate-300 transition-colors hover:bg-ink-800/70 disabled:cursor-not-allowed disabled:opacity-40"
                                 >
-                                  {t("common_no")}
+                                  No
                                 </button>
                               </>
                             ) : (
@@ -745,11 +780,11 @@ export default function AdminPage() {
                                 className="rounded border border-rose-500/40 bg-rose-500/10 px-2.5 py-1 text-xs font-medium text-rose-300 transition-colors hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                                 title={
                                   isSelf
-                                    ? t("tip_cannot_delete_self")
-                                    : t("tip_delete_user")
+                                    ? "No puedes eliminar tu propia cuenta"
+                                    : "Eliminar usuario — acción no reversible"
                                 }
                               >
-                                {t("admin_delete")}
+                                Eliminar
                               </button>
                             )}
                           </div>
@@ -767,34 +802,38 @@ export default function AdminPage() {
 
       {tab === "roles" && (
         <section className="grid gap-4 md:grid-cols-2">
-          {(["analyst", "admin"] as UserRole[]).map((role) => {
-            const count = users.filter((u) => u.role === role).length;
-            return (
-              <article
-                key={role}
-                className="bg-ink-900/60 border border-ink-700 rounded-xl p-5 space-y-3"
-              >
-                <header className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">{ROLE_TITLE[role]}</h3>
-                  <span
-                    className={`px-2 py-1 rounded text-xs font-medium ${
-                      role === "admin"
-                        ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
-                        : "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
-                    }`}
-                  >
-                    {role}
-                  </span>
-                </header>
-                <p className="text-sm text-slate-400">{t(ROLE_BLURB_KEY[role])}</p>
-                <p className="text-xs text-slate-500">
-                  {t("admin_users_with_role")} <span className="text-slate-300">{count}</span>
-                </p>
-              </article>
-            );
-          })}
+          {(Object.entries(ROLE_DESCRIPTIONS) as [UserRole, typeof ROLE_DESCRIPTIONS["admin"]][]).map(
+            ([role, info]) => {
+              const count = users.filter((u) => u.role === role).length;
+              return (
+                <article
+                  key={role}
+                  className="bg-ink-900/60 border border-ink-700 rounded-xl p-5 space-y-3"
+                >
+                  <header className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold">{info.title}</h3>
+                    <span
+                      className={`px-2 py-1 rounded text-xs font-medium ${
+                        role === "admin"
+                          ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                          : "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
+                      }`}
+                    >
+                      {role}
+                    </span>
+                  </header>
+                  <p className="text-sm text-slate-400">{info.blurb}</p>
+                  <p className="text-xs text-slate-500">
+                    Usuarios con este rol: <span className="text-slate-300">{count}</span>
+                  </p>
+                </article>
+              );
+            }
+          )}
           <p className="md:col-span-2 text-xs text-slate-500">
-            {t("admin_roles_note")}
+            Los roles están definidos en <code>app/models.py::UserRole</code> y se
+            asignan en el alta o desde la pestaña Usuarios. El primer registro pasa
+            automáticamente a admin.
           </p>
         </section>
       )}
@@ -803,7 +842,7 @@ export default function AdminPage() {
         <section className="bg-ink-900/60 border border-ink-700 rounded-xl overflow-hidden">
           <div className="p-4 border-b border-ink-700 bg-ink-900/60 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-xl font-semibold">{t("admin_perms_title")}</h2>
+              <h2 className="text-xl font-semibold">Matriz de Permisos</h2>
               <p className="text-xs text-slate-500 mt-1">
                 Activa o desactiva cada acción por rol. Las filas marcadas como
                 <span className="mx-1 px-1 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30">locked</span>
@@ -818,14 +857,14 @@ export default function AdminPage() {
                 disabled={permsSaving || permsLoading}
                 className="px-3 py-1.5 text-sm bg-ink-900 border border-ink-700 hover:border-cyan-500/40 disabled:opacity-50 rounded-md"
               >
-                {t("admin_discard")}
+                Descartar
               </button>
               <button
                 onClick={() => void savePermissions()}
                 disabled={permsSaving || permsLoading}
                 className="px-3 py-1.5 text-sm bg-cyan-500 text-ink-950 hover:bg-cyan-400 disabled:bg-ink-800 disabled:text-slate-500 rounded-md font-medium"
               >
-                {permsSaving ? t("admin_saving") : t("admin_save_changes")}
+                {permsSaving ? "Guardando..." : "Guardar cambios"}
               </button>
             </div>
           </div>
@@ -837,14 +876,14 @@ export default function AdminPage() {
           )}
 
           {permsLoading ? (
-            <div className="p-8 text-center text-slate-400">{t("admin_perms_loading")}</div>
+            <div className="p-8 text-center text-slate-400">Cargando matriz...</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="bg-ink-850 text-slate-400">
                   <tr>
-                    <th className="px-4 py-3 font-medium">{t("admin_perms_col_area")}</th>
-                    <th className="px-4 py-3 font-medium">{t("admin_perms_col_action")}</th>
+                    <th className="px-4 py-3 font-medium">Área</th>
+                    <th className="px-4 py-3 font-medium">Acción</th>
                     <th className="px-4 py-3 font-medium text-center">Analyst</th>
                     <th className="px-4 py-3 font-medium text-center">Admin</th>
                   </tr>
@@ -918,12 +957,15 @@ export default function AdminPage() {
         <section className="bg-ink-900/60 border border-ink-700 rounded-xl overflow-hidden">
           <div className="p-4 border-b border-ink-700 bg-ink-900/60 flex flex-wrap gap-3 items-end justify-between">
             <div>
-              <h2 className="text-xl font-semibold">{t("admin_audit_title")}</h2>
-              <p className="text-xs text-slate-500 mt-1">{t("admin_audit_subtitle")}</p>
+              <h2 className="text-xl font-semibold">Registro de Auditoría</h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Acciones administrativas registradas en orden cronológico inverso.
+                Solo lectura.
+              </p>
             </div>
             <div className="flex flex-wrap gap-3 items-end">
               <label className="block text-xs">
-                <span className="text-slate-400 block mb-1">{t("admin_action")}</span>
+                <span className="text-slate-400 block mb-1">Acción</span>
                 <select
                   value={auditAction}
                   onChange={(e) => setAuditAction(e.target.value)}
@@ -931,13 +973,13 @@ export default function AdminPage() {
                 >
                   {ACTION_OPTIONS.map((a) => (
                     <option key={a} value={a}>
-                      {a === "" ? t("admin_audit_all") : a}
+                      {a === "" ? "(todas)" : a}
                     </option>
                   ))}
                 </select>
               </label>
               <label className="block text-xs">
-                <span className="text-slate-400 block mb-1">{t("admin_actor_email")}</span>
+                <span className="text-slate-400 block mb-1">Actor (email)</span>
                 <input
                   type="text"
                   value={auditActor}
@@ -953,7 +995,7 @@ export default function AdminPage() {
                 onClick={() => void loadAudit(0)}
                 className="px-3 py-1.5 text-sm bg-cyan-500 text-ink-950 hover:bg-cyan-400 rounded-md font-medium"
               >
-                {t("admin_apply")}
+                Aplicar
               </button>
             </div>
           </div>
@@ -965,22 +1007,22 @@ export default function AdminPage() {
           )}
 
           {auditLoading ? (
-            <div className="p-8 text-center text-slate-400">{t("admin_audit_loading")}</div>
+            <div className="p-8 text-center text-slate-400">Cargando registros...</div>
           ) : audit.length === 0 ? (
             <div className="p-8 text-center text-slate-500">
-              {t("admin_audit_empty")}
+              No hay registros para los filtros actuales.
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-ink-850 text-slate-400">
                   <tr>
-                    <th className="px-3 py-2 font-medium whitespace-nowrap">{t("admin_audit_col_date")}</th>
-                    <th className="px-3 py-2 font-medium">{t("admin_audit_col_actor")}</th>
-                    <th className="px-3 py-2 font-medium">{t("admin_audit_col_action")}</th>
-                    <th className="px-3 py-2 font-medium">{t("admin_audit_col_target")}</th>
-                    <th className="px-3 py-2 font-medium">{t("admin_audit_col_details")}</th>
-                    <th className="px-3 py-2 font-medium">{t("admin_audit_col_ip")}</th>
+                    <th className="px-3 py-2 font-medium whitespace-nowrap">Fecha</th>
+                    <th className="px-3 py-2 font-medium">Actor</th>
+                    <th className="px-3 py-2 font-medium">Acción</th>
+                    <th className="px-3 py-2 font-medium">Objetivo</th>
+                    <th className="px-3 py-2 font-medium">Detalles</th>
+                    <th className="px-3 py-2 font-medium">IP</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-ink-700/60 font-mono">
@@ -1031,17 +1073,17 @@ export default function AdminPage() {
               disabled={auditOffset === 0 || auditLoading}
               className="px-3 py-1 bg-ink-900 border border-ink-700 hover:border-cyan-500/40 disabled:opacity-50 rounded-md"
             >
-              {t("admin_prev")}
+              Anterior
             </button>
             <span className="text-slate-400">
-              {t("admin_audit_showing")} {audit.length} {t("admin_audit_records_from")} {auditOffset}
+              Mostrando {audit.length} registros desde offset {auditOffset}
             </span>
             <button
               onClick={() => void loadAudit(auditOffset + AUDIT_PAGE_SIZE)}
               disabled={!auditHasMore || auditLoading}
               className="px-3 py-1 bg-ink-900 border border-ink-700 hover:border-cyan-500/40 disabled:opacity-50 rounded-md"
             >
-              {t("admin_next")}
+              Siguiente
             </button>
           </div>
         </section>
@@ -1053,7 +1095,7 @@ export default function AdminPage() {
             onSubmit={handleCreateUser}
             className="w-full max-w-sm bg-ink-900 border border-ink-700 rounded-xl shadow-xl p-6 space-y-4"
           >
-            <h3 className="text-lg font-bold">{t("admin_create_user_title")}</h3>
+            <h3 className="text-lg font-bold">{t("tile_admin_title")} — {t("login_name")}</h3>
 
             {createError && (
               <div className="text-xs bg-rose-500/10 text-rose-300 p-2 rounded border border-rose-500/30">
@@ -1062,7 +1104,7 @@ export default function AdminPage() {
             )}
 
             <label className="block text-sm">
-              <span className="text-slate-400">{t("admin_col_name")}</span>
+              <span className="text-slate-400">Nombre</span>
               <input
                 type="text"
                 required
@@ -1070,23 +1112,23 @@ export default function AdminPage() {
                 maxLength={100}
                 value={createForm.name}
                 onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-                className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-slate-100"
               />
             </label>
 
             <label className="block text-sm">
-              <span className="text-slate-400">{t("admin_col_email")}</span>
+              <span className="text-slate-400">Email</span>
               <input
                 type="email"
                 required
                 value={createForm.email}
                 onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
-                className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-slate-100"
               />
             </label>
 
             <label className="block text-sm">
-              <span className="text-slate-400">{t("admin_password")}</span>
+              <span className="text-slate-400">Contraseña</span>
               <input
                 type="password"
                 required
@@ -1094,19 +1136,19 @@ export default function AdminPage() {
                 autoComplete="new-password"
                 value={createForm.password}
                 onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
-                className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-white"
-                placeholder={t("admin_password_placeholder")}
+                className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-slate-100"
+                placeholder="Mín. 10 chars · mayús/minús/dígito/símbolo"
               />
             </label>
 
             <label className="block text-sm">
-              <span className="text-slate-400">{t("admin_col_role")}</span>
+              <span className="text-slate-400">Rol</span>
               <select
                 value={createForm.role}
                 onChange={(e) =>
                   setCreateForm({ ...createForm, role: e.target.value as UserRole })
                 }
-                className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-slate-100"
               >
                 <option value="analyst">analyst</option>
                 <option value="admin">admin</option>
@@ -1122,14 +1164,14 @@ export default function AdminPage() {
                 }}
                 className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200"
               >
-                {t("common_cancel")}
+                Cancelar
               </button>
               <button
                 type="submit"
                 disabled={createLoading}
                 className="px-4 py-2 text-sm bg-cyan-500 text-ink-950 hover:bg-cyan-400 disabled:bg-ink-800 disabled:text-slate-500 rounded-md font-medium"
               >
-                {createLoading ? t("admin_creating") : t("admin_create")}
+                {createLoading ? "…" : t("login_register_btn")}
               </button>
             </div>
           </form>
@@ -1142,11 +1184,13 @@ export default function AdminPage() {
             onSubmit={handleChangePassword}
             className="w-full max-w-sm bg-ink-900 border border-ink-700 rounded-xl shadow-xl p-6 space-y-4"
           >
-            <h3 className="text-lg font-bold">{t("admin_pw_modal_title")}</h3>
+            <h3 className="text-lg font-bold">Resetear contraseña</h3>
             <p className="text-sm text-slate-400">
-              {t("admin_pw_user_label")} <span className="text-slate-200">{pwUser.email}</span>
+              Usuario: <span className="text-slate-200">{pwUser.email}</span>
             </p>
-            <p className="text-xs text-amber-400">{t("admin_pw_warning")}</p>
+            <p className="text-xs text-amber-400">
+              Tras el cambio, las sesiones activas del usuario quedan invalidadas.
+            </p>
 
             {pwError && (
               <div className="text-xs bg-rose-500/10 text-rose-300 p-2 rounded border border-rose-500/30">
@@ -1155,7 +1199,7 @@ export default function AdminPage() {
             )}
 
             <label className="block text-sm">
-              <span className="text-slate-400">{t("admin_new_password")}</span>
+              <span className="text-slate-400">Nueva contraseña</span>
               <input
                 type="password"
                 required
@@ -1163,12 +1207,12 @@ export default function AdminPage() {
                 autoComplete="new-password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-slate-100"
               />
             </label>
 
             <label className="block text-sm">
-              <span className="text-slate-400">{t("admin_confirm_password")}</span>
+              <span className="text-slate-400">Confirmar contraseña</span>
               <input
                 type="password"
                 required
@@ -1176,7 +1220,7 @@ export default function AdminPage() {
                 autoComplete="new-password"
                 value={newPasswordConfirm}
                 onChange={(e) => setNewPasswordConfirm(e.target.value)}
-                className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-slate-100"
               />
               {newPasswordConfirm && (
                 <span
@@ -1184,7 +1228,9 @@ export default function AdminPage() {
                     pwMatch ? "text-emerald-400" : "text-rose-400"
                   }`}
                 >
-                  {pwMatch ? t("admin_pw_match") : t("admin_pw_nomatch")}
+                  {pwMatch
+                    ? "✓ Las contraseñas coinciden"
+                    : "✕ Las contraseñas no coinciden"}
                 </span>
               )}
             </label>
@@ -1204,7 +1250,7 @@ export default function AdminPage() {
                   ))}
                 </div>
                 <p className="text-[11px] text-slate-400">
-                  {t("strength_label")}:{" "}
+                  Fortaleza:{" "}
                   <span className="font-medium text-slate-200">
                     {t(STRENGTH_LABEL_KEYS[pwStrengthScore])}
                   </span>
@@ -1236,14 +1282,14 @@ export default function AdminPage() {
                 }}
                 className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200"
               >
-                {t("common_cancel")}
+                Cancelar
               </button>
               <button
                 type="submit"
                 disabled={pwLoading || !pwCanSubmit}
                 className="px-4 py-2 text-sm bg-cyan-500 text-ink-950 hover:bg-cyan-400 disabled:bg-ink-800 disabled:text-slate-500 disabled:cursor-not-allowed rounded-md font-medium"
               >
-                {pwLoading ? t("admin_saving") : t("common_save")}
+                {pwLoading ? "…" : t("profile_save")}
               </button>
             </div>
           </form>

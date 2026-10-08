@@ -7,6 +7,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from app.config import get_settings
 
+# Output language for LLM answers (Práctica 2 · ES/EN). "auto" = detect
+# from the analyst's text, falling back to the UI language header.
+ResponseLanguage = Literal["es", "en", "fr", "auto"]
+
 
 def _validate_model_allowlist(value: str | None) -> str | None:
     if value is None:
@@ -34,6 +38,7 @@ class ExplainRequest(BaseModel):
     model: str | None = Field(
         None, description="Override default LLM (must be in allowlist)"
     )
+    language: ResponseLanguage | None = None
 
     @field_validator("log")
     @classmethod
@@ -66,6 +71,7 @@ class RecommendRequest(BaseModel):
     log: str | None = Field(None, max_length=20_000)
     source: str | None = Field(None, max_length=200)
     model: str | None = Field(None)
+    language: ResponseLanguage | None = None
 
     @model_validator(mode="after")
     def _require_alert_or_log(self) -> RecommendRequest:
@@ -110,6 +116,25 @@ class AlertSummary(BaseModel):
     risk_level: str | None
     mitre_techniques: list[str] | None
     created_at: datetime
+    # SIEM ingestion (Práctica 2). Defaults keep old rows/tests valid.
+    origin: str = "manual"
+    external_id: str | None = None
+    rule_level: int | None = None
+    agent_name: str | None = None
+    event_at: datetime | None = None
+    analyzed_at: datetime | None = None
+
+
+class AlertAnalyzeRequest(BaseModel):
+    """Optional body for POST /api/alerts/{id}/analyze."""
+
+    model: str | None = Field(None)
+    language: ResponseLanguage | None = None
+
+    @field_validator("model")
+    @classmethod
+    def _model_in_allowlist(cls, v: str | None) -> str | None:
+        return _validate_model_allowlist(v)
 
 
 class AlertDetail(AlertSummary):
@@ -153,6 +178,7 @@ class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(..., min_length=1, max_length=30)
     log_context: str | None = Field(None, max_length=20_000)
     model: str | None = Field(None)
+    language: ResponseLanguage | None = None
 
     @field_validator("model")
     @classmethod
@@ -163,3 +189,4 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     reply: str
     sources: list[str]
+    language: str = "es"

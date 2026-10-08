@@ -95,6 +95,9 @@ services:
     volumes:
       - ../apps/web/src:/app/src
       - ../apps/web/public:/app/public
+      # Paleta de colores: sin este montaje los cambios de tailwind.config.ts
+      # solo se aplican tras reconstruir la imagen (--build).
+      - ../apps/web/tailwind.config.ts:/app/tailwind.config.ts:ro
     depends_on:
       - api
     healthcheck:

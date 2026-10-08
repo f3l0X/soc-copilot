@@ -38,13 +38,7 @@ function AlertsInner() {
     setError(null);
     setResult(null);
     try {
-      setResult(
-        await explainAlert({
-          log,
-          source: source || undefined,
-          model: model ?? undefined,
-        }),
-      );
+      setResult(await explainAlert({ log, source: source || undefined, model: model ?? undefined }));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -91,7 +85,7 @@ function AlertsInner() {
         <button
           type="submit"
           disabled={loading || !log.trim()}
-          className="rounded bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-700 px-4 py-2 text-sm font-medium"
+          className="rounded bg-cyan-600 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white"
         >
           {loading ? t("alerts_analyzing_btn") : t("alerts_analyze_btn")}
         </button>
@@ -108,35 +102,27 @@ function AlertsInner() {
           <div className="flex items-start justify-between gap-4">
             <h2 className="text-lg font-semibold">
               {t("alerts_summary")}{" "}
-              {result.id != null && (
-                <span className="text-xs text-slate-500">#{result.id}</span>
-              )}
+              {result.id != null && <span className="text-xs text-slate-500">#{result.id}</span>}
             </h2>
             <RiskBadge level={result.risk_level} />
           </div>
           <p className="text-slate-200 leading-relaxed">{result.summary}</p>
 
           <div>
-            <h3 className="text-sm font-semibold text-slate-400 mb-2">
-              {t("alerts_mitre")}
-            </h3>
+            <h3 className="text-sm font-semibold text-slate-400 mb-2">{t("alerts_mitre")}</h3>
             <MitreList techniques={result.mitre_techniques} />
           </div>
 
           <div>
-            <h3 className="text-sm font-semibold text-slate-400 mb-2">
-              {t("alerts_reasoning")}
-            </h3>
-            <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-line">
-              {result.reasoning}
-            </p>
+            <h3 className="text-sm font-semibold text-slate-400 mb-2">{t("alerts_reasoning")}</h3>
+            <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-line">{result.reasoning}</p>
           </div>
 
           {result.id != null && (
             <div className="pt-2">
               <Link
                 href={`/respond?alert_id=${result.id}`}
-                className="inline-block rounded bg-emerald-700 hover:bg-emerald-600 px-4 py-2 text-sm font-medium"
+                className="inline-block rounded bg-emerald-600 hover:brightness-110 px-4 py-2 text-sm font-medium text-white"
               >
                 {t("alerts_next_step")}
               </Link>
@@ -150,7 +136,7 @@ function AlertsInner() {
 
 export default function AlertsPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-slate-500 text-sm">…</div>}>
+    <Suspense fallback={<div className="p-8 text-slate-500 text-sm">Cargando…</div>}>
       <AlertsInner />
     </Suspense>
   );

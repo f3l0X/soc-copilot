@@ -26,7 +26,7 @@ export default function Home() {
 
   return (
     <div className="p-6 max-w-[1600px] mx-auto space-y-8">
-      <section className="hero-section rounded-xl border border-ink-700 bg-gradient-to-br from-cyan-500/10 via-ink-900/60 to-violet-500/10 p-8 relative overflow-hidden">
+      <section className="rounded-xl border border-ink-700 bg-gradient-to-br from-cyan-500/10 via-ink-900/60 to-violet-500/10 p-8 relative overflow-hidden">
         <div className="absolute -right-10 -top-10 w-48 h-48 rounded-full bg-cyan-500/10 blur-3xl pointer-events-none" />
         <div className="absolute -left-10 -bottom-10 w-48 h-48 rounded-full bg-violet-500/10 blur-3xl pointer-events-none" />
         <div className="relative">
@@ -68,7 +68,7 @@ export default function Home() {
             <Link
               key={tile.href}
               href={tile.href}
-              className="module-card group rounded-xl border border-ink-700 bg-ink-900/60 p-5 hover:border-cyan-500/40 hover:shadow-glow transition"
+              className="group rounded-xl border border-ink-700 bg-ink-900/60 p-5 hover:border-cyan-500/40 hover:shadow-glow transition"
             >
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-lg bg-ink-850 border border-ink-700 grid place-items-center text-cyan-300 group-hover:border-cyan-500/40">

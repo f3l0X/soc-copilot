@@ -2,13 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
 
-import { FloatingActions } from "@/components/FloatingActions";
-import { LocaleThemeControls } from "@/components/LocaleThemeControls";
 import { useAuth } from "@/lib/auth";
-import { useI18n } from "@/lib/i18n";
-import { useModel } from "@/lib/useModel";
+import { useTheme } from "@/lib/theme";
+import { useI18n, type Locale, LOCALE_LABELS } from "@/lib/i18n";
 
 type NavItem = {
   href: string;
@@ -21,11 +18,11 @@ type NavItem = {
 const OPS_NAV: NavItem[] = [
   { href: "/dashboard", labelKey: "nav_dashboard", icon: "▦", shortcut: "⌘1" },
   { href: "/alerts",    labelKey: "nav_alerts",    icon: "▲" },
+  { href: "/siem",      labelKey: "nav_siem",      icon: "⇶" },
   { href: "/logs",      labelKey: "nav_logs",      icon: "≡" },
-  // /chat moved to the floating-action button bottom-right of the AppShell
-  // (see <FloatingActions />). Keep the nav focused on triage-first paths.
-  { href: "/history",   labelKey: "nav_history",   icon: "◷" },
+  { href: "/chat",      labelKey: "nav_chat",      icon: "◐" },
   { href: "/groupchat", labelKey: "nav_groupchat", icon: "◈" },
+  { href: "/history",   labelKey: "nav_history",   icon: "◷" },
 ];
 
 const SYS_NAV: NavItem[] = [
@@ -33,15 +30,7 @@ const SYS_NAV: NavItem[] = [
   { href: "/admin",        labelKey: "nav_admin",     icon: "◇" },
 ];
 
-const SIDEBAR_COLLAPSED_KEY = "soc:sidebar_collapsed";
-
-function Sidebar({
-  collapsed,
-  onToggle,
-}: {
-  collapsed: boolean;
-  onToggle: () => void;
-}) {
+function Sidebar() {
   const pathname = usePathname();
   const { user } = useAuth();
   const { t } = useI18n();
@@ -55,29 +44,25 @@ function Sidebar({
 
   const renderItem = (it: NavItem) => {
     const active = isActive(it.href);
-    const label = t(it.labelKey as Parameters<typeof t>[0]);
     return (
       <Link
         key={it.href}
         href={it.href}
         className={
-          "flex items-center gap-3 rounded-md text-sm transition " +
-          (collapsed ? "px-2 py-2 justify-center " : "px-3 py-2 ") +
+          "flex items-center gap-3 px-3 py-2 rounded-md text-sm transition " +
           (active
             ? "bg-cyan-500/10 text-cyan-300 border border-cyan-500/20"
             : "text-slate-300 hover:bg-ink-800 border border-transparent")
         }
-        title={collapsed ? label : undefined}
-        aria-label={collapsed ? label : undefined}
       >
         <span className="w-4 text-center">{it.icon}</span>
-        {!collapsed && <span>{label}</span>}
-        {!collapsed && it.badge && (
+        <span>{t(it.labelKey as Parameters<typeof t>[0])}</span>
+        {it.badge && (
           <span className="ml-auto text-[10px] font-mono px-1.5 rounded bg-rose-500/20 text-rose-300">
             {it.badge}
           </span>
         )}
-        {!collapsed && it.shortcut && !it.badge && active && (
+        {it.shortcut && !it.badge && active && (
           <span className="ml-auto text-[10px] font-mono text-cyan-300/70">
             {it.shortcut}
           </span>
@@ -87,98 +72,53 @@ function Sidebar({
   };
 
   return (
-    <aside
-      className={
-        "sidebar shrink-0 border-r flex flex-col transition-[width] duration-200 " +
-        (collapsed ? "w-14" : "w-64")
-      }
-    >
-      <div
-        className={
-          "border-b flex items-center gap-3 " +
-          (collapsed ? "px-2 py-3 justify-center" : "px-5 py-5")
-        }
+    <aside className="sidebar w-64 shrink-0 border-r flex flex-col">
+      <Link
+        href="/"
+        className="px-5 py-5 border-b flex items-center gap-3"
       >
-        <Link
-          href="/"
-          className="flex items-center gap-3 min-w-0"
-          title={collapsed ? "SOC Copilot" : undefined}
-        >
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-400 to-cyan-700 flex items-center justify-center text-ink-950 font-bold shrink-0">
-            S
-          </div>
-          {!collapsed && (
-            <div className="min-w-0">
-              <div className="font-semibold tracking-tight">SOC Copilot</div>
-              <div className="text-[11px] font-mono opacity-50">v0.4.2 · prod</div>
-            </div>
-          )}
-        </Link>
-        {!collapsed && (
-          <button
-            type="button"
-            onClick={onToggle}
-            className="ml-auto w-8 h-8 rounded-md bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/20 hover:border-cyan-500/60 hover:text-cyan-200 transition flex items-center justify-center text-base font-bold leading-none"
-            title={t("sidebar_collapse")}
-            aria-label={t("sidebar_collapse")}
-          >
-            ‹‹
-          </button>
-        )}
-      </div>
+        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-500 to-violet-500 flex items-center justify-center text-ink-950 font-bold">
+          S
+        </div>
+        <div>
+          <div className="font-semibold tracking-tight">SOC Copilot</div>
+          <div className="text-[11px] font-mono opacity-50">v0.4.2 · prod</div>
+        </div>
+      </Link>
 
-      {collapsed && (
-        <button
-          type="button"
-          onClick={onToggle}
-          className="mx-2 mt-3 h-8 rounded-md bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/20 hover:border-cyan-500/60 hover:text-cyan-200 transition flex items-center justify-center text-base font-bold leading-none"
-          title={t("sidebar_expand")}
-          aria-label={t("sidebar_expand")}
-        >
-          ››
-        </button>
-      )}
-
-      <nav className={"py-4 space-y-1 " + (collapsed ? "px-2" : "px-3")}>
-        {!collapsed && (
-          <div className="px-3 pb-2 text-[10px] uppercase tracking-widest opacity-50">
-            {t("nav_ops")}
-          </div>
-        )}
+      <nav className="px-3 py-4 space-y-1">
+        <div className="px-3 pb-2 text-[10px] uppercase tracking-widest opacity-50">
+          {t("nav_ops")}
+        </div>
         {OPS_NAV.map(renderItem)}
 
-        {!collapsed && (
-          <div className="px-3 pt-5 pb-2 text-[10px] uppercase tracking-widest opacity-50">
-            {t("nav_system")}
-          </div>
-        )}
-        {collapsed && <div className="my-3 border-t opacity-20" />}
+        <div className="px-3 pt-5 pb-2 text-[10px] uppercase tracking-widest opacity-50">
+          {t("nav_system")}
+        </div>
         {sysNav.map(renderItem)}
       </nav>
 
-      {!collapsed && (
-        <div className="mt-auto m-3 rounded-lg border p-3 text-xs status-widget">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="relative inline-block w-2 h-2 rounded-full bg-emerald-400 pulse-dot" />
-            <span>{t("status_backend")}</span>
-          </div>
-          <div className="font-mono opacity-50 leading-5">
-            api &nbsp; · 142 ms
-            <br />
-            chroma · 38 ms
-            <br />
-            gemini · ok
-          </div>
+      <div className="mt-auto m-3 rounded-lg border p-3 text-xs status-widget">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="relative inline-block w-2 h-2 rounded-full bg-emerald-400 pulse-dot" />
+          <span>{t("status_backend")}</span>
         </div>
-      )}
+        <div className="font-mono opacity-50 leading-5">
+          api &nbsp; · 142 ms
+          <br />
+          chroma · 38 ms
+          <br />
+          gemini · ok
+        </div>
+      </div>
     </aside>
   );
 }
 
 function Topbar() {
   const { user, signOut } = useAuth();
-  const { t } = useI18n();
-  const { selected } = useModel();
+  const { theme, toggleTheme } = useTheme();
+  const { locale, setLocale, t } = useI18n();
 
   const initials = user
     ? `${(user.name?.[0] ?? user.email[0]).toUpperCase()}${
@@ -188,6 +128,8 @@ function Topbar() {
   const fullName = user
     ? [user.name, user.last_name].filter(Boolean).join(" ") || user.email
     : "";
+
+  const locales: Locale[] = ["es", "en", "fr"];
 
   return (
     <header className="topbar h-14 border-b backdrop-blur flex items-center px-6 gap-4 sticky top-0 z-40">
@@ -201,15 +143,43 @@ function Topbar() {
       </div>
 
       <div className="ml-auto flex items-center gap-3">
-        <LocaleThemeControls />
+        {/* ── Language selector ─────────────────────────────── */}
+        <div className="flex items-center rounded-md border overflow-hidden text-xs lang-selector">
+          {locales.map((l) => (
+            <button
+              key={l}
+              type="button"
+              onClick={() => setLocale(l)}
+              className={
+                "px-2 py-1.5 font-medium transition " +
+                (locale === l
+                  ? "bg-cyan-500 text-ink-950"
+                  : "opacity-50 hover:opacity-80")
+              }
+              title={LOCALE_LABELS[l]}
+            >
+              {l.toUpperCase()}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Theme toggle ──────────────────────────────────── */}
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="rounded-md border px-2.5 py-1.5 text-xs font-medium transition hover:border-cyan-500/40 theme-toggle"
+          title={theme === "dark" ? t("theme_light") : t("theme_dark")}
+        >
+          {theme === "dark" ? t("theme_light") : t("theme_dark")}
+        </button>
 
         <Link
           href="/settings/llm"
           className="text-xs flex items-center gap-2 px-3 py-1.5 rounded-md border hover:border-cyan-500/30 model-btn"
-          title={t("tip_model_config")}
+          title="Configuración del modelo"
         >
           <span className="opacity-50">{t("topbar_model")}</span>
-          <span className="text-cyan-300 font-medium">{selected ?? "—"}</span>
+          <span className="text-cyan-300 font-medium">gemini-3.5-flash-lite</span>
           <span className="opacity-40">▾</span>
         </Link>
 
@@ -234,7 +204,7 @@ function Topbar() {
                     ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
                     : "bg-amber-500/10 text-amber-300 border-amber-500/30")
               }
-              title={t("tip_soc_level")}
+              title="Nivel SOC — ajusta el tono del Copilot (editable en Mi Perfil)"
             >
               {user.level}
             </span>
@@ -256,7 +226,7 @@ function Topbar() {
               type="button"
               onClick={() => void signOut()}
               className="rounded-md border px-2.5 py-1.5 text-xs transition hover:border-slate-500"
-              title={t("tip_signout")}
+              title="Cerrar sesión"
             >
               {t("topbar_signout")}
             </button>
@@ -270,23 +240,6 @@ function Topbar() {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user } = useAuth();
-  const [collapsed, setCollapsed] = useState(false);
-
-  // Hydrate the persisted preference once on mount. Stays false on first
-  // render to keep server/client markup matching and avoid hydration
-  // warnings; the flip happens after mount.
-  useEffect(() => {
-    const saved = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
-    if (saved === "1") setCollapsed(true);
-  }, []);
-
-  function toggle() {
-    setCollapsed((prev) => {
-      const next = !prev;
-      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? "1" : "0");
-      return next;
-    });
-  }
 
   if (pathname === "/login" || !user) {
     return <>{children}</>;
@@ -294,11 +247,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen grid-bg">
-      <Sidebar collapsed={collapsed} onToggle={toggle} />
+      <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <Topbar />
         <main className="flex-1 overflow-auto">{children}</main>
-        <FloatingActions />
       </div>
     </div>
   );

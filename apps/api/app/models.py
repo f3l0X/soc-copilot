@@ -150,15 +150,82 @@ class User(Base):
         Date, nullable=True
     )
 
+    # ── Password reset (Práctica 2) ─────────────────────────────────────
+    # Only the SHA-256 of the emailed token is stored, so a DB leak can't
+    # be used to reset passwords. Single use: cleared on success.
+    password_reset_token_hash: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True
+    )
+    password_reset_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # ── MFA / TOTP (Práctica 2) ─────────────────────────────────────────
+    # Secret encrypted with Fernet (APP_ENCRYPTION_KEY). Set at enrolment
+    # start; ``mfa_enabled`` flips to True only after the first valid code.
+    mfa_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    mfa_secret_ciphertext: Mapped[bytes | None] = mapped_column(
+        LargeBinary, nullable=True
+    )
+    mfa_enabled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Last accepted TOTP time-step (anti-replay).
+    mfa_last_used_step: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # SHA-256 hashes of the unused recovery codes.
+    mfa_recovery_codes: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+
     alerts: Mapped[list[Alert]] = relationship(back_populates="user")
+
+
+class AlertOrigin(str, Enum):
+    """Where an alert came from.
+
+    ``manual`` = pasted by an analyst in the Alert Explainer.
+    ``wazuh``  = ingested from the Wazuh SIEM (webhook push or indexer pull).
+    Stored as a plain string column so new SIEMs don't need an enum migration.
+    """
+
+    MANUAL = "manual"
+    WAZUH = "wazuh"
 
 
 class Alert(Base):
     __tablename__ = "alerts"
+    __table_args__ = (
+        # Dedupe SIEM alerts: the same Wazuh alert can arrive twice (push +
+        # pull, or integratord retries). NULL external_id (manual alerts)
+        # never collides because Postgres treats NULLs as distinct.
+        UniqueConstraint("origin", "external_id", name="uq_alert_origin_external"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     log: Mapped[str] = mapped_column(Text, nullable=False)
     source: Mapped[str | None] = mapped_column(String(200))
+
+    # ── SIEM ingestion (Práctica 2) ─────────────────────────────────────
+    origin: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default=AlertOrigin.MANUAL.value,
+        server_default=AlertOrigin.MANUAL.value,
+        index=True,
+    )
+    # Wazuh alert id (e.g. "1717171717.123456"). Unique per origin.
+    external_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Wazuh rule.level (0-15). Null for manual alerts.
+    rule_level: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    agent_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Timestamp of the event in the SIEM (not ingestion time).
+    event_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # When the AI analysis ran. NULL = SIEM alert still pending triage.
+    analyzed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Output of /api/explain (filled when alert is created via that endpoint)
     summary: Mapped[str | None] = mapped_column(Text)
