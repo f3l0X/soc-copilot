@@ -562,3 +562,58 @@ curl -b /tmp/c.txt -c /tmp/c.txt -X POST http://localhost:8080/api/auth/logout
 ejemplos. `http://localhost:8080/openapi.json` devuelve la spec OpenAPI
 completa para integración con generadores de cliente o herramientas de
 testing.
+
+
+## Integraciones SIEM — Wazuh (Práctica 2)
+
+Detalle completo, ejemplos y códigos de error en
+[13-integracion-wazuh.md](13-integracion-wazuh.md#6-endpoints).
+
+| Método | Ruta | Auth |
+|---|---|---|
+| POST | `/api/integrations/wazuh/webhook` | `Authorization: Bearer <WAZUH_WEBHOOK_TOKEN>` |
+| POST | `/api/integrations/wazuh/pull` | sesión + permiso `integrations.manage` |
+| GET | `/api/integrations/wazuh/status` | sesión + permiso `integrations.manage` |
+| POST | `/api/alerts/{id}/analyze` | sesión (rate limit LLM) |
+
+`GET /api/alerts` acepta ahora `origin=manual|wazuh` y `pending=true|false`,
+y cada alerta incluye `origin`, `external_id`, `rule_level`, `agent_name`,
+`event_at` y `analyzed_at`.
+
+
+## Informe de incidente (Práctica 2)
+
+`POST /api/reports/incident` → PDF (`?format=json` para el informe
+estructurado). Detalle en [15-informe-incidente.md](15-informe-incidente.md#4-api).
+
+## Idioma de respuesta (Práctica 2)
+
+`/api/explain`, `/api/recommend`, `/api/chat`, `/api/alerts/{id}/analyze`
+y `/api/reports/incident` aceptan `language: "es" | "en" | "fr" | "auto"`
+y leen `Accept-Language`. `ChatResponse` incluye `language`. Regla en
+[16-multiidioma.md](16-multiidioma.md#2-respuestas-de-la-ia--regla-de-decisión).
+
+## MFA / TOTP (Práctica 2)
+
+`POST /api/auth/login` ya no abre sesión si `MFA_REQUIRED=true`: devuelve
+`{"user": null, "mfa_required": true, "mfa_setup_required": bool, "expires_at": …}`.
+
+| Método | Ruta | Auth |
+|---|---|---|
+| POST | `/api/auth/mfa/setup` | cookie `soc_mfa_pending` |
+| POST | `/api/auth/mfa/verify` | cookie `soc_mfa_pending` |
+| GET | `/api/auth/mfa/status` | sesión |
+| POST | `/api/auth/mfa/recovery-codes` | sesión + `{"code"}` |
+| POST | `/api/admin/users/{id}/mfa/reset` | `users.reset_mfa` |
+
+Detalle en [17-mfa-totp.md](17-mfa-totp.md).
+
+
+## Recuperar contraseña
+
+| Método | Ruta | Cuerpo | Respuesta |
+|---|---|---|---|
+| POST | `/api/auth/forgot-password` | `{"email"}` | 202 `{"message", "reset_link_dev"}` (siempre el mismo mensaje) |
+| POST | `/api/auth/reset-password` | `{"token", "new_password"}` | 204 · 400 enlace inválido/caducado · 422 contraseña débil |
+
+Detalle en [19-recuperar-contrasena.md](19-recuperar-contrasena.md).

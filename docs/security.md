@@ -181,6 +181,21 @@ Variables (todas en `.env.example`):
 - En contenedores los secretos viven en `Config.Env` (visible solo via
   `docker inspect`, no via HTTP).
 
+## Práctica 2 — nuevos controles (05/10/2026)
+
+- **MFA TOTP obligatorio** para todos los usuarios (RFC 6238, secreto
+  cifrado con Fernet, anti-replay, códigos de recuperación hasheados,
+  bloqueo compartido con la contraseña, arranque bloqueado en producción
+  si `MFA_REQUIRED=false`). Detalle: [17-mfa-totp.md](17-mfa-totp.md).
+- **Webhook Wazuh** autenticado con token compartido (comparación en
+  tiempo constante, ≥32 caracteres en producción), rate limit propio y
+  límites de tamaño. Detalle: [13-integracion-wazuh.md](13-integracion-wazuh.md#7-seguridad).
+- **Informe PDF**: datos del analista delimitados como no confiables en el
+  prompt; todo el texto escapado antes de ReportLab (sin inyección de
+  markup). Detalle: [15-informe-incidente.md](15-informe-incidente.md#3-arquitectura).
+- Riesgo residual: el TOTP no protege frente a phishing en tiempo real
+  (AitM); WebAuthn/passkeys quedaría como mejora futura.
+
 ## Parches Recientes (Remediación Post-Fase-4)
 
 Se han implementado correcciones específicas basadas en el reporte de vulnerabilidades:

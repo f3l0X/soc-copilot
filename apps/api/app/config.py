@@ -104,6 +104,9 @@ class Settings(BaseSettings):
     # Counter increments on every wrong password; on the Nth fail the
     # account is locked for `auth_lockout_minutes`. Counter resets on
     # successful login or when the lock expires.
+    # ── Password reset («¿Has olvidado tu contraseña?») ─────────────────
+    password_reset_ttl_minutes: int = 30
+
     auth_lockout_threshold: int = 4
     auth_lockout_minutes: int = 15
 
@@ -118,6 +121,57 @@ class Settings(BaseSettings):
     # who configure their own key are not throttled here (their own quota
     # at Google applies). Reset rolls forward at the next UTC day.
     server_llm_daily_quota: int = 50
+
+    # ── MFA / TOTP (Práctica 2 · 8.2) ───────────────────────────────────
+    # Mandatory second factor for EVERY user. Can only be switched off
+    # outside production (unit/e2e tests that predate MFA).
+    mfa_required: bool = True
+    mfa_issuer: str = "SOC Copilot"
+    # Lifetime of the "password OK, waiting for TOTP" token.
+    mfa_pending_ttl_seconds: int = 300
+    mfa_pending_cookie_name: str = "soc_mfa_pending"
+
+    # ── Wazuh SIEM integration (Práctica 2) ─────────────────────────────
+    # PUSH: Wazuh integratord POSTs each alert to
+    # /api/integrations/wazuh/webhook with ``Authorization: Bearer <token>``.
+    # Empty token = webhook disabled (endpoint answers 503).
+    #   Generate with: openssl rand -hex 32
+    wazuh_webhook_token: str = ""
+    # Alerts below this Wazuh rule.level are acknowledged but not stored.
+    # Wazuh levels: 0-15 (7+ is the usual "worth a human look" threshold).
+    wazuh_min_rule_level: int = 7
+    # Max alerts accepted per webhook call (batch protection).
+    wazuh_webhook_max_batch: int = 100
+    # Per-IP bucket for the webhook (independent of the global UI bucket,
+    # Wazuh can legitimately burst).
+    wazuh_webhook_rate_limit: int = 600
+
+    # PULL: SOC Copilot queries the Wazuh Indexer (OpenSearch) directly.
+    # Leave the URL empty to disable pull mode.
+    wazuh_indexer_url: str = ""  # e.g. https://wazuh.indexer:9200
+    wazuh_indexer_user: str = ""
+    wazuh_indexer_password: str = ""
+    wazuh_indexer_index: str = "wazuh-alerts-*"
+    # Path to the Wazuh root CA (root-ca.pem). If empty, TLS is verified
+    # against the system store; set WAZUH_INDEXER_VERIFY_TLS=false only in
+    # labs with self-signed certs.
+    wazuh_indexer_ca_cert: str = ""
+    wazuh_indexer_verify_tls: bool = True
+    wazuh_indexer_timeout_seconds: int = 15
+    # Max documents per pull.
+    wazuh_pull_batch_size: int = 200
+    # Background poller. 0 = disabled (only manual "Sincronizar ahora").
+    wazuh_poll_interval_seconds: int = 0
+    # First pull with no cursor looks back this many minutes.
+    wazuh_pull_initial_lookback_minutes: int = 60
+
+    @property
+    def wazuh_push_enabled(self) -> bool:
+        return bool(self.wazuh_webhook_token)
+
+    @property
+    def wazuh_pull_enabled(self) -> bool:
+        return bool(self.wazuh_indexer_url)
 
     @property
     def is_production(self) -> bool:
@@ -169,6 +223,16 @@ class Settings(BaseSettings):
                 problems.append(
                     f"API_CORS_ORIGINS entry {o!r} must use https:// in production"
                 )
+        if not self.mfa_required:
+            problems.append("MFA_REQUIRED must be true in production (MFA obligatorio)")
+        if self.wazuh_webhook_token and len(self.wazuh_webhook_token) < 32:
+            problems.append(
+                "WAZUH_WEBHOOK_TOKEN must be >=32 chars (openssl rand -hex 32)"
+            )
+        if self.wazuh_indexer_url and not self.wazuh_indexer_url.startswith(
+            "https://"
+        ):
+            problems.append("WAZUH_INDEXER_URL must use https:// in production")
         if problems:
             raise RuntimeError(
                 "Refusing to start with insecure configuration:\n  - "

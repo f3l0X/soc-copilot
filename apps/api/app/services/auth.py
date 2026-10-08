@@ -41,8 +41,14 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 
 def issue_token(
-    *, user_id: int, role: str, password_version: int
+    *, user_id: int, role: str, password_version: int, mfa: bool = False
 ) -> tuple[str, datetime]:
+    """Session token. ``mfa`` = the second factor was verified (Práctica 2).
+
+    When ``MFA_REQUIRED`` is on, ``get_current_user`` rejects session tokens
+    without ``mfa: true`` — so tokens issued before MFA existed stop
+    working and every user is forced through enrolment.
+    """
     s = get_settings()
     now = datetime.now(UTC)
     exp = now + timedelta(seconds=s.jwt_ttl_seconds)
@@ -50,11 +56,33 @@ def issue_token(
         "sub": str(user_id),
         "role": role,
         "pv": password_version,
+        "mfa": mfa,
         "iat": int(now.timestamp()),
         "exp": int(exp.timestamp()),
     }
     token = jwt.encode(payload, s.jwt_secret, algorithm=s.jwt_alg)
     return token, exp
+
+
+MFA_PENDING_PURPOSE = "mfa_pending"
+
+
+def issue_mfa_pending_token(*, user_id: int, password_version: int) -> tuple[str, datetime]:
+    """Short-lived token proving "password OK, TOTP still missing".
+
+    Carries ``purpose`` so it can NEVER be accepted as a session token.
+    """
+    s = get_settings()
+    now = datetime.now(UTC)
+    exp = now + timedelta(seconds=s.mfa_pending_ttl_seconds)
+    payload: dict[str, Any] = {
+        "sub": str(user_id),
+        "pv": password_version,
+        "purpose": MFA_PENDING_PURPOSE,
+        "iat": int(now.timestamp()),
+        "exp": int(exp.timestamp()),
+    }
+    return jwt.encode(payload, s.jwt_secret, algorithm=s.jwt_alg), exp
 
 
 class TokenError(Exception):

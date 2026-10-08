@@ -66,6 +66,7 @@ def _to_admin_view(u: User, *, today, quota_limit: int) -> AdminUserView:
         server_llm_quota_limit=quota_limit,
         byo_key_configured=u.gemini_api_key_ciphertext is not None,
         gemini_key_last4=u.gemini_key_last4,
+        mfa_enabled=bool(u.mfa_enabled),
     )
 
 
@@ -205,6 +206,42 @@ def reset_llm_quota(
         "user_id": target.id,
         "previous_count": previous,
     }
+
+
+@router.post("/users/{user_id}/mfa/reset", status_code=status.HTTP_200_OK)
+def reset_user_mfa(
+    user_id: int,
+    db: DbSession,
+    request: Request,
+    user: User = require_perm("users.reset_mfa"),
+) -> dict:
+    """Práctica 2 · MFA: wipe a user's TOTP enrolment (lost phone).
+
+    The user must enrol again on next login. ``password_version`` is bumped
+    so every open session of that user is invalidated immediately.
+    """
+    target = db.scalar(select(User).where(User.id == user_id))
+    if not target:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="user not found")
+    was_enabled = bool(target.mfa_enabled)
+    target.mfa_enabled = False
+    target.mfa_secret_ciphertext = None
+    target.mfa_enabled_at = None
+    target.mfa_last_used_step = None
+    target.mfa_recovery_codes = None
+    target.password_version = (target.password_version or 0) + 1
+    log_audit(
+        db,
+        actor=user,
+        action="user.mfa_reset",
+        target_type="user",
+        target_id=target.id,
+        target_label=target.email,
+        details={"was_enabled": was_enabled},
+        request=request,
+    )
+    db.commit()
+    return {"status": "ok", "user_id": target.id, "was_enabled": was_enabled}
 
 
 @router.put("/users/{user_id}/role", response_model=UserMe)

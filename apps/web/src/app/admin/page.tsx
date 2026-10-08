@@ -17,6 +17,7 @@ import {
   adminCreateUser,
   adminDeleteUser,
   adminResetLlmQuota,
+  adminResetMfa,
   getAdminUsers,
   getAppSettings,
   getAuditLog,
@@ -25,6 +26,7 @@ import {
   updatePermissions,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 import {
   evaluatePassword,
   loadZxcvbn,
@@ -70,6 +72,7 @@ const BASELINE_CAPS: { area: string; action: string }[] = [
 
 export default function AdminPage() {
   const auth = useAuth();
+  const { t } = useI18n();
   const [tab, setTab] = useState<Tab>("usuarios");
   const [users, setUsers] = useState<AdminUserView[]>([]);
   const [loading, setLoading] = useState(true);
@@ -395,6 +398,27 @@ export default function AdminPage() {
     }
   }
 
+  async function handleResetMfa(target: AdminUserView) {
+    if (
+      !window.confirm(
+        `¿Resetear el MFA de ${target.email}? Se cerrarán sus sesiones y deberá volver a escanear el QR.`,
+      )
+    )
+      return;
+    setBusyId(target.id);
+    setRowError(null);
+    setRowNotice(null);
+    try {
+      await adminResetMfa(target.id);
+      setRowNotice(`MFA reseteado para ${target.email}.`);
+      await loadUsers();
+    } catch (err) {
+      setRowError(err instanceof ApiError ? err.detail : "No se pudo resetear el MFA");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function handleDelete(target: AdminUserView) {
     setBusyId(target.id);
     setRowError(null);
@@ -699,6 +723,18 @@ export default function AdminPage() {
                                 Resetear cuota
                               </button>
                             )}
+                            <button
+                              disabled={busy || !u.mfa_enabled}
+                              onClick={() => void handleResetMfa(u)}
+                              className="rounded border border-violet-500/40 bg-violet-500/10 px-2.5 py-1 text-xs font-medium text-violet-300 transition-colors hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                              title={
+                                u.mfa_enabled
+                                  ? "Borra el segundo factor (móvil perdido). Cierra sus sesiones; deberá enrolarse de nuevo."
+                                  : "MFA aún no activado por el usuario"
+                              }
+                            >
+                              {u.mfa_enabled ? "Reset MFA" : "MFA pendiente"}
+                            </button>
                             <button
                               disabled={busy}
                               onClick={() => {
@@ -1059,7 +1095,7 @@ export default function AdminPage() {
             onSubmit={handleCreateUser}
             className="w-full max-w-sm bg-ink-900 border border-ink-700 rounded-xl shadow-xl p-6 space-y-4"
           >
-            <h3 className="text-lg font-bold">Crear Usuario</h3>
+            <h3 className="text-lg font-bold">{t("tile_admin_title")} — {t("login_name")}</h3>
 
             {createError && (
               <div className="text-xs bg-rose-500/10 text-rose-300 p-2 rounded border border-rose-500/30">
@@ -1076,7 +1112,7 @@ export default function AdminPage() {
                 maxLength={100}
                 value={createForm.name}
                 onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-                className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-slate-100"
               />
             </label>
 
@@ -1087,7 +1123,7 @@ export default function AdminPage() {
                 required
                 value={createForm.email}
                 onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
-                className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-slate-100"
               />
             </label>
 
@@ -1100,7 +1136,7 @@ export default function AdminPage() {
                 autoComplete="new-password"
                 value={createForm.password}
                 onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
-                className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-slate-100"
                 placeholder="Mín. 10 chars · mayús/minús/dígito/símbolo"
               />
             </label>
@@ -1112,7 +1148,7 @@ export default function AdminPage() {
                 onChange={(e) =>
                   setCreateForm({ ...createForm, role: e.target.value as UserRole })
                 }
-                className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-slate-100"
               >
                 <option value="analyst">analyst</option>
                 <option value="admin">admin</option>
@@ -1135,7 +1171,7 @@ export default function AdminPage() {
                 disabled={createLoading}
                 className="px-4 py-2 text-sm bg-cyan-500 text-ink-950 hover:bg-cyan-400 disabled:bg-ink-800 disabled:text-slate-500 rounded-md font-medium"
               >
-                {createLoading ? "Creando..." : "Crear"}
+                {createLoading ? "…" : t("login_register_btn")}
               </button>
             </div>
           </form>
@@ -1171,7 +1207,7 @@ export default function AdminPage() {
                 autoComplete="new-password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-slate-100"
               />
             </label>
 
@@ -1184,7 +1220,7 @@ export default function AdminPage() {
                 autoComplete="new-password"
                 value={newPasswordConfirm}
                 onChange={(e) => setNewPasswordConfirm(e.target.value)}
-                className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-md bg-ink-950 border border-ink-700 px-3 py-2 text-slate-100"
               />
               {newPasswordConfirm && (
                 <span
@@ -1253,7 +1289,7 @@ export default function AdminPage() {
                 disabled={pwLoading || !pwCanSubmit}
                 className="px-4 py-2 text-sm bg-cyan-500 text-ink-950 hover:bg-cyan-400 disabled:bg-ink-800 disabled:text-slate-500 disabled:cursor-not-allowed rounded-md font-medium"
               >
-                {pwLoading ? "Guardando..." : "Guardar"}
+                {pwLoading ? "…" : t("profile_save")}
               </button>
             </div>
           </form>

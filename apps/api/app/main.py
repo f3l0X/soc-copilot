@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -12,9 +14,12 @@ from app.routers import (
     chat,
     explain,
     health,
+    integrations,
     kb,
     llm,
+    mfa,
     recommend,
+    reports,
     stats,
 )
 
@@ -24,7 +29,19 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()
+    poller: asyncio.Task | None = None
+    # Optional Wazuh Indexer poller (pull mode). Off unless both the
+    # indexer URL and a poll interval are configured.
+    if settings.wazuh_pull_enabled and settings.wazuh_poll_interval_seconds > 0:
+        from app.db import _SessionLocal
+        from app.services.wazuh import poll_forever
+
+        poller = asyncio.create_task(poll_forever(_SessionLocal))
     yield
+    if poller is not None:
+        poller.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await poller
 
 
 # In production we hide Swagger/ReDoc + the OpenAPI schema. They leak the
@@ -52,7 +69,12 @@ app.add_middleware(
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "X-Requested-With",
+        "Accept-Language",
+    ],
     max_age=600,
 )
 
@@ -76,6 +98,7 @@ async def security_headers(request, call_next):
 
 app.include_router(health.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
+app.include_router(mfa.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 app.include_router(explain.router, prefix="/api")
 app.include_router(recommend.router, prefix="/api")
@@ -84,6 +107,8 @@ app.include_router(alerts.router, prefix="/api")
 app.include_router(stats.router, prefix="/api")
 app.include_router(kb.router, prefix="/api")
 app.include_router(llm.router, prefix="/api")
+app.include_router(integrations.router, prefix="/api")
+app.include_router(reports.router, prefix="/api")
 
 
 @app.get("/")

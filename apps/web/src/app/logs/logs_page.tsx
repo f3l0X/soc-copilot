@@ -1,6 +1,7 @@
 "use client";
 
 import { useRequireAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
@@ -146,6 +147,7 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 export default function LogsAnalyzerPage() {
   const auth = useRequireAuth();
   const router = useRouter();
+  const { t } = useI18n();
 
   const [filename, setFilename] = useState<string | null>(null);
   const [lines, setLines] = useState<ParsedLine[]>([]);
@@ -506,7 +508,7 @@ export default function LogsAnalyzerPage() {
           </section>
 
           <section className="rounded-xl border border-ink-700 bg-ink-900/60 p-4 space-y-3 sticky bottom-4">
-            <StepHeader n={4} title="Analizar" />
+            <StepHeader n={4} title={t("alerts_analyze_btn")} />
             <p className="text-xs text-slate-400">
               Líneas seleccionadas:{" "}
               <span className="font-mono text-cyan-300">
@@ -518,7 +520,7 @@ export default function LogsAnalyzerPage() {
               disabled={selectedIds.size === 0}
               className="w-full py-2 rounded-md text-xs font-medium bg-cyan-500 text-ink-950 hover:bg-cyan-400 disabled:bg-ink-700 disabled:text-slate-500 disabled:cursor-not-allowed transition"
             >
-              Enviar a Alert Explainer →
+              {t("alerts_analyze_btn")} →
             </button>
           </section>
         </aside>
@@ -562,7 +564,7 @@ export default function LogsAnalyzerPage() {
             {lines.length === 0 ? (
               <div className="h-full min-h-[400px] flex flex-col items-center justify-center gap-2 text-slate-500">
                 <div className="text-3xl text-slate-700">≡</div>
-                <span>Sube un archivo de logs para comenzar.</span>
+                <span>{t("tile_logs_desc")}</span>
               </div>
             ) : paginatedLines.length === 0 ? (
               <div className="h-full min-h-[400px] flex items-center justify-center text-slate-500">
@@ -653,7 +655,7 @@ export default function LogsAnalyzerPage() {
                 disabled={currentPage === 1}
                 className="px-3 py-1.5 bg-ink-900 border border-ink-700 hover:border-cyan-500/40 disabled:opacity-40 disabled:cursor-not-allowed rounded-md text-slate-300"
               >
-                ← Anterior
+              ← {t("history_col_date")}
               </button>
               <span className="text-slate-400 font-mono">
                 Página {currentPage} / {totalPages}

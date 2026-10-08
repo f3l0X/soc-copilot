@@ -1,6 +1,7 @@
 import logging
+from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import ValidationError
 
 from app.db import DbSession
@@ -8,9 +9,10 @@ from app.middleware.auth import CurrentUser
 from app.middleware.ratelimit import rate_limit
 from app.models import Alert
 from app.schemas.alerts import ExplainRequest, ExplainResponse
-from app.services.explainer import explain
-from app.services.llm import LLMProviderError, LLMResponseError
 from app.services.audit import log_audit
+from app.services.explainer import explain
+from app.services.language import resolve_language
+from app.services.llm import LLMProviderError, LLMResponseError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -20,11 +22,17 @@ router = APIRouter(
 
 @router.post("", response_model=ExplainResponse)
 def explain_alert(
-    payload: ExplainRequest, db: DbSession, user: CurrentUser
+    payload: ExplainRequest, db: DbSession, user: CurrentUser, request: Request
 ) -> ExplainResponse:
+    language = resolve_language(payload.language, request)
     try:
         result = explain(
-            payload.log, payload.source, model=payload.model, user=user, db=db
+            payload.log,
+            payload.source,
+            model=payload.model,
+            user=user,
+            db=db,
+            language=language,
         )
     except LLMProviderError:
         logger.exception("LLM provider error in /explain")
@@ -46,6 +54,7 @@ def explain_alert(
         mitre_techniques=result.mitre_techniques,
         reasoning=result.reasoning,
         user_id=user.id,
+        analyzed_at=datetime.now(UTC),
     )
     db.add(alert)
     db.commit()

@@ -49,7 +49,16 @@ export interface AlertSummary {
   risk_level: RiskLevel | null;
   mitre_techniques: string[] | null;
   created_at: string;
+  // SIEM ingestion (Práctica 2)
+  origin: AlertOrigin;
+  external_id: string | null;
+  rule_level: number | null;
+  agent_name: string | null;
+  event_at: string | null;
+  analyzed_at: string | null;
 }
+
+export type AlertOrigin = "manual" | "wazuh";
 
 export interface RecommendationDetail {
   id: number;
@@ -76,6 +85,17 @@ export class ApiError extends Error {
   }
 }
 
+// UI language chosen in the top bar (persisted by I18nProvider). Sent as
+// Accept-Language so the backend answers in the same language
+// (Práctica 2 · ES/EN). Falls back to the browser's own header.
+function uiLanguage(): string | undefined {
+  try {
+    return localStorage.getItem("soc:locale") ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 async function request<T>(
   path: string,
   init: RequestInit & { timeoutMs?: number } = {},
@@ -87,7 +107,11 @@ async function request<T>(
     const res = await fetch(`${API_BASE}${path}`, {
       ...rest,
       credentials: "include",
-      headers: { "Content-Type": "application/json", ...(rest.headers ?? {}) },
+      headers: {
+        "Content-Type": "application/json",
+        ...(uiLanguage() ? { "Accept-Language": uiLanguage() as string } : {}),
+        ...(rest.headers ?? {}),
+      },
       signal: ctrl.signal,
     });
     if (!res.ok) {
@@ -120,8 +144,55 @@ export const recommendActions = (payload: RecommendRequest) =>
     body: JSON.stringify(payload),
   });
 
-export const listAlerts = (limit = 50, offset = 0) =>
-  request<AlertSummary[]>(`/api/alerts?limit=${limit}&offset=${offset}`);
+export const listAlerts = (
+  limit = 50,
+  offset = 0,
+  filters: { origin?: AlertOrigin; pending?: boolean } = {},
+) => {
+  const qs = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (filters.origin) qs.set("origin", filters.origin);
+  if (filters.pending != null) qs.set("pending", String(filters.pending));
+  return request<AlertSummary[]>(`/api/alerts?${qs.toString()}`);
+};
+
+export const analyzeStoredAlert = (id: number, model?: string) =>
+  request<AlertDetail>(`/api/alerts/${id}/analyze`, {
+    method: "POST",
+    body: JSON.stringify(model ? { model } : {}),
+  });
+
+// ─── Wazuh SIEM integration ───────────────────────────────────────────────
+
+export interface WazuhStatus {
+  push_enabled: boolean;
+  pull_enabled: boolean;
+  poll_interval_seconds: number;
+  min_rule_level: number;
+  indexer_url: string | null;
+  push_last_received: string | null;
+  pull_last_run: string | null;
+  pull_last_error: string | null;
+  pull_cursor: string | null;
+  alerts_total: number;
+  alerts_last_24h: number;
+  alerts_pending: number;
+}
+
+export interface WazuhPullResult {
+  fetched: number;
+  received: number;
+  created: number;
+  duplicates: number;
+  below_threshold: number;
+  invalid: number;
+  cursor: string;
+}
+
+export const getWazuhStatus = () =>
+  request<WazuhStatus>("/api/integrations/wazuh/status");
+
+export const wazuhPullNow = () =>
+  request<WazuhPullResult>("/api/integrations/wazuh/pull", { method: "POST" });
 
 export const getAlert = (id: number) =>
   request<AlertDetail>(`/api/alerts/${id}`);
@@ -144,6 +215,7 @@ export interface ChatRequest {
 export interface ChatResponse {
   reply: string;
   sources: string[];
+  language?: string;
 }
 
 export const sendChat = (payload: ChatRequest) =>
@@ -151,6 +223,61 @@ export const sendChat = (payload: ChatRequest) =>
     method: "POST",
     body: JSON.stringify(payload),
   });
+
+// ─── Incident report (PDF) ───────────────────────────────────────────────
+
+export interface IncidentReportRequest {
+  alert_id?: number;
+  messages?: ChatMessage[];
+  log_context?: string;
+  title?: string;
+  analyst_notes?: string;
+  include_transcript?: boolean;
+  model?: string;
+}
+
+/** POST /api/reports/incident → triggers a browser download of the PDF. */
+export async function downloadIncidentReport(
+  payload: IncidentReportRequest,
+): Promise<string> {
+  const ctrl = new AbortController();
+  // LLM synthesis + rendering can take a while on long conversations.
+  const timer = setTimeout(() => ctrl.abort(), 120_000);
+  try {
+    const lang = uiLanguage();
+    const res = await fetch(`${API_BASE}/api/reports/incident`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...(lang ? { "Accept-Language": lang } : {}),
+      },
+      body: JSON.stringify(payload),
+      signal: ctrl.signal,
+    });
+    if (!res.ok) throw new ApiError(res.status, await res.text());
+    const blob = await res.blob();
+    const disposition = res.headers.get("content-disposition") ?? "";
+    const match = /filename="([^"]+)"/.exec(disposition);
+    const filename = match?.[1] ?? "incident-report.pdf";
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    return filename;
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("Timeout tras 120s — reintenta");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 // ─── Stats / Dashboard ────────────────────────────────────────────────────
 
@@ -228,6 +355,7 @@ export interface UserMe {
   level_approved: boolean;
   is_verified: boolean;
   created_at: string;
+  mfa_enabled?: boolean;
 }
 
 export interface UpdateProfilePayload {
@@ -272,9 +400,59 @@ export const clearLLMKey = () =>
   request<LLMSettings>("/api/auth/me/llm", { method: "DELETE" });
 
 export interface LoginResponse {
+  /** null while the MFA step is pending (Práctica 2 · MFA obligatorio). */
+  user: UserMe | null;
+  expires_at: string;
+  mfa_required?: boolean;
+  mfa_setup_required?: boolean;
+}
+
+// ─── MFA / TOTP ───────────────────────────────────────────────────────────
+
+export interface MfaSetupResponse {
+  secret: string;
+  otpauth_uri: string;
+  qr_svg_data_uri: string;
+  issuer: string;
+  account: string;
+}
+
+export interface MfaVerifyResponse {
   user: UserMe;
   expires_at: string;
+  recovery_codes: string[] | null;
+  recovery_codes_left: number;
 }
+
+export interface MfaStatus {
+  required: boolean;
+  enabled: boolean;
+  enabled_at: string | null;
+  recovery_codes_left: number;
+}
+
+export const mfaSetup = () =>
+  request<MfaSetupResponse>("/api/auth/mfa/setup", { method: "POST" });
+
+export const mfaVerify = (payload: { code?: string; recovery_code?: string }) =>
+  request<MfaVerifyResponse>("/api/auth/mfa/verify", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+export const getMfaStatus = () => request<MfaStatus>("/api/auth/mfa/status");
+
+export const regenerateRecoveryCodes = (code: string) =>
+  request<{ recovery_codes: string[] }>("/api/auth/mfa/recovery-codes", {
+    method: "POST",
+    body: JSON.stringify({ code }),
+  });
+
+export const adminResetMfa = (userId: number) =>
+  request<{ status: string; user_id: number; was_enabled: boolean }>(
+    `/api/admin/users/${userId}/mfa/reset`,
+    { method: "POST" },
+  );
 
 export interface RegisterResponse {
   user: UserMe;
@@ -301,6 +479,20 @@ export const checkEmail = (email: string) =>
     `/api/auth/check-email?email=${encodeURIComponent(email)}`,
   );
 
+// ─── «¿Has olvidado tu contraseña?» ──────────────────────────────────────
+
+export const forgotPassword = (email: string) =>
+  request<{ message: string; reset_link_dev: string | null }>(
+    "/api/auth/forgot-password",
+    { method: "POST", body: JSON.stringify({ email }) },
+  );
+
+export const resetPassword = (token: string, new_password: string) =>
+  request<void>("/api/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify({ token, new_password }),
+  });
+
 export const verifyEmail = (token: string) =>
   request<UserMe>("/api/auth/verify-email", {
     method: "POST",
@@ -322,6 +514,7 @@ export interface AdminUserView {
   server_llm_quota_limit: number;
   byo_key_configured: boolean;
   gemini_key_last4: string | null;
+  mfa_enabled?: boolean;
 }
 
 export const getAdminUsers = () =>

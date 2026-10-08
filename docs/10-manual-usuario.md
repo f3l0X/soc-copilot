@@ -90,6 +90,13 @@ queda pendiente de aprobación por un administrador.
 - Logout: menú superior derecho → **Cerrar sesión**. Cierra la sesión en
   todos los dispositivos donde usases esa contraseña.
 
+### 2.2 bis ¿Has olvidado tu contraseña?
+
+En la pantalla de inicio de sesión pulsa **«¿Has olvidado tu contraseña?»**,
+escribe tu email y abre el enlace que te llega (caduca en 30 minutos).
+Elige una contraseña nueva y entra normalmente. El código MFA de tu app
+se seguirá pidiendo. **No crees otra cuenta**: perderías tu historial.
+
 ### 2.3 Roles
 
 | Rol | Puede |
@@ -230,6 +237,36 @@ relevantes. Reduce ruido y ahorra cuota de IA.
 > todas las sesiones previas**. Tendrás que volver a iniciar sesión.
 
 ---
+
+### 4.7 SIEM · Wazuh (`/siem`) — Práctica 2
+
+Cola de alertas que llegan solas desde Wazuh. Filtra por *Pendientes /
+Analizadas*, se refresca cada 15 s y cada alerta tiene «Analizar con IA».
+Al analizarla pasa a ser tuya y puedes seguir en «Ver / responder».
+Los admins ven el estado de la integración y «Sincronizar ahora».
+
+### 4.8 Informe de incidente en PDF — Práctica 2
+
+En el Chat IA (cuando hay conversación) o en la página de una alerta,
+pulsa «Generar informe de incidente (PDF)». Opcionalmente añade un título
+y notas (p. ej. acciones ya hechas). El PDF se descarga en 10-30 s.
+**Revísalo antes de enviarlo**: lo redacta la IA.
+
+### 4.9 Idioma
+
+La IA te contesta en el idioma en que escribes (español, inglés o
+francés). Si tu mensaje es muy corto, usa el idioma elegido arriba a la
+derecha (ES/EN/FR).
+
+### 4.10 Verificación en dos pasos (MFA) — obligatoria
+
+1. Instala una app de autenticación (Google Authenticator, Microsoft
+   Authenticator, Authy…).
+2. En tu primer inicio de sesión escanea el QR e introduce el código.
+3. Guarda los 10 **códigos de recuperación** (se muestran una vez).
+4. A partir de ahí: contraseña + código de 6 dígitos.
+5. ¿Móvil perdido? Usa un código de recuperación o pide a un admin
+   «Reset MFA». En «Mi perfil» puedes generar códigos nuevos.
 
 ## 5. Funciones de administrador
 

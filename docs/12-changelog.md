@@ -1,5 +1,47 @@
 # Changelog de UI/UX
 
+## [05/10/2026] - «¿Has olvidado tu contraseña?»
+
+Nuevo enlace en el inicio de sesión. Envía por email un enlace de un solo
+uso (30 min) para elegir una contraseña nueva, sin tener que crear otra
+cuenta. Ver [19-recuperar-contrasena.md](19-recuperar-contrasena.md).
+
+## [05/10/2026] - Nueva paleta de colores (oscuro y claro)
+
+Todos los textos, insignias de nivel/riesgo, estados y botones se leen bien
+en los dos temas (contraste WCAG AA). En modo claro desaparecen los
+amarillos y cian pálidos sobre blanco; en oscuro los bordes y textos
+secundarios se distinguen mejor. Ver [18-paleta-colores.md](18-paleta-colores.md).
+
+## [05/10/2026] - Práctica 2 · Fase 4: MFA (TOTP) obligatorio
+
+El inicio de sesión pasa a tener dos pasos para **todos** los usuarios:
+contraseña + código de 6 dígitos de una app de autenticación. En el
+primer login se muestra un QR y 10 códigos de recuperación. El perfil
+muestra el estado del MFA y permite regenerar códigos; los admins tienen
+«Reset MFA» por usuario. Ver [17-mfa-totp.md](17-mfa-totp.md).
+
+## [05/10/2026] - Práctica 2 · Fase 3: respuestas ES/EN con detección automática
+
+La IA responde en el idioma en que escribe el analista (o, si no se puede
+detectar, en el de la interfaz). La interfaz detecta el idioma del
+navegador en la primera visita. Ver [16-multiidioma.md](16-multiidioma.md).
+
+## [05/10/2026] - Práctica 2 · Fase 2: informe de incidente en PDF
+
+Botón «Generar informe de incidente (PDF)» en el Chat IA y en la página de
+respuesta de cada alerta. Ver [15-informe-incidente.md](15-informe-incidente.md).
+
+## [05/10/2026] - Práctica 2 · Fase 1: integración con Wazuh
+
+Nueva página **SIEM · Wazuh** (`/siem`): las alertas de Wazuh llegan solas
+(webhook de integratord o pull del Wazuh Indexer) a una cola de triage
+compartida, priorizada por nivel de regla y con MITRE precargado. Botón
+«Analizar con IA» por alerta; los admins ven el estado de la integración
+y pueden «Sincronizar ahora». Detalle técnico en
+[13-integracion-wazuh.md](13-integracion-wazuh.md) y lista de archivos en
+[14-practica2.md](14-practica2.md).
+
 ## [18/05/2026] - Toggle de registro público desde el panel admin
 
 Los admins pueden ahora abrir o cerrar el registro de cuentas

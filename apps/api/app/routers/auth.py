@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import time
 from datetime import UTC, datetime, timedelta
@@ -12,17 +13,21 @@ from app.middleware.origin import enforce_same_origin
 from app.middleware.ratelimit import (
     auth_rate_limit,
     check_email_rate_limit,
+    forgot_password_email_rate_limit,
     register_email_rate_limit,
 )
 from app.models import User, UserLevel, UserRole
 from app.schemas.auth import (
     CheckEmailResponse,
+    ForgotPasswordRequest,
+    ForgotPasswordResponse,
     LLMSettingsResponse,
     LLMSettingsUpdate,
     LoginRequest,
     LoginResponse,
     RegisterRequest,
     RegisterResponse,
+    ResetPasswordRequest,
     UpdateProfileRequest,
     UserMe,
     VerifyEmailRequest,
@@ -31,11 +36,16 @@ from app.services.auth import (
     generate_verification_token,
     hash_password,
     is_locked,
+    issue_mfa_pending_token,
     issue_token,
     verify_password,
 )
 from app.services.audit import log_audit
-from app.services.email import send_verification_email
+from app.services.email import (
+    password_reset_link,
+    send_password_reset_email,
+    send_verification_email,
+)
 from app.services.llm import GeminiAdapter, LLMProviderError
 from app.services.secrets import EncryptionDisabled, encrypt, last4
 from app.services.security import equalize_timing
@@ -43,6 +53,19 @@ from app.services.settings import is_public_registration_enabled
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def _set_mfa_pending_cookie(response: Response, token: str) -> None:
+    s = get_settings()
+    response.set_cookie(
+        key=s.mfa_pending_cookie_name,
+        value=token,
+        httponly=True,
+        secure=s.effective_cookie_secure,
+        samesite=s.effective_cookie_samesite,
+        max_age=s.mfa_pending_ttl_seconds,
+        path="/api/auth/mfa",
+    )
 
 
 def _set_session_cookie(response: Response, token: str) -> None:
@@ -416,6 +439,33 @@ def login(
     user.failed_login_attempts = 0
     user.locked_until = None
 
+    # Práctica 2 · MFA obligatorio: the password alone never opens a
+    # session. Hand out a 5-minute "mfa_pending" token (httpOnly cookie
+    # scoped to /api/auth/mfa) and let the UI run setup or verification.
+    if settings.mfa_required:
+        pending, pending_exp = issue_mfa_pending_token(
+            user_id=user.id, password_version=user.password_version
+        )
+        _set_mfa_pending_cookie(response, pending)
+        response.delete_cookie(key=settings.cookie_name, path="/")
+        log_audit(
+            db,
+            actor=user,
+            action="auth.login_password_ok",
+            target_type="user",
+            target_id=user.id,
+            target_label=user.email,
+            details={"mfa_enrolled": user.mfa_enabled},
+            request=request,
+        )
+        db.commit()
+        return LoginResponse(
+            user=None,
+            expires_at=pending_exp,
+            mfa_required=True,
+            mfa_setup_required=not user.mfa_enabled,
+        )
+
     token, exp = issue_token(
         user_id=user.id, role=user.role.value, password_version=user.password_version
     )
@@ -434,10 +484,124 @@ def login(
     return LoginResponse(user=UserMe.model_validate(user), expires_at=exp)
 
 
+# ── «¿Has olvidado tu contraseña?» (Práctica 2) ─────────────────────────
+
+_FORGOT_MSG = (
+    "Si existe una cuenta con ese email, te hemos enviado un enlace para "
+    "restablecer la contraseña. Revisa tu bandeja (y la carpeta de spam)."
+)
+
+
+def _hash_reset_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+@router.post(
+    "/forgot-password",
+    response_model=ForgotPasswordResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(enforce_same_origin), Depends(auth_rate_limit)],
+)
+def forgot_password(
+    payload: ForgotPasswordRequest, db: DbSession, request: Request
+) -> ForgotPasswordResponse:
+    """Email a single-use reset link.
+
+    Anti-enumeration: same message and similar latency whether or not the
+    account exists. Only the SHA-256 of the token is stored.
+    """
+    started = time.monotonic()
+    settings = get_settings()
+    forgot_password_email_rate_limit(payload.email)
+
+    user = db.scalar(select(User).where(User.email == payload.email))
+    link_dev: str | None = None
+    if user is not None:
+        token = generate_verification_token()
+        user.password_reset_token_hash = _hash_reset_token(token)
+        user.password_reset_sent_at = datetime.now(UTC)
+        log_audit(
+            db,
+            actor=user,
+            action="auth.password_reset_requested",
+            target_type="user",
+            target_id=user.id,
+            target_label=user.email,
+            request=request,
+        )
+        db.commit()
+        sent = send_password_reset_email(user.email, user.name or "", token)
+        if not sent and not settings.is_production:
+            # Same dev-only fallback as email verification.
+            link_dev = password_reset_link(token)
+            logger.info(
+                "auth.password_reset_link_dev",
+                extra={"user_id": user.id, "link": link_dev},
+            )
+    equalize_timing(started, min_seconds=0.4)
+    return ForgotPasswordResponse(message=_FORGOT_MSG, reset_link_dev=link_dev)
+
+
+@router.post(
+    "/reset-password",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(enforce_same_origin), Depends(auth_rate_limit)],
+)
+def reset_password(
+    payload: ResetPasswordRequest, db: DbSession, request: Request, response: Response
+) -> None:
+    settings = get_settings()
+    user = db.scalar(
+        select(User).where(
+            User.password_reset_token_hash == _hash_reset_token(payload.token)
+        )
+    )
+    expired = (
+        user is None
+        or user.password_reset_sent_at is None
+        or datetime.now(UTC)
+        > user.password_reset_sent_at + timedelta(minutes=settings.password_reset_ttl_minutes)
+    )
+    if expired:
+        if user is not None:
+            user.password_reset_token_hash = None
+            user.password_reset_sent_at = None
+            db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="enlace inválido o caducado — solicita uno nuevo",
+        )
+
+    user.hashed_password = hash_password(payload.new_password)
+    # Invalidates every open session (JWT `pv` claim).
+    user.password_version = (user.password_version or 0) + 1
+    user.password_reset_token_hash = None
+    user.password_reset_sent_at = None
+    user.failed_login_attempts = 0
+    user.locked_until = None
+    # Clicking the emailed link proves ownership of the address.
+    if not user.is_verified:
+        user.is_verified = True
+        user.email_verified_at = datetime.now(UTC)
+        user.email_verification_token = None
+    log_audit(
+        db,
+        actor=user,
+        action="auth.password_reset",
+        target_type="user",
+        target_id=user.id,
+        target_label=user.email,
+        request=request,
+    )
+    db.commit()
+    response.delete_cookie(key=settings.cookie_name, path="/")
+
+
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 def logout(request: Request, response: Response, db: DbSession) -> None:
     s = get_settings()
     response.delete_cookie(key=s.cookie_name, path="/")
+    response.delete_cookie(key=s.mfa_pending_cookie_name, path="/api/auth/mfa")
     # Best-effort identify the user for the audit trail; logout never fails
     # auth even if the cookie is missing or stale.
     user_id: int | None = None

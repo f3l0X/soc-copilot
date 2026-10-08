@@ -10,7 +10,7 @@ import {
   useState,
 } from "react";
 
-import { ApiError, type UserMe, getMe, login, logout } from "@/lib/api";
+import { ApiError, type LoginResponse, type UserMe, getMe, login, logout } from "@/lib/api";
 
 // Key used to broadcast auth changes across tabs. The value is just a
 // monotonically-increasing timestamp; listeners only care that it changed.
@@ -19,7 +19,10 @@ const AUTH_SYNC_KEY = "soc_copilot_auth_event";
 interface AuthState {
   user: UserMe | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
+  /** Password step. When MFA is pending the user is NOT signed in yet. */
+  signIn: (email: string, password: string) => Promise<LoginResponse>;
+  /** Called after a successful /auth/mfa/verify. */
+  completeSignIn: (user: UserMe) => void;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -75,7 +78,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = useCallback(async (email: string, password: string) => {
     const res = await login(email, password);
-    setUser(res.user);
+    if (!res.mfa_required && res.user) {
+      setUser(res.user);
+      broadcast();
+    }
+    return res;
+  }, []);
+
+  const completeSignIn = useCallback((u: UserMe) => {
+    setUser(u);
     broadcast();
   }, []);
 
@@ -86,7 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <Ctx.Provider value={{ user, loading, signIn, signOut, refresh }}>
+    <Ctx.Provider value={{ user, loading, signIn, completeSignIn, signOut, refresh }}>
       {children}
     </Ctx.Provider>
   );

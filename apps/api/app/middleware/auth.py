@@ -43,6 +43,17 @@ def get_current_user(request: Request, db: DbSession) -> User:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="invalid or expired token",
         ) from None
+    # Purpose-bound tokens (e.g. "mfa_pending") are never sessions.
+    if payload.get("purpose"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid or expired token"
+        )
+    # Práctica 2 · MFA obligatorio: sessions must carry a verified 2nd factor.
+    if get_settings().mfa_required and payload.get("mfa") is not True:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="mfa required, please log in again",
+        )
     try:
         user_id = int(payload["sub"])
     except (KeyError, ValueError, TypeError):

@@ -5,12 +5,14 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
 import { ApiError, verifyEmail } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 
 function VerifyInner() {
   const params = useSearchParams();
+  const { t } = useI18n();
   const token = params.get("token") ?? "";
   const [state, setState] = useState<"pending" | "ok" | "error">("pending");
-  const [message, setMessage] = useState<string>("Verificando…");
+  const [message, setMessage] = useState<string>("");
 
   useEffect(() => {
     if (!token) {
@@ -39,16 +41,16 @@ function VerifyInner() {
 
   return (
     <main className="min-h-screen flex items-center justify-center p-8">
-      <div
-        className={`w-full max-w-md space-y-4 rounded-lg border p-6 ${tone}`}
-      >
-        <h1 className="text-2xl font-bold tracking-tight">Verificación de email</h1>
-        <p className="text-sm">{message}</p>
+      <div className={`w-full max-w-md space-y-4 rounded-lg border p-6 ${tone}`}>
+        <h1 className="text-2xl font-bold tracking-tight">
+          {t("login_email")} — {state === "pending" ? "…" : state === "ok" ? "✓" : "✕"}
+        </h1>
+        <p className="text-sm">{message || "Verificando…"}</p>
         <Link
           href="/login"
-          className="inline-block rounded bg-sky-600 hover:bg-sky-500 px-4 py-2 text-sm font-medium text-white"
+          className="inline-block rounded bg-sky-600 hover:brightness-110 px-4 py-2 text-sm font-medium text-white"
         >
-          Ir a iniciar sesión
+          {t("login_btn")}
         </Link>
       </div>
     </main>

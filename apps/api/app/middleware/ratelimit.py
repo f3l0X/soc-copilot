@@ -114,6 +114,13 @@ def check_email_rate_limit(request: Request) -> None:
     _check("auth_check_email", _client_id(request), 10, 60)
 
 
+def forgot_password_email_rate_limit(email: str) -> None:
+    """Max 3 reset emails per hour per address (anti mail-bombing)."""
+    key = email.strip().lower()
+    if key:
+        _check("forgot_email", key, 3, 3600)
+
+
 def register_email_rate_limit(email: str) -> None:
     """Per-email bucket on /auth/register, independent of the IP.
 

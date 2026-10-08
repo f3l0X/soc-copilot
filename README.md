@@ -131,6 +131,12 @@ Detalle en [docs/08-rag-ingestion.md](docs/08-rag-ingestion.md).
 | 4.5 | Dashboard analítico | ✅ |
 | 5 | Despliegue Hetzner + dominio + HTTPS + backups + SMTP + toggle registro | ✅ |
 | 6 | Informe PDF + presentación 10 min | ⏳ pendiente |
+| P2-1 | Práctica 2 · Integración Wazuh (push + pull) | ✅ |
+| P2-2 | Práctica 2 · Informe de incidente en PDF | ✅ |
+| P2-3 | Práctica 2 · Respuestas ES/EN con detección automática | ✅ |
+| P2-4 | Práctica 2 · MFA TOTP obligatorio | ✅ |
+
+Detalle de la Práctica 2 en [docs/14-practica2.md](docs/14-practica2.md).
 
 Detalle por fase en [docs/02-estado-fases.md](docs/02-estado-fases.md).
 
