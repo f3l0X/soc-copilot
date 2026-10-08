@@ -11,7 +11,7 @@ import {
   MIN_STRENGTH_SCORE,
   PASSWORD_RULES,
   STRENGTH_COLORS,
-  STRENGTH_LABELS,
+  STRENGTH_LABEL_KEYS,
   type ZxcvbnFn,
 } from "@/lib/password";
 
@@ -120,12 +120,12 @@ function ResetInner() {
               ))}
             </div>
             <p className="text-[11px] text-slate-400">
-              Fortaleza: <span className="font-medium text-slate-200">{STRENGTH_LABELS[score]}</span>
+              Fortaleza: <span className="font-medium text-slate-200">{t(STRENGTH_LABEL_KEYS[score])}</span>
             </p>
             <ul className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px]">
               {rules.map((r) => (
                 <li key={r.id} className={r.ok ? "text-emerald-400" : "text-slate-500"}>
-                  {r.ok ? "✓" : "○"} {r.label}
+                  {r.ok ? "✓" : "○"} {t(r.labelKey)}
                 </li>
               ))}
             </ul>

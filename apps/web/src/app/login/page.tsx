@@ -10,7 +10,7 @@ import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import {
   loadZxcvbn, MIN_STRENGTH_SCORE, PASSWORD_RULES,
-  STRENGTH_COLORS, STRENGTH_LABELS, type ZxcvbnFn,
+  STRENGTH_COLORS, STRENGTH_LABEL_KEYS, type ZxcvbnFn,
 } from "@/lib/password";
 
 const LEVEL_OPTIONS: { value: UserLevel; label: string; hint: string }[] = [
@@ -218,10 +218,10 @@ function LoginInner() {
                 <div key={i} className={`h-1.5 flex-1 rounded ${i <= strengthScore ? STRENGTH_COLORS[strengthScore] : "bg-slate-800"}`} />
               ))}
             </div>
-            <p className="text-[11px] text-slate-400">Fortaleza: <span className="font-medium text-slate-200">{STRENGTH_LABELS[strengthScore]}</span>{strengthFeedback ? ` — ${strengthFeedback}` : ""}</p>
+            <p className="text-[11px] text-slate-400">Fortaleza: <span className="font-medium text-slate-200">{t(STRENGTH_LABEL_KEYS[strengthScore])}</span>{strengthFeedback ? ` — ${strengthFeedback}` : ""}</p>
             <ul className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px]">
               {ruleChecks.map((r) => (
-                <li key={r.id} className={r.ok ? "text-emerald-400" : "text-slate-500"}>{r.ok ? "✓" : "○"} {r.label}</li>
+                <li key={r.id} className={r.ok ? "text-emerald-400" : "text-slate-500"}>{r.ok ? "✓" : "○"} {t(r.labelKey)}</li>
               ))}
             </ul>
           </div>

@@ -32,7 +32,7 @@ import {
   loadZxcvbn,
   MIN_STRENGTH_SCORE,
   STRENGTH_COLORS,
-  STRENGTH_LABELS,
+  STRENGTH_LABEL_KEYS,
   type ZxcvbnFn,
 } from "@/lib/password";
 
@@ -1252,7 +1252,7 @@ export default function AdminPage() {
                 <p className="text-[11px] text-slate-400">
                   Fortaleza:{" "}
                   <span className="font-medium text-slate-200">
-                    {STRENGTH_LABELS[pwStrengthScore]}
+                    {t(STRENGTH_LABEL_KEYS[pwStrengthScore])}
                   </span>
                   {pwStrengthFeedback ? ` — ${pwStrengthFeedback}` : ""}
                 </p>
@@ -1262,7 +1262,7 @@ export default function AdminPage() {
                       key={r.id}
                       className={r.ok ? "text-emerald-400" : "text-slate-500"}
                     >
-                      {r.ok ? "✓" : "○"} {r.label}
+                      {r.ok ? "✓" : "○"} {t(r.labelKey)}
                     </li>
                   ))}
                 </ul>
