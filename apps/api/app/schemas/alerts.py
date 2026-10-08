@@ -7,7 +7,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from app.config import get_settings
 
-
 # Output language for LLM answers (Práctica 2 · ES/EN). "auto" = detect
 # from the analyst's text, falling back to the UI language header.
 ResponseLanguage = Literal["es", "en", "fr", "auto"]
