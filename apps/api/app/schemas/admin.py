@@ -87,6 +87,7 @@ class AdminUserView(BaseModel):
     server_llm_quota_limit: int
     byo_key_configured: bool
     gemini_key_last4: str | None
+    mfa_enabled: bool = False
 
 
 class AppSettingsView(BaseModel):

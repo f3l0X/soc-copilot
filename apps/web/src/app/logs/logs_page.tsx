@@ -146,8 +146,8 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 
 export default function LogsAnalyzerPage() {
   const auth = useRequireAuth();
-  const { t } = useI18n();
   const router = useRouter();
+  const { t } = useI18n();
 
   const [filename, setFilename] = useState<string | null>(null);
   const [lines, setLines] = useState<ParsedLine[]>([]);
@@ -314,7 +314,7 @@ export default function LogsAnalyzerPage() {
   const startIdx = (currentPage - 1) * pageSize;
 
   if (!auth.ready) {
-    return <div className="p-8 text-slate-500 text-sm">{t("alerts_loading")}</div>;
+    return <div className="p-8 text-slate-500 text-sm">Verificando sesión…</div>;
   }
 
   return (
@@ -322,19 +322,22 @@ export default function LogsAnalyzerPage() {
       <header className="flex items-end justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-100">
-            {t("logs_title")}
+            Analizador de Logs
           </h1>
-          <p className="text-sm text-slate-400 mt-1">{t("logs_subtitle")}</p>
+          <p className="text-sm text-slate-400 mt-1">
+            Carga un archivo local, filtra y envía las líneas relevantes al
+            Alert Explainer.
+          </p>
         </div>
         <div className="text-right text-xs">
           <div className="text-slate-500">
-            {t("logs_total")}{" "}
-            <span className="font-mono text-slate-300">{lines.length}</span> ·{" "}
-            {t("logs_after_filters")}{" "}
+            Total{" "}
+            <span className="font-mono text-slate-300">{lines.length}</span> ·
+            tras filtros{" "}
             <span className="font-mono text-cyan-300">{filteredLines.length}</span>
           </div>
           <div className="text-slate-500">
-            {t("logs_selected")}{" "}
+            Seleccionadas{" "}
             <span className="font-mono text-cyan-300">{selectedIds.size}</span>
           </div>
         </div>
@@ -343,11 +346,11 @@ export default function LogsAnalyzerPage() {
       <div className="grid grid-cols-1 xl:grid-cols-[300px_minmax(0,1fr)] gap-4">
         <aside className="space-y-4">
           <section className="rounded-xl border border-ink-700 bg-ink-900/60 p-4">
-            <StepHeader n={1} title={t("logs_step_upload")} />
+            <StepHeader n={1} title="Cargar archivo" />
             <label className="block w-full border-2 border-dashed border-ink-700 hover:border-cyan-500/40 rounded-lg p-5 text-center cursor-pointer transition group">
               <div className="text-cyan-300/80 text-2xl mb-1">⬆</div>
               <span className="text-xs text-slate-400 group-hover:text-slate-300 break-all">
-                {filename ? filename : t("logs_upload_hint")}
+                {filename ? filename : "Click para subir .log / .txt / .csv"}
               </span>
               <input
                 type="file"
@@ -358,7 +361,7 @@ export default function LogsAnalyzerPage() {
             </label>
             {lines.length > 0 && (
               <p className="mt-3 text-[11px] font-mono text-cyan-400">
-                {lines.length} {t("logs_processed")}
+                {lines.length} líneas procesadas
               </p>
             )}
           </section>
@@ -366,19 +369,19 @@ export default function LogsAnalyzerPage() {
           <section className="rounded-xl border border-ink-700 bg-ink-900/60 p-4 space-y-3">
             <StepHeader
               n={2}
-              title={t("logs_step_filters")}
+              title="Filtros de red"
               action={
                 <button
                   onClick={handleClearFilters}
                   className="text-[11px] text-slate-500 hover:text-cyan-300 transition"
                 >
-                  {t("logs_clear")}
+                  Limpiar
                 </button>
               }
             />
 
             <label className="block">
-              <FieldLabel>{t("logs_src_ip")}</FieldLabel>
+              <FieldLabel>IP origen</FieldLabel>
               <input
                 type="text"
                 value={srcIpFilter}
@@ -388,7 +391,7 @@ export default function LogsAnalyzerPage() {
               />
             </label>
             <label className="block">
-              <FieldLabel>{t("logs_dst_ip")}</FieldLabel>
+              <FieldLabel>IP destino</FieldLabel>
               <input
                 type="text"
                 value={dstIpFilter}
@@ -400,7 +403,7 @@ export default function LogsAnalyzerPage() {
 
             <div className="grid grid-cols-2 gap-2">
               <label>
-                <FieldLabel>{t("logs_src_port")}</FieldLabel>
+                <FieldLabel>Puerto orig.</FieldLabel>
                 <input
                   type="number"
                   min={0}
@@ -412,7 +415,7 @@ export default function LogsAnalyzerPage() {
                 />
               </label>
               <label>
-                <FieldLabel>{t("logs_dst_port")}</FieldLabel>
+                <FieldLabel>Puerto dest.</FieldLabel>
                 <input
                   type="number"
                   min={0}
@@ -426,7 +429,7 @@ export default function LogsAnalyzerPage() {
             </div>
 
             <label className="block">
-              <FieldLabel>{t("logs_mac")}</FieldLabel>
+              <FieldLabel>MAC</FieldLabel>
               <input
                 type="text"
                 value={macFilter}
@@ -437,7 +440,7 @@ export default function LogsAnalyzerPage() {
             </label>
 
             <label className="block">
-              <FieldLabel>{t("logs_proto")}</FieldLabel>
+              <FieldLabel>Protocolo</FieldLabel>
               <select
                 value={protoFilter}
                 onChange={(e) => setProtoFilter(e.target.value)}
@@ -445,7 +448,7 @@ export default function LogsAnalyzerPage() {
               >
                 {PROTO_OPTIONS.map((p) => (
                   <option key={p} value={p}>
-                    {p === "" ? t("logs_all") : p}
+                    {p === "" ? "(todos)" : p}
                   </option>
                 ))}
               </select>
@@ -453,10 +456,10 @@ export default function LogsAnalyzerPage() {
           </section>
 
           <section className="rounded-xl border border-ink-700 bg-ink-900/60 p-4 space-y-3">
-            <StepHeader n={3} title={t("logs_step_more_filters")} />
+            <StepHeader n={3} title="Otros filtros" />
 
             <label className="block">
-              <FieldLabel>{t("logs_freetext")}</FieldLabel>
+              <FieldLabel>Texto libre</FieldLabel>
               <input
                 type="text"
                 value={searchTermInput}
@@ -474,7 +477,7 @@ export default function LogsAnalyzerPage() {
                   onChange={(e) => setRequireAuthFailure(e.target.checked)}
                   className="rounded bg-ink-950 border-ink-700 accent-cyan-500"
                 />
-                {t("logs_auth_failures")}
+                Errores de autenticación
               </label>
               <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer hover:text-slate-100">
                 <input
@@ -483,12 +486,12 @@ export default function LogsAnalyzerPage() {
                   onChange={(e) => setRequireHTTPError(e.target.checked)}
                   className="rounded bg-ink-950 border-ink-700 accent-cyan-500"
                 />
-                {t("logs_http_errors")}
+                HTTP 4xx / 5xx
               </label>
             </div>
 
             <div className="pt-3 border-t border-ink-700 space-y-2">
-              <FieldLabel>{t("logs_period")}</FieldLabel>
+              <FieldLabel>Periodo (heurístico)</FieldLabel>
               <input
                 type="datetime-local"
                 value={timeFrom}
@@ -505,9 +508,9 @@ export default function LogsAnalyzerPage() {
           </section>
 
           <section className="rounded-xl border border-ink-700 bg-ink-900/60 p-4 space-y-3 sticky bottom-4">
-            <StepHeader n={4} title={t("logs_step_analyze")} />
+            <StepHeader n={4} title={t("alerts_analyze_btn")} />
             <p className="text-xs text-slate-400">
-              {t("logs_selected_lines")}{" "}
+              Líneas seleccionadas:{" "}
               <span className="font-mono text-cyan-300">
                 {selectedIds.size}
               </span>
@@ -517,7 +520,7 @@ export default function LogsAnalyzerPage() {
               disabled={selectedIds.size === 0}
               className="w-full py-2 rounded-md text-xs font-medium bg-cyan-500 text-ink-950 hover:bg-cyan-400 disabled:bg-ink-700 disabled:text-slate-500 disabled:cursor-not-allowed transition"
             >
-              {t("logs_send_to_explainer")}
+              {t("alerts_analyze_btn")} →
             </button>
           </section>
         </aside>
@@ -533,12 +536,12 @@ export default function LogsAnalyzerPage() {
                 className="rounded bg-ink-950 border-ink-700 accent-cyan-500"
               />
               <span>
-                {t("logs_select_page")} ({paginatedLines.length})
+                Seleccionar página ({paginatedLines.length})
               </span>
             </label>
             <div className="flex items-center gap-3 text-[11px] text-slate-500">
               <label className="flex items-center gap-2">
-                <span>{t("logs_per_page")}</span>
+                <span>Por página</span>
                 <select
                   value={pageSize}
                   onChange={(e) => setPageSize(Number(e.target.value))}
@@ -552,7 +555,7 @@ export default function LogsAnalyzerPage() {
                 </select>
               </label>
               <span className="font-mono">
-                {filteredLines.length} {t("logs_hits")}
+                {filteredLines.length} hits
               </span>
             </div>
           </div>
@@ -561,11 +564,11 @@ export default function LogsAnalyzerPage() {
             {lines.length === 0 ? (
               <div className="h-full min-h-[400px] flex flex-col items-center justify-center gap-2 text-slate-500">
                 <div className="text-3xl text-slate-700">≡</div>
-                <span>{t("logs_empty")}</span>
+                <span>{t("tile_logs_desc")}</span>
               </div>
             ) : paginatedLines.length === 0 ? (
               <div className="h-full min-h-[400px] flex items-center justify-center text-slate-500">
-                {t("logs_no_match")}
+                Ninguna línea coincide con los filtros en esta página.
               </div>
             ) : (
               <div className="divide-y divide-ink-800/60">
@@ -652,17 +655,17 @@ export default function LogsAnalyzerPage() {
                 disabled={currentPage === 1}
                 className="px-3 py-1.5 bg-ink-900 border border-ink-700 hover:border-cyan-500/40 disabled:opacity-40 disabled:cursor-not-allowed rounded-md text-slate-300"
               >
-                {t("logs_prev")}
+              ← {t("history_col_date")}
               </button>
               <span className="text-slate-400 font-mono">
-                {t("logs_page")} {currentPage} / {totalPages}
+                Página {currentPage} / {totalPages}
               </span>
               <button
                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages}
                 className="px-3 py-1.5 bg-ink-900 border border-ink-700 hover:border-cyan-500/40 disabled:opacity-40 disabled:cursor-not-allowed rounded-md text-slate-300"
               >
-                {t("logs_next")}
+                Siguiente →
               </button>
             </div>
           )}

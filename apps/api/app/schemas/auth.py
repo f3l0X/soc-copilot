@@ -76,6 +76,7 @@ class UserMe(BaseModel):
     level_approved: bool
     is_verified: bool
     created_at: datetime
+    mfa_enabled: bool = False
 
 
 class RegisterResponse(BaseModel):
@@ -103,8 +104,68 @@ class UpdateProfileRequest(BaseModel):
 
 
 class LoginResponse(BaseModel):
+    """Login result.
+
+    With MFA required (default) a correct password does NOT open a session:
+    ``mfa_required`` is true, ``user`` is null (nothing about the account is
+    revealed before the second factor) and ``expires_at`` is the deadline
+    to complete the TOTP step. ``mfa_setup_required`` tells the UI to show
+    the enrolment QR instead of the code prompt.
+    """
+
+    user: UserMe | None = None
+    expires_at: datetime
+    mfa_required: bool = False
+    mfa_setup_required: bool = False
+
+
+# ── MFA / TOTP (Práctica 2) ────────────────────────────────────────────
+
+
+class MfaSetupResponse(BaseModel):
+    secret: str
+    otpauth_uri: str
+    qr_svg_data_uri: str
+    issuer: str
+    account: str
+
+
+class MfaVerifyRequest(BaseModel):
+    code: str | None = Field(None, min_length=6, max_length=8)
+    recovery_code: str | None = Field(None, min_length=8, max_length=20)
+
+    @field_validator("code")
+    @classmethod
+    def _digits(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        v = v.replace(" ", "")
+        if not v.isdigit():
+            raise ValueError("code must be numeric")
+        return v
+
+
+class MfaVerifyResponse(BaseModel):
     user: UserMe
     expires_at: datetime
+    # Only returned once, right after enrolment or regeneration.
+    recovery_codes: list[str] | None = None
+    recovery_codes_left: int
+
+
+class MfaStatusResponse(BaseModel):
+    required: bool
+    enabled: bool
+    enabled_at: datetime | None = None
+    recovery_codes_left: int
+
+
+class MfaCodeRequest(BaseModel):
+    code: str = Field(..., min_length=6, max_length=8)
+
+
+class MfaRecoveryCodesResponse(BaseModel):
+    recovery_codes: list[str]
 
 
 class VerifyEmailRequest(BaseModel):
@@ -148,3 +209,36 @@ class LLMSettingsUpdate(BaseModel):
 
     api_key: str | None = Field(None, min_length=10, max_length=256)
     preferred_chat_model: str | None = Field(None, min_length=1, max_length=64)
+
+
+# ── Password reset («¿Has olvidado tu contraseña?») ────────────────────
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+    @field_validator("email")
+    @classmethod
+    def _normalize(cls, v: str) -> str:
+        return normalize_email(v)
+
+
+class ForgotPasswordResponse(BaseModel):
+    """Always the same message, whether or not the email exists."""
+
+    message: str
+    # DEV ONLY (no SMTP, not production): link the email would contain.
+    reset_link_dev: str | None = None
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(..., min_length=20, max_length=64)
+    new_password: str = Field(..., min_length=MIN_LENGTH, max_length=MAX_LENGTH)
+
+    @field_validator("new_password")
+    @classmethod
+    def _strong_password(cls, v: str) -> str:
+        result = check_password(v)
+        if not result.ok:
+            raise ValueError(result.first_error())
+        return v

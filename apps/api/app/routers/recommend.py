@@ -1,14 +1,16 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import ValidationError
 
 from app.db import DbSession
 from app.middleware.auth import CurrentUser
 from app.middleware.ratelimit import rate_limit
-from app.models import Alert, Recommendation, UserRole
+from app.models import Alert, Recommendation
 from app.schemas.alerts import RecommendRequest, RecommendResponse
+from app.services.alert_access import can_view_alert
 from app.services.audit import log_audit
+from app.services.language import resolve_language
 from app.services.llm import LLMProviderError, LLMResponseError
 from app.services.recommender import recommend
 
@@ -22,7 +24,7 @@ router = APIRouter(
 
 @router.post("", response_model=RecommendResponse)
 def recommend_actions(
-    payload: RecommendRequest, db: DbSession, user: CurrentUser
+    payload: RecommendRequest, db: DbSession, user: CurrentUser, request: Request
 ) -> RecommendResponse:
     alert: Alert | None = None
     log = payload.log
@@ -37,8 +39,9 @@ def recommend_actions(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"alert {payload.alert_id} not found",
             )
-        # Ownership: analysts can only act on their own alerts; admin sees all.
-        if user.role != UserRole.ADMIN and alert.user_id != user.id:
+        # Ownership: analysts act on their own alerts + the shared SIEM
+        # queue; admin sees all (see services/alert_access.py).
+        if not can_view_alert(user, alert):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"alert {payload.alert_id} not found",
@@ -65,6 +68,7 @@ def recommend_actions(
             model=payload.model,
             user=user,
             db=db,
+            language=resolve_language(payload.language, request),
         )
     except LLMProviderError:
         logger.exception("LLM provider error in /recommend")

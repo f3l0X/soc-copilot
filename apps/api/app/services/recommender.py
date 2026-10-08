@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.schemas.alerts import RecommendResponse
 from app.services.audience import with_audience
+from app.services.language import with_language
 from app.services.llm import LLMAdapter, get_llm, get_llm_for_user
 
 LOG_BEGIN = "BEGIN_UNTRUSTED_LOG"
@@ -93,6 +94,7 @@ def recommend(
     *,
     user=None,
     db: Session | None = None,
+    language: str | None = None,
 ) -> RecommendResponse:
     if llm is None:
         llm = get_llm_for_user(user, db) if (user and db) else get_llm()
@@ -102,7 +104,7 @@ def recommend(
     data = llm.generate_json(
         user_prompt,
         schema=RESPONSE_SCHEMA,
-        system=with_audience(SYSTEM_PROMPT, user),
+        system=with_language(with_audience(SYSTEM_PROMPT, user), language),
         temperature=0.2,
         model=model,
     )

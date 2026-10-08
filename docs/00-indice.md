@@ -23,6 +23,13 @@ externo pueda ejecutarlo, mantenerlo o auditarlo.
 | 10 | [Manual de usuario](10-manual-usuario.md) | Guía para analista/admin: módulos, flujo de trabajo, cuotas, troubleshooting |
 | 11 | [Módulo de Auditoría](11-modulo-auditoria.md) | Detalles técnicos y funcionamiento del registro de eventos inmutable |
 | 12 | [Changelog de UI/UX](12-changelog.md) | Historial de cambios visibles para el usuario |
+| 13 | [Integración con Wazuh (SIEM)](13-integracion-wazuh.md) | Práctica 2 · ingesta push/pull de alertas Wazuh, simulador, seguridad |
+| 14 | [Práctica 2 — plan y estado](14-practica2.md) | Mejoras del roadmap seleccionadas, decisiones, cambios por fase y checklist de despliegue |
+| 15 | [Informe de incidente en PDF](15-informe-incidente.md) | Práctica 2 · generación del informe desde el chat o la alerta |
+| 16 | [Multiidioma ES/EN](16-multiidioma.md) | Práctica 2 · detección automática del idioma de respuesta |
+| 17 | [MFA TOTP obligatorio](17-mfa-totp.md) | Práctica 2 · segundo factor, recuperación, reset por admin |
+| 18 | [Paleta de colores](18-paleta-colores.md) | Modo oscuro y claro legibles (WCAG AA), cómo cambiar colores |
+| 19 | [¿Has olvidado tu contraseña?](19-recuperar-contrasena.md) | Recuperación de contraseña por email, seguridad del enlace |
 | —  | [**Operations runbook**](operations.md) | **Operación del entorno productivo en Hetzner**: acceso, deploy, migraciones, backups, troubleshooting |
 | —  | [Estado de seguridad y mitigaciones](security.md) | Threats activas y residuales |
 | —  | [Reporte de Vulnerabilidades](vulnerability_report.md) | Informe de la auditoría y parches de remediación |

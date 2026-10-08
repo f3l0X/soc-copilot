@@ -67,6 +67,14 @@ REGISTRY: tuple[PermissionDef, ...] = (
         default_analyst=False, default_admin=True,
     ),
     PermissionDef(
+        "users.reset_mfa", "Usuarios", "Resetear MFA (TOTP) de un usuario",
+        default_analyst=False, default_admin=True,
+    ),
+    PermissionDef(
+        "integrations.manage", "Integraciones", "Ver estado y sincronizar SIEM (Wazuh)",
+        default_analyst=False, default_admin=True,
+    ),
+    PermissionDef(
         "permissions.manage", "Permisos", "Modificar matriz de permisos",
         default_analyst=False, default_admin=True, locked=True,
     ),

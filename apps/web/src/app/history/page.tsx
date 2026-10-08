@@ -45,10 +45,7 @@ export default function HistoryPage() {
       {alerts && alerts.length === 0 && (
         <p className="text-slate-400">
           {t("history_empty")}{" "}
-          <Link href="/alerts" className="text-cyan-400 hover:underline">
-            {t("nav_alerts")}
-          </Link>
-          .
+          <Link href="/alerts" className="text-cyan-400 hover:underline">Alertas</Link>.
         </p>
       )}
 
@@ -69,24 +66,13 @@ export default function HistoryPage() {
             {alerts.map((a) => (
               <tr key={a.id} className="border-t border-ink-700">
                 <td className="px-3 py-2 text-slate-500">{a.id}</td>
-                <td className="px-3 py-2 text-slate-400">
-                  {new Date(a.created_at).toLocaleString()}
-                </td>
+                <td className="px-3 py-2 text-slate-400">{new Date(a.created_at).toLocaleString()}</td>
                 <td className="px-3 py-2 text-slate-400">{a.source ?? "—"}</td>
-                <td className="px-3 py-2 text-slate-200 max-w-md truncate">
-                  {a.summary ?? "—"}
-                </td>
+                <td className="px-3 py-2 text-slate-200 max-w-md truncate">{a.summary ?? "—"}</td>
+                <td className="px-3 py-2"><RiskBadge level={a.risk_level} /></td>
+                <td className="px-3 py-2 text-xs text-slate-400">{(a.mitre_techniques ?? []).join(", ") || "—"}</td>
                 <td className="px-3 py-2">
-                  <RiskBadge level={a.risk_level} />
-                </td>
-                <td className="px-3 py-2 text-xs text-slate-400">
-                  {(a.mitre_techniques ?? []).join(", ") || "—"}
-                </td>
-                <td className="px-3 py-2">
-                  <Link
-                    href={`/respond?alert_id=${a.id}`}
-                    className="text-xs text-cyan-400 hover:underline"
-                  >
+                  <Link href={`/respond?alert_id=${a.id}`} className="text-xs text-cyan-400 hover:underline">
                     {t("history_open")}
                   </Link>
                 </td>

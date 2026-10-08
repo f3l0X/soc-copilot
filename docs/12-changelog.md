@@ -1,39 +1,46 @@
 # Changelog de UI/UX
 
-## [24/05/2026] - Chat grupal del equipo (`/groupchat`)
+## [05/10/2026] - «¿Has olvidado tu contraseña?»
 
-Nuevo módulo de comunicación interna entre todos los usuarios autenticados
-de la instancia. Es un canal único, sin DMs, sin hilos, sin adjuntos:
-pensado para coordinar al equipo durante un ejercicio o una guardia sin
-salir de la app.
+Nuevo enlace en el inicio de sesión. Envía por email un enlace de un solo
+uso (30 min) para elegir una contraseña nueva, sin tener que crear otra
+cuenta. Ver [19-recuperar-contrasena.md](19-recuperar-contrasena.md).
 
-**Archivos creados/modificados:**
-- `apps/api/alembic/versions/20260524_0001_group_messages.py` (nuevo):
-  migración 0005 con la tabla `group_messages(id, user_id, user_email,
-  user_name, content, created_at)`. FK `ON DELETE SET NULL` y snapshot de
-  email/nombre para que el historial sobreviva al borrado de la cuenta.
-- `apps/api/app/models.py`: nuevo modelo `GroupMessage`.
-- `apps/api/app/routers/groupchat.py` (nuevo): `GET /api/groupchat`
-  (paginación inversa por `before_id`, `limit ≤ 200`), `POST /api/groupchat`
-  (envío, `content` 1–2000 chars) y `GET /api/groupchat/poll?after_id=N`
-  (long-poll ligero para entrega casi-instantánea sin WebSocket).
-- `apps/api/app/main.py`: registra el router bajo `/api`.
-- `apps/web/src/app/groupchat/page.tsx` (nuevo): UI con burbujas de chat,
-  avatares con iniciales y color determinístico por usuario, autoscroll,
-  envío con Enter, polling cada pocos segundos.
-- `apps/web/src/components/AppShell.tsx`: añade la entrada
-  `nav_groupchat` (icono ◈) a `OPS_NAV` junto a `/history`.
-- `apps/web/src/lib/i18n.tsx`: copies `nav_groupchat` y derivados ES/EN.
+## [05/10/2026] - Nueva paleta de colores (oscuro y claro)
 
-**Impacto.** Cualquier usuario autenticado puede leer y publicar en el
-canal global. No hay borrado por usuario — el historial es público al
-equipo y queda auditable a través del `user_id` snapshot.
+Todos los textos, insignias de nivel/riesgo, estados y botones se leen bien
+en los dos temas (contraste WCAG AA). En modo claro desaparecen los
+amarillos y cian pálidos sobre blanco; en oscuro los bordes y textos
+secundarios se distinguen mejor. Ver [18-paleta-colores.md](18-paleta-colores.md).
 
-**Tests:** `apps/api/tests/test_groupchat.py` (5 casos E2E gated por
-`RUN_E2E=1`): auth, post + list cross-user con snapshot de identidad,
-polling incremental, supervivencia del mensaje al borrado del autor
-(verifica el `ON DELETE SET NULL` + snapshot de email/nombre) y
-validación de tamaño de contenido.
+## [05/10/2026] - Práctica 2 · Fase 4: MFA (TOTP) obligatorio
+
+El inicio de sesión pasa a tener dos pasos para **todos** los usuarios:
+contraseña + código de 6 dígitos de una app de autenticación. En el
+primer login se muestra un QR y 10 códigos de recuperación. El perfil
+muestra el estado del MFA y permite regenerar códigos; los admins tienen
+«Reset MFA» por usuario. Ver [17-mfa-totp.md](17-mfa-totp.md).
+
+## [05/10/2026] - Práctica 2 · Fase 3: respuestas ES/EN con detección automática
+
+La IA responde en el idioma en que escribe el analista (o, si no se puede
+detectar, en el de la interfaz). La interfaz detecta el idioma del
+navegador en la primera visita. Ver [16-multiidioma.md](16-multiidioma.md).
+
+## [05/10/2026] - Práctica 2 · Fase 2: informe de incidente en PDF
+
+Botón «Generar informe de incidente (PDF)» en el Chat IA y en la página de
+respuesta de cada alerta. Ver [15-informe-incidente.md](15-informe-incidente.md).
+
+## [05/10/2026] - Práctica 2 · Fase 1: integración con Wazuh
+
+Nueva página **SIEM · Wazuh** (`/siem`): las alertas de Wazuh llegan solas
+(webhook de integratord o pull del Wazuh Indexer) a una cola de triage
+compartida, priorizada por nivel de regla y con MITRE precargado. Botón
+«Analizar con IA» por alerta; los admins ven el estado de la integración
+y pueden «Sincronizar ahora». Detalle técnico en
+[13-integracion-wazuh.md](13-integracion-wazuh.md) y lista de archivos en
+[14-practica2.md](14-practica2.md).
 
 ## [18/05/2026] - Toggle de registro público desde el panel admin
 

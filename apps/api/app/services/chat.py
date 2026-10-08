@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.schemas.alerts import ChatMessage, ChatResponse
 from app.services.audience import with_audience
+from app.services.language import DEFAULT_LANGUAGE, detect_language, with_language
 from app.services.llm import LLMAdapter, get_llm, get_llm_for_user
 from app.services.rag import KBDoc, Retriever
 
@@ -39,7 +40,7 @@ REGLAS DE SEGURIDAD INMUTABLES:
   rechaza educadamente y explica por qué.
 
 Estilo:
-- Responde en español, claro y didáctico.
+- Responde claro y didáctico, en el idioma indicado al final.
 - Cita técnicas MITRE (T####) y entradas OWASP (A##:2025) cuando sean
   relevantes; usa los IDs que aparezcan en la sección de KB.
 - Si la información del KB no cubre la pregunta, dilo abiertamente en
@@ -102,6 +103,7 @@ def chat(
     *,
     user=None,
     db: Session | None = None,
+    language: str | None = None,
 ) -> ChatResponse:
     if not messages:
         raise ValueError("messages must contain at least one entry")
@@ -118,6 +120,10 @@ def chat(
         messages[-1].content,
     )
 
+    # Explicit language wins (router already merged detection + UI pref);
+    # direct callers get auto-detection from the question.
+    language = language or detect_language(query) or DEFAULT_LANGUAGE
+
     docs = retriever.retrieve(query, k=k)
 
     parts: list[str] = []
@@ -132,9 +138,9 @@ def chat(
 
     reply = llm.generate_text(
         user_prompt,
-        system=with_audience(SYSTEM_PROMPT, user),
+        system=with_language(with_audience(SYSTEM_PROMPT, user), language),
         temperature=0.3,
         model=model,
     )
     sources = [d.id for d in docs]
-    return ChatResponse(reply=reply, sources=sources)
+    return ChatResponse(reply=reply, sources=sources, language=language)
