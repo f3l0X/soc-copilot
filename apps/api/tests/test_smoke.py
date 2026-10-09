@@ -566,8 +566,8 @@ def test_explain_passes_allowed_model_to_llm():
         def embed(self, texts):
             return []
 
-    explainer.explain("ok", llm=CapturingLLM(), model="gemini-2.5-flash")
-    assert captured["model"] == "gemini-2.5-flash"
+    explainer.explain("ok", llm=CapturingLLM(), model="gemini-3.5-flash")
+    assert captured["model"] == "gemini-3.5-flash"
 
 
 def test_chat_accepts_allowed_model(monkeypatch):
@@ -581,7 +581,7 @@ def test_chat_accepts_allowed_model(monkeypatch):
         "/api/chat",
         json={
             "messages": [{"role": "user", "content": "hi"}],
-            "model": "gemini-2.0-flash-lite",
+            "model": "gemini-3.1-flash-lite",
         },
     )
     assert r.status_code == 200, r.text

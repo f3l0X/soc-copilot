@@ -274,14 +274,14 @@ def test_get_llm_settings_returns_safe_view(client_with_user):
         gemini_api_key_ciphertext=encrypt("AIzaSy-secret-12345"),
         gemini_key_last4="2345",
         gemini_key_validated_at=datetime.now(UTC),
-        preferred_chat_model="gemini-2.5-flash-lite",
+        preferred_chat_model="gemini-3.1-flash-lite",
     )
     r = client.get("/api/auth/me/llm")
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["configured"] is True
     assert body["key_last4"] == "2345"
-    assert body["preferred_chat_model"] == "gemini-2.5-flash-lite"
+    assert body["preferred_chat_model"] == "gemini-3.1-flash-lite"
     # The response must NEVER contain the plaintext key or ciphertext.
     assert "ciphertext" not in r.text.lower()
     assert "AIza" not in r.text

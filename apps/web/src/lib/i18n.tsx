@@ -34,6 +34,8 @@ export const translations = {
     groupchat_err_load: "No se pudieron cargar los mensajes.",
     groupchat_err_send: "No se pudo enviar el mensaje.",
     fab_close: "Cerrar",
+    pw_show: "Mostrar contraseña",
+    pw_hide: "Ocultar contraseña",
     pwrule_len: "Al menos 10 caracteres",
     pwrule_upper: "Incluye mayúscula",
     pwrule_lower: "Incluye minúscula",
@@ -119,6 +121,7 @@ export const translations = {
     history_open: "abrir →",
     // SIEM · Wazuh (Práctica 2)
     nav_siem: "SIEM · Wazuh",
+    nav_siem_wazuh: "Alertas Wazuh",   // español
     siem_title: "SIEM · Wazuh",
     siem_subtitle: "Alertas recibidas en tiempo real desde Wazuh. Prioriza por nivel y lanza el análisis IA con un clic.",
     siem_filter_pending: "Pendientes",
@@ -273,6 +276,8 @@ export const translations = {
     groupchat_err_load: "Could not load messages.",
     groupchat_err_send: "Could not send the message.",
     fab_close: "Close",
+    pw_show: "Show password",
+    pw_hide: "Hide password",
     pwrule_len: "At least 10 characters",
     pwrule_upper: "Includes uppercase",
     pwrule_lower: "Includes lowercase",
@@ -358,6 +363,7 @@ export const translations = {
     history_open: "open →",
     // SIEM · Wazuh (Práctica 2)
     nav_siem: "SIEM · Wazuh",
+    nav_siem_wazuh: "Wazuh alerts", 
     siem_title: "SIEM · Wazuh",
     siem_subtitle: "Alerts received in real time from Wazuh. Prioritise by level and run the AI analysis with one click.",
     siem_filter_pending: "Pending",
@@ -512,6 +518,8 @@ export const translations = {
     groupchat_err_load: "Impossible de charger les messages.",
     groupchat_err_send: "Impossible d'envoyer le message.",
     fab_close: "Fermer",
+    pw_show: "Afficher le mot de passe",
+    pw_hide: "Masquer le mot de passe",
     pwrule_len: "Au moins 10 caractères",
     pwrule_upper: "Inclut une majuscule",
     pwrule_lower: "Inclut une minuscule",
@@ -597,6 +605,7 @@ export const translations = {
     history_open: "ouvrir →",
     // SIEM · Wazuh (Práctica 2)
     nav_siem: "SIEM · Wazuh",
+    nav_siem_wazuh: "Alertes Wazuh",
     siem_title: "SIEM · Wazuh",
     siem_subtitle: "Alertes reçues en temps réel depuis Wazuh. Priorisez par niveau et lancez l'analyse IA en un clic.",
     siem_filter_pending: "En attente",

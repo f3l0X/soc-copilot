@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 
 import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
@@ -15,11 +16,19 @@ type NavItem = {
   shortcut?: string;
 };
 
-const OPS_NAV: NavItem[] = [
+// Operación: entradas sueltas arriba y abajo, y el grupo SIEM en medio.
+const OPS_TOP: NavItem[] = [
   { href: "/dashboard", labelKey: "nav_dashboard", icon: "▦", shortcut: "⌘1" },
-  { href: "/alerts",    labelKey: "nav_alerts",    icon: "▲" },
-  { href: "/siem",      labelKey: "nav_siem",      icon: "⇶" },
-  { href: "/logs",      labelKey: "nav_logs",      icon: "≡" },
+];
+
+// Subpáginas del menú SIEM.
+const SIEM_NAV: NavItem[] = [
+  { href: "/siem",   labelKey: "nav_siem_wazuh", icon: "⇶" },
+  { href: "/alerts", labelKey: "nav_alerts",     icon: "▲" },
+  { href: "/logs",   labelKey: "nav_logs",       icon: "≡" },
+];
+
+const OPS_BOTTOM: NavItem[] = [
   { href: "/chat",      labelKey: "nav_chat",      icon: "◐" },
   { href: "/groupchat", labelKey: "nav_groupchat", icon: "◈" },
   { href: "/history",   labelKey: "nav_history",   icon: "◷" },
@@ -38,11 +47,14 @@ function Sidebar() {
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(href + "/");
 
+  const siemActive = SIEM_NAV.some((it) => isActive(it.href));
+  const [siemOpen, setSiemOpen] = useState(siemActive);
+
   const sysNav = SYS_NAV.filter(
     (it) => it.href !== "/admin" || user?.role === "admin",
   );
 
-  const renderItem = (it: NavItem) => {
+  const renderItem = (it: NavItem, nested = false) => {
     const active = isActive(it.href);
     return (
       <Link
@@ -50,6 +62,7 @@ function Sidebar() {
         href={it.href}
         className={
           "flex items-center gap-3 px-3 py-2 rounded-md text-sm transition " +
+          (nested ? "ml-4 " : "") +
           (active
             ? "bg-cyan-500/10 text-cyan-300 border border-cyan-500/20"
             : "text-slate-300 hover:bg-ink-800 border border-transparent")
@@ -90,12 +103,34 @@ function Sidebar() {
         <div className="px-3 pb-2 text-[10px] uppercase tracking-widest opacity-50">
           {t("nav_ops")}
         </div>
-        {OPS_NAV.map(renderItem)}
+        {OPS_TOP.map((it) => renderItem(it))}
+
+        {/* ── Menú SIEM (Wazuh · Alertas · Logs) ─────────────── */}
+        <button
+          type="button"
+          onClick={() => setSiemOpen((o) => !o)}
+          aria-expanded={siemOpen || siemActive}
+          className={
+            "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition border " +
+            (siemActive
+              ? "text-cyan-300 border-transparent"
+              : "text-slate-300 hover:bg-ink-800 border-transparent")
+          }
+        >
+          <span className="w-4 text-center">◎</span>
+          <span>SIEM</span>
+          <span className="ml-auto text-xs opacity-60">{siemOpen || siemActive ? "▾" : "▸"}</span>
+        </button>
+        {(siemOpen || siemActive) && (
+          <div className="space-y-1">{SIEM_NAV.map((it) => renderItem(it, true))}</div>
+        )}
+
+        {OPS_BOTTOM.map((it) => renderItem(it))}
 
         <div className="px-3 pt-5 pb-2 text-[10px] uppercase tracking-widest opacity-50">
           {t("nav_system")}
         </div>
-        {sysNav.map(renderItem)}
+        {sysNav.map((it) => renderItem(it))}
       </nav>
 
       <div className="mt-auto m-3 rounded-lg border p-3 text-xs status-widget">

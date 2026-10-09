@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     app_env: str = "development"
 
     gemini_api_key: str = ""
-    gemini_chat_model: str = "gemini-2.5-flash-lite"
+    gemini_chat_model: str = "gemini-3.5-flash-lite"
     gemini_embed_model: str = "gemini-embedding-001"
 
     # Allowlist of chat models the frontend can switch to. Each must support
@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     # /api/explain and /api/recommend keep parsing structured output.
     # Comma-separated in env.
     gemini_chat_models_allowlist: str = (
-        "gemini-2.5-flash-lite,gemini-2.5-flash,gemini-2.0-flash-lite"
+        "gemini-3.5-flash-lite,gemini-3.5-flash,gemini-3.1-flash-lite"
     )
 
     @property

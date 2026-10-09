@@ -33,7 +33,7 @@ TIMEOUT_S = 10
 RETRIES = 3
 
 # Optional: path to a CA bundle if SOC Copilot uses a private CA.
-CA_FILE = os.environ.get("SOCCOPILOT_CA_FILE", "")
+CA_FILE = os.environ.get("SOCCOPILOT_CA_FILE", "/etc/ssl/certs/ca-certificates.crt")
 
 
 def log(msg: str) -> None:
