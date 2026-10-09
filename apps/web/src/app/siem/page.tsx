@@ -3,12 +3,10 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
-import { MitreList, RiskBadge } from "@/components/RiskBadge";
+import { RiskBadge } from "@/components/RiskBadge";
 import {
-  type AlertDetail,
   type AlertSummary,
   ApiError,
-  analyzeStoredAlert,
   getWazuhStatus,
   listAlerts,
   type WazuhStatus,
@@ -16,7 +14,6 @@ import {
 } from "@/lib/api";
 import { useRequireAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
-import { useModel } from "@/lib/useModel";
 
 type Filter = "pending" | "analyzed" | "all";
 const REFRESH_MS = 15_000;
@@ -142,13 +139,10 @@ function IntegrationPanel() {
 export default function SiemPage() {
   const auth = useRequireAuth();
   const { t } = useI18n();
-  const { selected: model } = useModel();
   const [filter, setFilter] = useState<Filter>("pending");
   const [alerts, setAlerts] = useState<AlertSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [busyId, setBusyId] = useState<number | null>(null);
-  const [opened, setOpened] = useState<AlertDetail | null>(null);
 
   const load = useCallback(() => {
     const pending = filter === "all" ? undefined : filter === "pending";
@@ -167,20 +161,6 @@ export default function SiemPage() {
     const id = setInterval(load, REFRESH_MS);
     return () => clearInterval(id);
   }, [auth.user, load, autoRefresh]);
-
-  async function analyze(id: number) {
-    setBusyId(id);
-    setError(null);
-    try {
-      const detail = await analyzeStoredAlert(id, model ?? undefined);
-      setOpened(detail);
-      load();
-    } catch (e) {
-      setError(errMsg(e));
-    } finally {
-      setBusyId(null);
-    }
-  }
 
   if (!auth.ready) {
     return <div className="p-8 text-slate-500 text-sm">{t("alerts_loading")}</div>;
@@ -240,38 +220,6 @@ export default function SiemPage() {
         </div>
       )}
 
-      {opened && (
-        <div className="space-y-4 rounded-lg border border-ink-700 bg-ink-900/60 p-6">
-          <div className="flex items-start justify-between gap-4">
-            <h2 className="text-lg font-semibold">
-              {t("alerts_summary")} <span className="text-xs text-slate-500">#{opened.id}</span>
-            </h2>
-            <div className="flex items-center gap-2">
-              <RiskBadge level={opened.risk_level} />
-              <button
-                type="button"
-                onClick={() => setOpened(null)}
-                className="text-xs opacity-60 hover:opacity-100"
-                aria-label="close"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-          <p className="text-slate-200 leading-relaxed">{opened.summary}</p>
-          <MitreList techniques={opened.mitre_techniques} />
-          <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-line">
-            {opened.reasoning}
-          </p>
-          <Link
-            href={`/respond?alert_id=${opened.id}`}
-            className="inline-block rounded bg-emerald-600 hover:brightness-110 px-4 py-2 text-sm font-medium text-white"
-          >
-            {t("alerts_next_step")}
-          </Link>
-        </div>
-      )}
-
       {!alerts && !error && <p className="text-slate-400">{t("history_loading")}</p>}
       {alerts && alerts.length === 0 && <p className="text-slate-400">{t("siem_empty")}</p>}
 
@@ -315,19 +263,21 @@ export default function SiemPage() {
                     )}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
+                    {/* Analizar / ver: se abre en la página Alertas con la alerta cargada */}
                     {a.analyzed_at ? (
-                      <Link href={`/respond?alert_id=${a.id}`} className="text-xs text-cyan-400 hover:underline">
+                      <Link
+                        href={`/alerts?wazuh_id=${a.id}`}
+                        className="text-xs text-cyan-400 hover:underline"
+                      >
                         {t("siem_view")}
                       </Link>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => analyze(a.id)}
-                        disabled={busyId === a.id}
-                        className="rounded bg-cyan-600 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-1 text-xs font-medium text-white"
+                      <Link
+                        href={`/alerts?wazuh_id=${a.id}`}
+                        className="inline-block rounded bg-cyan-600 hover:brightness-110 px-3 py-1 text-xs font-medium text-white"
                       >
-                        {busyId === a.id ? t("siem_analyzing_btn") : t("siem_analyze_btn")}
-                      </button>
+                        {t("siem_analyze_btn")}
+                      </Link>
                     )}
                   </td>
                 </tr>

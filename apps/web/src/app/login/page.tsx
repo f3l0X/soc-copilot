@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 
 import { MfaStep } from "@/components/MfaStep";
+import { PasswordInput } from "@/components/PasswordInput";
 import { ApiError, checkEmail, register, UserLevel } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
@@ -182,7 +183,7 @@ function LoginInner() {
 
         <label className="block text-sm">
           <span className="text-slate-400">{t("login_password")}</span>
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required
+                    <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} required
             minLength={mode === "register" ? 10 : 1} autoComplete={mode === "register" ? "new-password" : "current-password"}
             className="mt-1 w-full rounded bg-slate-900 border border-slate-700 px-3 py-2" />
         </label>
@@ -201,7 +202,7 @@ function LoginInner() {
         {mode === "register" && (
           <label className="block text-sm">
             <span className="text-slate-400">{t("login_confirm_password")}</span>
-            <input type="password" value={passwordConfirm} onChange={(e) => setPasswordConfirm(e.target.value)} required minLength={10} autoComplete="new-password"
+             <PasswordInput value={passwordConfirm} onChange={(e) => setPasswordConfirm(e.target.value)} required minLength={10} autoComplete="new-password"
               className="mt-1 w-full rounded bg-slate-900 border border-slate-700 px-3 py-2" />
             {passwordConfirm && (
               <span className={`mt-1 block text-[11px] ${passwordsMatch ? "text-emerald-400" : "text-rose-400"}`}>
