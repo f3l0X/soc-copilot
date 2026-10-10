@@ -13,6 +13,7 @@ import {
   loadZxcvbn, MIN_STRENGTH_SCORE, PASSWORD_RULES,
   STRENGTH_COLORS, STRENGTH_LABEL_KEYS, type ZxcvbnFn,
 } from "@/lib/password";
+import { LoginBackground, SocEyeLogo } from "@/components/LoginBackground";
 
 const LEVEL_OPTIONS: { value: UserLevel; label: string; hint: string }[] = [
   { value: "L1", label: "Analista L1", hint: "Junior — el Copilot explica paso a paso" },
@@ -115,8 +116,9 @@ function LoginInner() {
 
   if (mfaStep) {
     return (
-      <main className="min-h-screen flex items-center justify-center p-8">
-        <div className="w-full max-w-md rounded-lg border border-slate-800 bg-slate-900/40 p-6">
+            <main className="relative min-h-screen flex items-center justify-center p-8">
+        <LoginBackground />
+        <div className="relative z-10 w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900/40 backdrop-blur-xl p-6 shadow-[0_0_60px_-10px_rgba(123,47,247,.55)]">
           <MfaStep
             mode={mfaStep}
             onDone={(u) => {
@@ -134,10 +136,14 @@ function LoginInner() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-8">
-      <form onSubmit={onSubmit} className="w-full max-w-md space-y-4 rounded-lg border border-slate-800 bg-slate-900/40 p-6">
+       <main className="relative min-h-screen flex items-center justify-center p-8">
+      <LoginBackground />
+          <form onSubmit={onSubmit} className="relative z-10 w-full max-w-md space-y-4 rounded-2xl border border-slate-800 bg-slate-900/40 backdrop-blur-xl p-6 shadow-[0_0_60px_-10px_rgba(123,47,247,.55)]">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">{t("login_title")}</h1>
+          <div className="flex items-center gap-3">
+            <SocEyeLogo className="w-10 h-10" />
+            <h1 className="text-2xl font-bold tracking-tight">{t("login_title")}</h1>
+          </div>
           <p className="text-sm text-slate-400 mt-1">
             {mode === "login" ? t("login_subtitle") : t("login_register_subtitle")}
           </p>
@@ -232,7 +238,7 @@ function LoginInner() {
         {info && <div className="rounded border border-emerald-700 bg-emerald-950/40 p-3 text-xs text-emerald-200 break-all">{info}</div>}
 
         <button type="submit" disabled={loading || !canSubmit}
-          className="w-full rounded bg-sky-600 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white">
+                   className="w-full rounded bg-gradient-to-r from-[#FF2E93] to-[#7B2FF7] hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white">
           {loading ? t("login_loading_btn") : mode === "login" ? t("login_btn") : t("login_register_btn")}
         </button>
 
