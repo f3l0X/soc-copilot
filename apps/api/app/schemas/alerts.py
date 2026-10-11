@@ -123,6 +123,11 @@ class AlertSummary(BaseModel):
     agent_name: str | None = None
     event_at: datetime | None = None
     analyzed_at: datetime | None = None
+    # Ciclo de vida (Práctica 3)
+    status: str = "new"
+    assigned_to_id: int | None = None
+    escalated_at: datetime | None = None
+    resolved_at: datetime | None = None
 
 
 class AlertAnalyzeRequest(BaseModel):
@@ -141,6 +146,56 @@ class AlertDetail(AlertSummary):
     log: str
     reasoning: str | None
     recommendations: list[RecommendationDetail] = []
+    # Ciclo de vida (Práctica 3)
+    escalation_note: str | None = None
+    escalated_by_id: int | None = None
+    resolution: str | None = None
+    resolved_by_id: int | None = None
+    events: list[AlertEventOut] = []
+
+
+# ─── Ciclo de vida de la alerta (Práctica 3) ────────────────────────────────
+
+
+class AlertEventOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    action: str
+    actor_id: int | None
+    actor_email: str
+    from_status: str | None
+    to_status: str | None
+    note: str | None
+    created_at: datetime
+
+
+class AlertEscalateRequest(BaseModel):
+    note: str = Field(
+        ...,
+        min_length=10,
+        max_length=2_000,
+        description="Motivo del escalado (obligatorio, mínimo 10 caracteres)",
+    )
+
+    @field_validator("note")
+    @classmethod
+    def _note_non_whitespace(cls, v: str) -> str:
+        if len(v.strip()) < 10:
+            raise ValueError("note must contain at least 10 non-whitespace characters")
+        return v.strip()
+
+
+class AlertResolveRequest(BaseModel):
+    verdict: Literal["resolved", "false_positive"]
+    resolution: str = Field(..., min_length=5, max_length=4_000)
+
+    @field_validator("resolution")
+    @classmethod
+    def _resolution_non_whitespace(cls, v: str) -> str:
+        if len(v.strip()) < 5:
+            raise ValueError("resolution must contain at least 5 non-whitespace characters")
+        return v.strip()
 
 
 class RecommendationDetail(BaseModel):

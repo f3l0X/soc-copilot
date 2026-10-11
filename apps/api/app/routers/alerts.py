@@ -11,8 +11,24 @@ from app.db import DbSession
 from app.middleware.auth import CurrentUser
 from app.middleware.ratelimit import rate_limit
 from app.models import Alert
-from app.schemas.alerts import AlertAnalyzeRequest, AlertDetail, AlertSummary
+from app.schemas.alerts import (
+    AlertAnalyzeRequest,
+    AlertDetail,
+    AlertEscalateRequest,
+    AlertResolveRequest,
+    AlertSummary,
+)
 from app.services.alert_access import can_view_alert, scope_visible_alerts
+from app.services.alert_workflow import (
+    OPEN_STATUSES,
+    QUEUE_STATUSES,
+    WorkflowError,
+    apply_assign,
+    apply_escalate,
+    apply_reopen,
+    apply_resolve,
+    mark_triaged,
+)
 from app.services.audit import log_audit
 from app.services.explainer import explain
 from app.services.language import resolve_language
@@ -32,6 +48,13 @@ def list_alerts(
     pending: bool | None = Query(
         None, description="true = only alerts without AI analysis yet"
     ),
+    queue: Literal["new", "escalated", "in_progress", "mine", "closed"] | None = Query(
+        None,
+        description=(
+            "Cola del ciclo de vida: new (nuevas y triadas), escalated, "
+            "in_progress, mine (asignadas a mí y abiertas) o closed"
+        ),
+    ),
 ) -> list[Alert]:
     stmt = select(Alert).order_by(Alert.created_at.desc()).offset(offset).limit(limit)
     # Analysts see their own alerts + the shared Wazuh queue; admins see all.
@@ -42,11 +65,21 @@ def list_alerts(
         stmt = stmt.where(Alert.analyzed_at.is_(None))
     elif pending is False:
         stmt = stmt.where(Alert.analyzed_at.is_not(None))
+    if queue == "mine":
+        stmt = stmt.where(
+            Alert.assigned_to_id == user.id, Alert.status.in_(tuple(OPEN_STATUSES))
+        )
+    elif queue is not None:
+        stmt = stmt.where(Alert.status.in_(QUEUE_STATUSES[queue]))
     return list(db.scalars(stmt).all())
 
 
 def _get_visible(db, user, alert_id: int) -> Alert:
-    alert = db.get(Alert, alert_id, options=[selectinload(Alert.recommendations)])
+    alert = db.get(
+        Alert,
+        alert_id,
+        options=[selectinload(Alert.recommendations), selectinload(Alert.events)],
+    )
     if alert is None or not can_view_alert(user, alert):
         # Don't reveal existence to users who can't see it.
         raise HTTPException(status_code=404, detail=f"alert {alert_id} not found")
@@ -102,6 +135,7 @@ def analyze_alert(
     alert.analyzed_at = datetime.now(UTC)
     if alert.user_id is None:
         alert.user_id = user.id
+    mark_triaged(db, alert, user)
     log_audit(
         db,
         actor=user,
@@ -113,3 +147,72 @@ def analyze_alert(
     db.commit()
     db.refresh(alert)
     return alert
+
+
+# ─── Ciclo de vida: escalar, asignar, cerrar, reabrir (Práctica 3) ──────────
+
+
+def _workflow_http(exc: WorkflowError) -> HTTPException:
+    return HTTPException(status_code=exc.status_code, detail=exc.detail)
+
+
+def _finish(db, user, alert: Alert, action: str, details: dict) -> Alert:
+    log_audit(
+        db,
+        actor=user,
+        action=f"alert.{action}",
+        target_type="alert",
+        target_id=alert.id,
+        details={"status": alert.status, **details},
+    )
+    db.commit()
+    db.refresh(alert)
+    return alert
+
+
+@router.post("/{alert_id}/escalate", response_model=AlertDetail)
+def escalate_alert(
+    alert_id: int, payload: AlertEscalateRequest, db: DbSession, user: CurrentUser
+) -> Alert:
+    """Escala la alerta al siguiente nivel con una nota obligatoria."""
+    alert = _get_visible(db, user, alert_id)
+    try:
+        apply_escalate(db, alert, user, payload.note)
+    except WorkflowError as exc:
+        raise _workflow_http(exc) from None
+    return _finish(db, user, alert, "escalate", {})
+
+
+@router.post("/{alert_id}/assign", response_model=AlertDetail)
+def assign_alert(alert_id: int, db: DbSession, user: CurrentUser) -> Alert:
+    """El analista (L2, INSTRUCTOR o admin) se asigna la alerta para investigarla."""
+    alert = _get_visible(db, user, alert_id)
+    try:
+        apply_assign(db, alert, user)
+    except WorkflowError as exc:
+        raise _workflow_http(exc) from None
+    return _finish(db, user, alert, "assign", {})
+
+
+@router.post("/{alert_id}/resolve", response_model=AlertDetail)
+def resolve_alert(
+    alert_id: int, payload: AlertResolveRequest, db: DbSession, user: CurrentUser
+) -> Alert:
+    """Cierra la alerta como resuelta o falso positivo, con la resolución."""
+    alert = _get_visible(db, user, alert_id)
+    try:
+        apply_resolve(db, alert, user, payload.verdict, payload.resolution)
+    except WorkflowError as exc:
+        raise _workflow_http(exc) from None
+    return _finish(db, user, alert, "resolve", {"verdict": payload.verdict})
+
+
+@router.post("/{alert_id}/reopen", response_model=AlertDetail)
+def reopen_alert(alert_id: int, db: DbSession, user: CurrentUser) -> Alert:
+    """Reabre una alerta cerrada (L2, INSTRUCTOR o admin) y se la asigna."""
+    alert = _get_visible(db, user, alert_id)
+    try:
+        apply_reopen(db, alert, user)
+    except WorkflowError as exc:
+        raise _workflow_http(exc) from None
+    return _finish(db, user, alert, "reopen", {})
