@@ -4,6 +4,8 @@ import Link from "next/link";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
+import { AlertStatusBadge } from "@/components/AlertStatusBadge";
+import { AlertWorkflowPanel } from "@/components/AlertWorkflowPanel";
 import { ModelSelector } from "@/components/ModelSelector";
 import { MitreList, RiskBadge } from "@/components/RiskBadge";
 import {
@@ -141,6 +143,7 @@ function AlertsInner() {
           <span className="font-semibold">
             {t("siem_title")} <span className="text-xs text-slate-500">#{wazuhAlert.id}</span>
           </span>
+          <AlertStatusBadge status={wazuhAlert.status} />
           <span>
             {t("siem_col_level")}: <span className="font-mono">{wazuhAlert.rule_level ?? "—"}</span>
           </span>
@@ -221,6 +224,9 @@ function AlertsInner() {
           )}
         </div>
       )}
+
+      {/* Escalar, asignar, cerrar y reabrir según el nivel (Práctica 3) */}
+      {wazuhAlert && <AlertWorkflowPanel alert={wazuhAlert} onChange={setWazuhAlert} />}
     </div>
   );
 }

@@ -177,7 +177,11 @@ class User(Base):
     # SHA-256 hashes of the unused recovery codes.
     mfa_recovery_codes: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
 
-    alerts: Mapped[list[Alert]] = relationship(back_populates="user")
+    # foreign_keys explícito: Alert tiene varias FK a users (dueño, asignado,
+    # quién escaló, quién resolvió) y SQLAlchemy necesita saber cuál es esta.
+    alerts: Mapped[list[Alert]] = relationship(
+        back_populates="user", foreign_keys="Alert.user_id"
+    )
 
 
 class AlertOrigin(str, Enum):
@@ -247,11 +251,74 @@ class Alert(Base):
         default=lambda: datetime.now(UTC),
     )
 
-    user: Mapped[User | None] = relationship(back_populates="alerts")
+    # ── Ciclo de vida y escalado por nivel SOC (Práctica 3) ─────────────
+    # Estados: new → triaged → escalated → in_progress → resolved /
+    # false_positive. Reglas por nivel en services.alert_workflow.
+    # Texto plano (como ``origin``) para no necesitar migraciones de enum.
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="new", server_default="new", index=True
+    )
+    assigned_to_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    escalation_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    escalated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    escalated_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    resolution: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    resolved_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    user: Mapped[User | None] = relationship(
+        back_populates="alerts", foreign_keys=[user_id]
+    )
     recommendations: Mapped[list[Recommendation]] = relationship(
         back_populates="alert",
         cascade="all, delete-orphan",
     )
+    events: Mapped[list[AlertEvent]] = relationship(
+        back_populates="alert",
+        cascade="all, delete-orphan",
+        order_by="AlertEvent.created_at",
+    )
+
+
+class AlertEvent(Base):
+    """Historial de una alerta: quién la trió, escaló, asignó o cerró.
+
+    Solo se añaden filas. ``actor_email`` se guarda como copia para que el
+    historial siga siendo legible si se borra la cuenta (FK con SET NULL).
+    """
+
+    __tablename__ = "alert_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    alert_id: Mapped[int] = mapped_column(
+        ForeignKey("alerts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    actor_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    actor_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    # analyze | escalate | assign | resolve | reopen
+    action: Mapped[str] = mapped_column(String(32), nullable=False)
+    from_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    to_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        default=lambda: datetime.now(UTC),
+    )
+
+    alert: Mapped[Alert] = relationship(back_populates="events")
 
 
 class Recommendation(Base):
