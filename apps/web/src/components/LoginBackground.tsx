@@ -27,13 +27,18 @@ export function SocEyeLogo({ className = "w-12 h-12" }: { className?: string }) 
   );
 }
 
-/** Fondo animado del login: un ojo que vigila, con radar y escáner. */
-export function LoginBackground() {
+/**
+ * Fondo animado: un ojo que vigila, con radar y escáner.
+ * - Sin props: versión completa, centrada (pantalla de login).
+ * - subtle: versión suave para las pantallas internas (ojo en la esquina
+ *   inferior derecha, más tenue y sin línea de escaneo).
+ */
+export function LoginBackground({ subtle = false }: { subtle?: boolean }) {
   const { theme } = useTheme();
   const mode = theme === "dark" ? "is-dark" : "is-light";
 
   return (
-    <div aria-hidden="true" className={`soc-login-bg ${mode}`}>
+    <div aria-hidden="true" className={`soc-login-bg ${mode}${subtle ? " is-subtle" : ""}`}>
       <div className="soc-grid" />
       <div className="soc-glow soc-glow-a" />
       <div className="soc-glow soc-glow-b" />
@@ -122,6 +127,23 @@ const CSS = `
 .soc-sweep{position:absolute;left:50%;top:50%;width:40%;aspect-ratio:1;border-radius:50%;
   background:conic-gradient(from 0deg,transparent 0deg 290deg,var(--sweep) 360deg);
   animation:socSweep 7s linear infinite}
+
+/* ── Versión suave para las pantallas internas ─────────────────────── */
+.soc-login-bg.is-subtle .soc-eye-wrap{left:calc(50% + 8rem);top:55%;right:auto;bottom:auto;transform:translate(-50%,-50%);width:min(900px,60vw)}
+.soc-login-bg.is-subtle .soc-eye{opacity:calc(var(--eyeop) * .35)}
+.soc-login-bg.is-subtle .soc-glow{opacity:calc(var(--glowop) * .6)}
+.soc-login-bg.is-subtle .soc-scan{display:none}
+.soc-login-bg.is-subtle .soc-grid{-webkit-mask-image:none;mask-image:none;opacity:.6}
+
+/* ── Más contraste del ojo en tema oscuro ──────────────────────────── */
+.soc-login-bg.is-dark .soc-almond{fill:#2a1257;fill-opacity:.9;stroke-width:5;
+  filter:drop-shadow(0 0 14px rgba(255,46,147,.7)) drop-shadow(0 0 30px rgba(123,47,247,.6))}
+.soc-login-bg.is-dark .soc-pupil{fill:#05030c}
+.soc-login-bg.is-dark .soc-iris circle:first-child{filter:drop-shadow(0 0 40px #5CF2FF)}
+.soc-login-bg.is-dark .soc-ticks{filter:drop-shadow(0 0 8px #5CF2FF)}
+.soc-login-bg.is-dark .soc-eye{opacity:.85}
+.soc-login-bg.is-dark.is-subtle .soc-eye{opacity:.35}
+
 @keyframes socBlink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.06)}}
 @keyframes socPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
 @keyframes socSpin{to{transform:rotate(360deg)}}

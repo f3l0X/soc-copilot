@@ -34,11 +34,8 @@ export default function Home() {
             {t("home_welcome")}
           </div>
           <h1 className="text-3xl font-semibold tracking-tight text-slate-100">
-            {t("home_hello")}, {fullName.split(" ")[0]} <span className="text-cyan-300">.</span>
+            {fullName.split(" ")[0]}
           </h1>
-          <p className="text-sm text-slate-400 mt-1 max-w-xl">
-            {t("home_subtitle")}
-          </p>
           <div className="mt-4 flex gap-2">
             <Link
               href="/dashboard"
