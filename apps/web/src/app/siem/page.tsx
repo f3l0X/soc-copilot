@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
+import { AlertStatusBadge } from "@/components/AlertStatusBadge";
 import { RiskBadge } from "@/components/RiskBadge";
 import {
+  type AlertQueue,
   type AlertSummary,
   ApiError,
   getWazuhStatus,
@@ -15,7 +17,8 @@ import {
 import { useRequireAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 
-type Filter = "pending" | "analyzed" | "all";
+// Colas del ciclo de vida (Práctica 3); "all" = sin filtro.
+type Filter = AlertQueue | "all";
 const REFRESH_MS = 15_000;
 
 function levelClass(level: number | null): string {
@@ -139,20 +142,30 @@ function IntegrationPanel() {
 export default function SiemPage() {
   const auth = useRequireAuth();
   const { t } = useI18n();
-  const [filter, setFilter] = useState<Filter>("pending");
+  const [filter, setFilter] = useState<Filter>("new");
+  const queueChosen = useRef(false);
   const [alerts, setAlerts] = useState<AlertSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
 
   const load = useCallback(() => {
-    const pending = filter === "all" ? undefined : filter === "pending";
-    listAlerts(100, 0, { origin: "wazuh", pending })
+    listAlerts(100, 0, { origin: "wazuh", queue: filter === "all" ? undefined : filter })
       .then((rows) => {
         setAlerts(rows);
         setError(null);
       })
       .catch((e) => setError(errMsg(e)));
   }, [filter]);
+
+  // Cola inicial según el nivel: L1 empieza por las nuevas; L2, Instructor y
+  // admin, por las escaladas. Solo la primera vez, luego manda el usuario.
+  useEffect(() => {
+    if (!auth.user || queueChosen.current) return;
+    queueChosen.current = true;
+    const senior =
+      auth.user.role === "admin" || auth.user.level === "L2" || auth.user.level === "INSTRUCTOR";
+    setFilter(senior ? "escalated" : "new");
+  }, [auth.user]);
 
   useEffect(() => {
     if (!auth.user) return;
@@ -167,8 +180,11 @@ export default function SiemPage() {
   }
 
   const filters: { key: Filter; label: string }[] = [
-    { key: "pending", label: t("siem_filter_pending") },
-    { key: "analyzed", label: t("siem_filter_analyzed") },
+    { key: "new", label: t("siem_queue_new") },
+    { key: "escalated", label: t("siem_queue_escalated") },
+    { key: "mine", label: t("siem_queue_mine") },
+    { key: "in_progress", label: t("siem_queue_in_progress") },
+    { key: "closed", label: t("siem_queue_closed") },
     { key: "all", label: t("siem_filter_all") },
   ];
 
@@ -256,11 +272,7 @@ export default function SiemPage() {
                     {(a.mitre_techniques ?? []).join(", ") || "—"}
                   </td>
                   <td className="px-3 py-2 text-xs">
-                    {a.analyzed_at ? (
-                      <span className="text-emerald-300">{t("siem_status_analyzed")}</span>
-                    ) : (
-                      <span className="text-amber-300">{t("siem_status_pending")}</span>
-                    )}
+                    <AlertStatusBadge status={a.status} />
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     {/* Analizar / ver: se abre en la página Alertas con la alerta cargada */}

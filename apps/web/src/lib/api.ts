@@ -56,9 +56,39 @@ export interface AlertSummary {
   agent_name: string | null;
   event_at: string | null;
   analyzed_at: string | null;
+  // Ciclo de vida (Práctica 3)
+  status: AlertStatus;
+  assigned_to_id: number | null;
+  escalated_at: string | null;
+  resolved_at: string | null;
 }
 
 export type AlertOrigin = "manual" | "wazuh";
+
+// ─── Ciclo de vida de la alerta (Práctica 3) ──────────────────────────────
+
+export type AlertStatus =
+  | "new"
+  | "triaged"
+  | "escalated"
+  | "in_progress"
+  | "resolved"
+  | "false_positive";
+
+export type AlertQueue = "new" | "escalated" | "in_progress" | "mine" | "closed";
+
+export type AlertVerdict = "resolved" | "false_positive";
+
+export interface AlertEvent {
+  id: number;
+  action: "analyze" | "escalate" | "assign" | "resolve" | "reopen";
+  actor_id: number | null;
+  actor_email: string;
+  from_status: AlertStatus | null;
+  to_status: AlertStatus | null;
+  note: string | null;
+  created_at: string;
+}
 
 export interface RecommendationDetail {
   id: number;
@@ -72,6 +102,12 @@ export interface AlertDetail extends AlertSummary {
   log: string;
   reasoning: string | null;
   recommendations: RecommendationDetail[];
+  // Ciclo de vida (Práctica 3)
+  escalation_note: string | null;
+  escalated_by_id: number | null;
+  resolution: string | null;
+  resolved_by_id: number | null;
+  events: AlertEvent[];
 }
 
 // ─── Internal fetch helper ────────────────────────────────────────────────
@@ -147,11 +183,12 @@ export const recommendActions = (payload: RecommendRequest) =>
 export const listAlerts = (
   limit = 50,
   offset = 0,
-  filters: { origin?: AlertOrigin; pending?: boolean } = {},
+  filters: { origin?: AlertOrigin; pending?: boolean; queue?: AlertQueue } = {},
 ) => {
   const qs = new URLSearchParams({ limit: String(limit), offset: String(offset) });
   if (filters.origin) qs.set("origin", filters.origin);
   if (filters.pending != null) qs.set("pending", String(filters.pending));
+  if (filters.queue) qs.set("queue", filters.queue);
   return request<AlertSummary[]>(`/api/alerts?${qs.toString()}`);
 };
 
@@ -160,6 +197,24 @@ export const analyzeStoredAlert = (id: number, model?: string) =>
     method: "POST",
     body: JSON.stringify(model ? { model } : {}),
   });
+
+export const escalateAlert = (id: number, note: string) =>
+  request<AlertDetail>(`/api/alerts/${id}/escalate`, {
+    method: "POST",
+    body: JSON.stringify({ note }),
+  });
+
+export const assignAlert = (id: number) =>
+  request<AlertDetail>(`/api/alerts/${id}/assign`, { method: "POST" });
+
+export const resolveAlert = (id: number, verdict: AlertVerdict, resolution: string) =>
+  request<AlertDetail>(`/api/alerts/${id}/resolve`, {
+    method: "POST",
+    body: JSON.stringify({ verdict, resolution }),
+  });
+
+export const reopenAlert = (id: number) =>
+  request<AlertDetail>(`/api/alerts/${id}/reopen`, { method: "POST" });
 
 // ─── Wazuh SIEM integration ───────────────────────────────────────────────
 
