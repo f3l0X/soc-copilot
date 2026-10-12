@@ -12,6 +12,7 @@ from app.services.alert_workflow import (
     WorkflowError,
     check_analyze,
     check_assign,
+    check_bulk_resolve,
     check_escalate,
     check_reopen,
     check_resolve,
@@ -225,3 +226,34 @@ def test_invalid_rating_rejected():
 def test_decision_maker_is_escalator_or_closer():
     assert decision_maker_id(_decided("escalated", 7)) == 7
     assert decision_maker_id(_decided("false_positive", 8)) == 8
+
+
+# ── Cierre masivo ──────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("user", [L2, INSTRUCTOR, ADMIN])
+@pytest.mark.parametrize("status", ["new", "escalated", "in_progress"])
+def test_senior_can_bulk_close_any_open_alert(user, status):
+    alert = _alert(status, risk=None, assigned=None if status != "in_progress" else 1)
+    assert _code(check_bulk_resolve, user, alert, "resolved") is None
+
+
+def test_l1_can_bulk_close_new_low_risk():
+    assert _code(check_bulk_resolve, L1, _alert("new", "low", None), "false_positive") is None
+
+
+@pytest.mark.parametrize("risk", ["high", "critical", None])
+def test_l1_cannot_bulk_close_high_or_unanalysed(risk):
+    assert _code(check_bulk_resolve, L1, _alert("new", risk, None), "resolved") == 403
+
+
+def test_l1_cannot_bulk_close_escalated():
+    assert _code(check_bulk_resolve, L1, _alert("escalated", "low", None), "resolved") == 403
+
+
+def test_l1_cannot_bulk_close_someone_elses():
+    assert _code(check_bulk_resolve, OTHER_L1, _alert("in_progress", "low", 1), "resolved") == 403
+
+
+def test_cannot_bulk_close_closed_alert():
+    assert _code(check_bulk_resolve, L2, _alert("resolved", "low", None), "resolved") == 409

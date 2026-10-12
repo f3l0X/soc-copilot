@@ -219,6 +219,36 @@ class AlertEscalateRequest(BaseModel):
         return v.strip()
 
 
+class AlertBulkResolveRequest(BaseModel):
+    """Cerrar varias alertas a la vez con una misma resolución."""
+
+    alert_ids: list[int] = Field(..., min_length=1, max_length=100)
+    verdict: Literal["resolved", "false_positive"]
+    resolution: str = Field(..., min_length=5, max_length=4_000)
+
+    @field_validator("alert_ids")
+    @classmethod
+    def _unique_ids(cls, v: list[int]) -> list[int]:
+        return list(dict.fromkeys(v))  # sin duplicados, en el mismo orden
+
+    @field_validator("resolution")
+    @classmethod
+    def _resolution_non_whitespace(cls, v: str) -> str:
+        if len(v.strip()) < 5:
+            raise ValueError("resolution must contain at least 5 non-whitespace characters")
+        return v.strip()
+
+
+class AlertBulkFailure(BaseModel):
+    id: int
+    detail: str
+
+
+class AlertBulkResolveResult(BaseModel):
+    closed: list[int]
+    failed: list[AlertBulkFailure]
+
+
 class AlertResolveRequest(BaseModel):
     verdict: Literal["resolved", "false_positive"]
     resolution: str = Field(..., min_length=5, max_length=4_000)

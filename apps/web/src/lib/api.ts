@@ -237,6 +237,21 @@ export const resolveAlert = (id: number, verdict: AlertVerdict, resolution: stri
 export const reopenAlert = (id: number) =>
   request<AlertDetail>(`/api/alerts/${id}/reopen`, { method: "POST" });
 
+export interface AlertBulkResolveResult {
+  closed: number[];
+  failed: { id: number; detail: string }[];
+}
+
+export const bulkResolveAlerts = (
+  alertIds: number[],
+  verdict: AlertVerdict,
+  resolution: string,
+) =>
+  request<AlertBulkResolveResult>(`/api/alerts/bulk-resolve`, {
+    method: "POST",
+    body: JSON.stringify({ alert_ids: alertIds, verdict, resolution }),
+  });
+
 export const reviewAlert = (id: number, rating: ReviewRating, comment?: string) =>
   request<AlertDetail>(`/api/alerts/${id}/review`, {
     method: "POST",

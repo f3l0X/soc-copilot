@@ -27,6 +27,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from enum import Enum
+from types import SimpleNamespace
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -145,6 +146,22 @@ def check_resolve(user: Any, alert: Any, verdict: str) -> None:
             403,
             "L1 can only close analysed low/medium alerts; escalate this one to L2",
         )
+
+
+def check_bulk_resolve(user: Any, alert: Any, verdict: str) -> None:
+    """Cierre masivo: si no es tuya, primero te la asignas; luego se cierra.
+
+    Comprueba los dos pasos sin modificar nada, con las mismas reglas que una
+    a una (un L1 solo cierra alertas nuevas analizadas de riesgo bajo o medio).
+    """
+    if not is_assignee(user, alert):
+        check_assign(user, alert)
+    assigned = SimpleNamespace(
+        status=AlertStatus.IN_PROGRESS.value,
+        assigned_to_id=user.id,
+        risk_level=alert.risk_level,
+    )
+    check_resolve(user, assigned, verdict)
 
 
 def check_reopen(user: Any, alert: Any) -> None:
