@@ -152,7 +152,7 @@ jobs:
       - name: Seed admin user
         id: seed-admin
         run: |
-          EMAIL="admin-ci-$(date +%s)@e2e.local"
+          EMAIL="admin-ci-$(date +%s)@example.com"
           PASSWORD="Test123456!"
           curl -sf -X POST http://localhost:8080/api/auth/register \
             -H "Content-Type: application/json" \

@@ -15,7 +15,7 @@ export interface SeededUser {
 
 function uniqEmail(prefix = "e2e"): string {
   // crypto.randomUUID is available in Node 18+ and CI runners.
-  return `${prefix}-${crypto.randomUUID().slice(0, 8)}@e2e.local`;
+  return `${prefix}-${crypto.randomUUID().slice(0, 8)}@example.com`;
 }
 
 /**

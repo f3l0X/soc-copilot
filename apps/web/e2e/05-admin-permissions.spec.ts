@@ -25,7 +25,7 @@ test("admin entra al panel y ve la matriz de permisos", async ({ page, request }
     const probe = await request.post(`${apiUrl()}/api/auth/register`, {
       data: {
         name: "AutoAdmin",
-        email: `admin-${Date.now()}@e2e.local`,
+        email: `admin-${Date.now()}@example.com`,
         password: "Test123456!",
       },
       failOnStatusCode: false,
