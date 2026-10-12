@@ -14,16 +14,22 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-
 import pytest
-from alembic.config import Config
-from alembic.script import ScriptDirectory
 from sqlalchemy import text
 
 if os.environ.get("RUN_E2E") != "1":  # pragma: no cover
     pytest.skip("Migration bridge test skipped (set RUN_E2E=1)", allow_module_level=True)
 
 from app.db import Base, _engine, init_db
+
+
+def _alembic_head() -> str:
+    """Última migración que existe (la 'head'), sea cual sea."""
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    ini = Path(__file__).resolve().parents[1] / "alembic.ini"
+    return ScriptDirectory.from_config(Config(str(ini))).get_current_head()
 
 
 def _reset_schema() -> None:
