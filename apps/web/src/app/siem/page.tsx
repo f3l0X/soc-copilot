@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AlertStatusBadge } from "@/components/AlertStatusBadge";
@@ -9,6 +10,7 @@ import {
   type AlertQueue,
   type AlertSummary,
   ApiError,
+  assignAlert,
   getWazuhStatus,
   listAlerts,
   type WazuhStatus,
@@ -142,7 +144,9 @@ function IntegrationPanel() {
 export default function SiemPage() {
   const auth = useRequireAuth();
   const { t } = useI18n();
+  const router = useRouter();
   const [filter, setFilter] = useState<Filter>("new");
+  const [takingId, setTakingId] = useState<number | null>(null);
   const queueChosen = useRef(false);
   const [alerts, setAlerts] = useState<AlertSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -175,15 +179,39 @@ export default function SiemPage() {
     return () => clearInterval(id);
   }, [auth.user, load, autoRefresh]);
 
+  // Asignarse la alerta y abrirla en la página Alertas para analizarla.
+  async function take(id: number) {
+    setTakingId(id);
+    setError(null);
+    try {
+      await assignAlert(id);
+      router.push(`/alerts?wazuh_id=${id}`);
+    } catch (e) {
+      setError(errMsg(e));
+      setTakingId(null);
+      load();
+    }
+  }
+
   if (!auth.ready) {
     return <div className="p-8 text-slate-500 text-sm">{t("alerts_loading")}</div>;
   }
 
+  const me = auth.user;
+  const senior =
+    me?.role === "admin" || me?.level === "L2" || me?.level === "INSTRUCTOR";
+  const isMine = (a: AlertSummary) => me != null && a.assigned_to_id === me.id;
+  // Mismas reglas que la API: un L1 solo coge alertas nuevas; L2/Instructor/admin
+  // también las escaladas y las de otros analistas.
+  const canTake = (a: AlertSummary) =>
+    !isMine(a) &&
+    (a.status === "new" || (senior && (a.status === "escalated" || a.status === "in_progress")));
+
   const filters: { key: Filter; label: string }[] = [
     { key: "new", label: t("siem_queue_new") },
-    { key: "escalated", label: t("siem_queue_escalated") },
     { key: "mine", label: t("siem_queue_mine") },
     { key: "in_progress", label: t("siem_queue_in_progress") },
+    { key: "escalated", label: t("siem_queue_escalated") },
     { key: "closed", label: t("siem_queue_closed") },
     { key: "all", label: t("siem_filter_all") },
   ];
@@ -273,22 +301,36 @@ export default function SiemPage() {
                   </td>
                   <td className="px-3 py-2 text-xs">
                     <AlertStatusBadge status={a.status} />
+                    {a.assigned_to_name && (
+                      <div className="mt-1 text-[11px] text-slate-400 whitespace-nowrap">
+                        {t("wf_assigned_to")}: {isMine(a) ? t("wf_assigned_you") : a.assigned_to_name}
+                      </div>
+                    )}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
-                    {/* Analizar / ver: se abre en la página Alertas con la alerta cargada */}
-                    {a.analyzed_at ? (
-                      <Link
-                        href={`/alerts?wazuh_id=${a.id}`}
-                        className="text-xs text-cyan-400 hover:underline"
-                      >
-                        {t("siem_view")}
-                      </Link>
-                    ) : (
+                    {/* Asignada a mí → Analizar; se puede coger → Asignármela; si no → Ver */}
+                    {isMine(a) && !a.analyzed_at ? (
                       <Link
                         href={`/alerts?wazuh_id=${a.id}`}
                         className="inline-block rounded bg-cyan-600 hover:brightness-110 px-3 py-1 text-xs font-medium text-white"
                       >
                         {t("siem_analyze_btn")}
+                      </Link>
+                    ) : canTake(a) ? (
+                      <button
+                        type="button"
+                        onClick={() => void take(a.id)}
+                        disabled={takingId === a.id}
+                        className="rounded bg-violet-600 hover:brightness-110 disabled:opacity-50 px-3 py-1 text-xs font-medium text-white"
+                      >
+                        {t("wf_assign")}
+                      </button>
+                    ) : (
+                      <Link
+                        href={`/alerts?wazuh_id=${a.id}`}
+                        className="text-xs text-cyan-400 hover:underline"
+                      >
+                        {t("siem_view")}
                       </Link>
                     )}
                   </td>

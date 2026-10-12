@@ -17,7 +17,7 @@ import { useI18n } from "@/lib/i18n";
 
 // Mismas reglas que la API (services/alert_workflow.py). Aquí solo sirven para
 // mostrar los botones adecuados; quien decide de verdad es la API.
-const OPEN_STATUSES = ["new", "triaged", "escalated", "in_progress"];
+const OPEN_STATUSES = ["new", "in_progress", "escalated"];
 const L1_CLOSABLE_RISKS = ["low", "medium"];
 const MIN_NOTE = { escalate: 10, resolved: 5, false_positive: 5 } as const;
 
@@ -52,12 +52,17 @@ export function AlertWorkflowPanel({
 
   if (!user) return null;
 
-  const senior = user.role === "admin" || user.level === "L2" || user.level === "INSTRUCTOR";
+  const admin = user.role === "admin";
+  const senior = admin || user.level === "L2" || user.level === "INSTRUCTOR";
   const isOpen = OPEN_STATUSES.includes(alert.status);
-  const canEscalate = isOpen && alert.status !== "escalated";
-  const canAssign = senior && isOpen && alert.assigned_to_id !== user.id;
-  const canClose =
-    isOpen && (senior || L1_CLOSABLE_RISKS.includes((alert.risk_level ?? "").toLowerCase()));
+  const mine = alert.assigned_to_id === user.id;
+  const canWork = isOpen && (mine || admin);
+  // Un L1 solo coge alertas nuevas; L2/Instructor/admin también escaladas y ajenas.
+  const canAssign =
+    isOpen && !mine && (alert.status === "new" || senior);
+  const canEscalate = canWork && alert.status !== "escalated";
+  const riskOk = L1_CLOSABLE_RISKS.includes((alert.risk_level ?? "").toLowerCase());
+  const canClose = canWork && (senior || riskOk);
   const canReopen = senior && !isOpen;
   const minLen = mode ? MIN_NOTE[mode] : 0;
   const textOk = text.trim().length >= minLen;
@@ -92,9 +97,9 @@ export function AlertWorkflowPanel({
   const assigned =
     alert.assigned_to_id == null
       ? t("wf_unassigned")
-      : alert.assigned_to_id === user.id
+      : mine
         ? t("wf_assigned_you")
-        : `${t("wf_analyst")} #${alert.assigned_to_id}`;
+        : (alert.assigned_to_name ?? `${t("wf_analyst")} #${alert.assigned_to_id}`);
 
   const btn =
     "rounded px-3 py-1.5 text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed";
@@ -178,7 +183,10 @@ export function AlertWorkflowPanel({
         )}
       </div>
 
-      {isOpen && !canClose && (
+      {isOpen && !canWork && (
+        <p className="text-xs text-amber-300">{t("wf_assign_to_analyze")}</p>
+      )}
+      {canWork && !canClose && (
         <p className="text-xs text-amber-300">{t("wf_l1_must_escalate")}</p>
       )}
 

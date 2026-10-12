@@ -59,6 +59,7 @@ export interface AlertSummary {
   // Ciclo de vida (Práctica 3)
   status: AlertStatus;
   assigned_to_id: number | null;
+  assigned_to_name: string | null;
   escalated_at: string | null;
   resolved_at: string | null;
 }
@@ -69,9 +70,8 @@ export type AlertOrigin = "manual" | "wazuh";
 
 export type AlertStatus =
   | "new"
-  | "triaged"
+  | "in_progress" // "Asignada a …"
   | "escalated"
-  | "in_progress"
   | "resolved"
   | "false_positive";
 

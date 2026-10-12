@@ -2,17 +2,20 @@
 
 Estados::
 
-    new ──analizar──▶ triaged ──escalar──▶ escalated ──asignar──▶ in_progress
-      │                  │                                            │
-      └──────────────────┴─────────── cerrar ─────────────────────────┴─▶ resolved
-                                                                          false_positive
+    new ──asignar──▶ in_progress ("Asignada a …") ──escalar──▶ escalated
+                         │    ▲                                     │
+                         │    └──────────── asignar (L2) ───────────┘
+                         └── cerrar ──▶ resolved / false_positive ──reabrir (L2)──▶ in_progress
 
-Reglas por nivel (se comprueban aquí, en la API; la web solo oculta botones):
+Reglas (se comprueban aquí, en la API; la web solo oculta botones):
 
-- Cualquier nivel puede analizar y escalar (con nota obligatoria).
-- Solo L2, INSTRUCTOR o el rol ADMIN pueden asignarse alertas y reabrirlas.
+- Para analizar, escalar o cerrar una alerta hay que tenerla asignada. El rol
+  ADMIN puede hacerlo siempre.
+- Un L1 solo puede asignarse alertas nuevas. L2, INSTRUCTOR y ADMIN pueden
+  asignarse también las escaladas y quitársela a otro analista.
 - Un L1 solo puede cerrar alertas analizadas de riesgo bajo o medio; las
   altas, críticas o sin analizar las tiene que escalar.
+- Solo L2, INSTRUCTOR o ADMIN pueden reabrir alertas cerradas.
 
 Las funciones ``check_*`` solo leen atributos y lanzan ``WorkflowError``, así
 se pueden probar sin base de datos. Las ``apply_*`` aplican el cambio y
@@ -31,9 +34,8 @@ from app.models import Alert, AlertEvent, User, UserLevel, UserRole
 
 class AlertStatus(str, Enum):
     NEW = "new"
-    TRIAGED = "triaged"
+    IN_PROGRESS = "in_progress"  # en la web: "Asignada"
     ESCALATED = "escalated"
-    IN_PROGRESS = "in_progress"
     RESOLVED = "resolved"
     FALSE_POSITIVE = "false_positive"
 
@@ -41,13 +43,7 @@ class AlertStatus(str, Enum):
 # Conjuntos de *strings* (no de miembros del Enum): el hash de un Enum no
 # coincide con el de su valor, y la columna ``status`` devuelve strings.
 OPEN_STATUSES: frozenset[str] = frozenset(
-    s.value
-    for s in (
-        AlertStatus.NEW,
-        AlertStatus.TRIAGED,
-        AlertStatus.ESCALATED,
-        AlertStatus.IN_PROGRESS,
-    )
+    s.value for s in (AlertStatus.NEW, AlertStatus.IN_PROGRESS, AlertStatus.ESCALATED)
 )
 CLOSED_STATUSES: frozenset[str] = frozenset(
     s.value for s in (AlertStatus.RESOLVED, AlertStatus.FALSE_POSITIVE)
@@ -57,15 +53,15 @@ L1_CLOSABLE_RISKS: frozenset[str] = frozenset({"low", "medium"})
 
 # Colas de la página SIEM → estados que incluye cada una.
 QUEUE_STATUSES: dict[str, tuple[str, ...]] = {
-    "new": (AlertStatus.NEW.value, AlertStatus.TRIAGED.value),
-    "escalated": (AlertStatus.ESCALATED.value,),
+    "new": (AlertStatus.NEW.value,),
     "in_progress": (AlertStatus.IN_PROGRESS.value,),
+    "escalated": (AlertStatus.ESCALATED.value,),
     "closed": (AlertStatus.RESOLVED.value, AlertStatus.FALSE_POSITIVE.value),
 }
 
 
 class WorkflowError(Exception):
-    """Acción no permitida. ``status_code``: 403 (nivel) o 409 (estado)."""
+    """Acción no permitida. ``status_code``: 403 (permiso) o 409 (estado)."""
 
     def __init__(self, status_code: int, detail: str) -> None:
         super().__init__(detail)
@@ -73,15 +69,40 @@ class WorkflowError(Exception):
         self.detail = detail
 
 
+def is_admin(user: Any) -> bool:
+    return user.role == UserRole.ADMIN
+
+
 def is_senior(user: Any) -> bool:
     """L2, INSTRUCTOR o administrador de la plataforma."""
-    return user.role == UserRole.ADMIN or user.level in (
-        UserLevel.L2,
-        UserLevel.INSTRUCTOR,
-    )
+    return is_admin(user) or user.level in (UserLevel.L2, UserLevel.INSTRUCTOR)
+
+
+def is_assignee(user: Any, alert: Any) -> bool:
+    return alert.assigned_to_id is not None and alert.assigned_to_id == user.id
+
+
+def _require_assignee(user: Any, alert: Any, what: str) -> None:
+    if not (is_assignee(user, alert) or is_admin(user)):
+        raise WorkflowError(403, f"assign the alert to yourself before you {what} it")
 
 
 # ─── Comprobaciones (sin base de datos) ─────────────────────────────────────
+
+
+def check_assign(user: Any, alert: Any) -> None:
+    if alert.status not in OPEN_STATUSES:
+        raise WorkflowError(409, "only open alerts can be assigned")
+    if is_assignee(user, alert):
+        raise WorkflowError(409, "the alert is already assigned to you")
+    if alert.status != AlertStatus.NEW.value and not is_senior(user):
+        raise WorkflowError(403, "L1 can only take new alerts")
+
+
+def check_analyze(user: Any, alert: Any) -> None:
+    if alert.status not in OPEN_STATUSES:
+        raise WorkflowError(409, "closed alerts can't be analysed again; reopen it first")
+    _require_assignee(user, alert, "analyse")
 
 
 def check_escalate(user: Any, alert: Any) -> None:
@@ -89,13 +110,7 @@ def check_escalate(user: Any, alert: Any) -> None:
         raise WorkflowError(409, "only open alerts can be escalated")
     if alert.status == AlertStatus.ESCALATED.value:
         raise WorkflowError(409, "alert is already escalated")
-
-
-def check_assign(user: Any, alert: Any) -> None:
-    if not is_senior(user):
-        raise WorkflowError(403, "only L2, INSTRUCTOR or admin can take alerts")
-    if alert.status not in OPEN_STATUSES:
-        raise WorkflowError(409, "only open alerts can be assigned")
+    _require_assignee(user, alert, "escalate")
 
 
 def check_resolve(user: Any, alert: Any, verdict: str) -> None:
@@ -103,6 +118,7 @@ def check_resolve(user: Any, alert: Any, verdict: str) -> None:
         raise WorkflowError(409, f"invalid verdict {verdict!r}")
     if alert.status not in OPEN_STATUSES:
         raise WorkflowError(409, "alert is already closed")
+    _require_assignee(user, alert, "close")
     if not is_senior(user) and (alert.risk_level or "").lower() not in L1_CLOSABLE_RISKS:
         raise WorkflowError(
             403,
@@ -121,7 +137,11 @@ def check_reopen(user: Any, alert: Any) -> None:
 
 
 def _record(
-    db: Session, alert: Alert, user: User, action: str, from_status: str | None,
+    db: Session,
+    alert: Alert,
+    user: User,
+    action: str,
+    from_status: str | None,
     note: str | None = None,
 ) -> None:
     db.add(
@@ -137,11 +157,17 @@ def _record(
     )
 
 
-def mark_triaged(db: Session, alert: Alert, user: User) -> None:
-    """Tras el análisis con IA: ``new`` pasa a ``triaged``. Otros estados no cambian."""
-    if alert.status == AlertStatus.NEW.value:
-        alert.status = AlertStatus.TRIAGED.value
-        _record(db, alert, user, "analyze", AlertStatus.NEW.value)
+def apply_assign(db: Session, alert: Alert, user: User) -> None:
+    check_assign(user, alert)
+    previous = alert.status
+    alert.status = AlertStatus.IN_PROGRESS.value
+    alert.assigned_to_id = user.id
+    _record(db, alert, user, "assign", previous)
+
+
+def record_analysis(db: Session, alert: Alert, user: User) -> None:
+    """Deja constancia del análisis con IA. No cambia el estado."""
+    _record(db, alert, user, "analyze", alert.status)
 
 
 def apply_escalate(db: Session, alert: Alert, user: User, note: str) -> None:
@@ -153,14 +179,6 @@ def apply_escalate(db: Session, alert: Alert, user: User, note: str) -> None:
     alert.escalated_by_id = user.id
     alert.assigned_to_id = None
     _record(db, alert, user, "escalate", previous, note)
-
-
-def apply_assign(db: Session, alert: Alert, user: User) -> None:
-    check_assign(user, alert)
-    previous = alert.status
-    alert.status = AlertStatus.IN_PROGRESS.value
-    alert.assigned_to_id = user.id
-    _record(db, alert, user, "assign", previous)
 
 
 def apply_resolve(
