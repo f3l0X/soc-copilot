@@ -101,6 +101,9 @@ def test_webhook_ingests_dedupes_and_analyst_can_triage(monkeypatch):
             return [[0.0]]
 
     monkeypatch.setattr(llm_module, "_singleton", FakeLLM())
+    # Desde la Práctica 3 hay que asignarse la alerta antes de analizarla.
+    r = ca.post(f"/api/alerts/{item['id']}/assign")
+    assert r.status_code == 200, r.text
     r = ca.post(f"/api/alerts/{item['id']}/analyze", json={})
     assert r.status_code == 200, r.text
     assert r.json()["risk_level"] == "critical"
