@@ -24,8 +24,7 @@ from urllib.parse import quote
 
 TOTP_DIGITS = 6
 TOTP_PERIOD = 30
-TOTP_WINDOW = 0           # el código anterior ya no sirve
-TOTP_ACCEPT_SECONDS = 15  # solo sirve en la primera mitad del circulito
+TOTP_WINDOW = 1  # accept codes from the previous/next 30 s step (clock drift)
 RECOVERY_CODES = 10
 
 
@@ -71,12 +70,7 @@ def verify_totp(
     code = (code or "").strip().replace(" ", "")
     if len(code) != TOTP_DIGITS or not code.isdigit():
         return None
-    now_ts = time.time() if now is None else now
-    # Solo se acepta el código en la primera mitad del circulito del móvil:
-    # de lleno a la mitad entra; de la mitad a vacío hay que esperar al siguiente.
-    if (now_ts % TOTP_PERIOD) >= TOTP_ACCEPT_SECONDS:
-        return None
-    step = current_step(now_ts)
+    step = current_step(now)
     for candidate in range(step - window, step + window + 1):
         if last_used_step is not None and candidate <= last_used_step:
             continue  # replay or older code

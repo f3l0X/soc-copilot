@@ -30,27 +30,20 @@ def test_rfc6238_sha1_vectors(t, expected):
 
 
 def test_verify_window_and_replay():
-    # 1_000_000 % 30 == 10 -> primera mitad del periodo, el código se acepta
     now = 1_000_000.0
     code = mfa.totp(RFC_SECRET, now)
     step = mfa.verify_totp(RFC_SECRET, code, now=now)
     assert step == mfa.current_step(now)
-    # Mismo código otra vez -> reutilización rechazada.
+    # Same code again → replay rejected.
     assert mfa.verify_totp(RFC_SECRET, code, last_used_step=step, now=now) is None
-    # Sin margen: el código anterior ya no sirve.
+    # Previous step accepted (clock drift), two steps back rejected.
     prev = mfa.hotp(RFC_SECRET, mfa.current_step(now) - 1)
-    assert mfa.verify_totp(RFC_SECRET, prev, now=now) is None
+    assert mfa.verify_totp(RFC_SECRET, prev, now=now) is not None
+    old = mfa.hotp(RFC_SECRET, mfa.current_step(now) - 2)
+    assert mfa.verify_totp(RFC_SECRET, old, now=now) is None
+    assert mfa.verify_totp(RFC_SECRET, "12a456", now=now) is None
+    assert mfa.verify_totp(RFC_SECRET, "", now=now) is None
 
-
-def test_code_only_valid_in_first_half_of_period():
-    start = mfa.current_step(1_000_000.0) * mfa.TOTP_PERIOD  # inicio exacto del periodo
-    code = mfa.totp(RFC_SECRET, start)
-    # Primera mitad (circulito de lleno a la mitad) -> aceptado.
-    assert mfa.verify_totp(RFC_SECRET, code, now=start) is not None
-    assert mfa.verify_totp(RFC_SECRET, code, now=start + mfa.TOTP_ACCEPT_SECONDS - 1) is not None
-    # Segunda mitad (de la mitad a vacío) -> rechazado aunque sea el código en pantalla.
-    assert mfa.verify_totp(RFC_SECRET, code, now=start + mfa.TOTP_ACCEPT_SECONDS) is None
-    assert mfa.verify_totp(RFC_SECRET, code, now=start + mfa.TOTP_PERIOD - 1) is None
 
 def test_secret_is_160_bits_base32():
     s = mfa.generate_secret()
