@@ -27,7 +27,8 @@ from app.services.alert_workflow import (
     apply_escalate,
     apply_reopen,
     apply_resolve,
-    mark_triaged,
+    check_analyze,
+    record_analysis,
 )
 from app.services.audit import log_audit
 from app.services.explainer import explain
@@ -51,8 +52,8 @@ def list_alerts(
     queue: Literal["new", "escalated", "in_progress", "mine", "closed"] | None = Query(
         None,
         description=(
-            "Cola del ciclo de vida: new (nuevas y triadas), escalated, "
-            "in_progress, mine (asignadas a mí y abiertas) o closed"
+            "Cola del ciclo de vida: new, in_progress (asignadas), escalated, "
+            "mine (asignadas a mí) o closed"
         ),
     ),
 ) -> list[Alert]:
@@ -72,6 +73,10 @@ def list_alerts(
     elif queue is not None:
         stmt = stmt.where(Alert.status.in_(QUEUE_STATUSES[queue]))
     return list(db.scalars(stmt).all())
+
+
+def _workflow_http(exc: WorkflowError) -> HTTPException:
+    return HTTPException(status_code=exc.status_code, detail=exc.detail)
 
 
 def _get_visible(db, user, alert_id: int) -> Alert:
@@ -105,10 +110,15 @@ def analyze_alert(
 ) -> Alert:
     """Run the Alert Explainer on an already-stored alert (e.g. from Wazuh).
 
-    Overwrites summary / risk / MITRE / reasoning with the AI result and
-    assigns the alert to the analyst who triaged it.
+    Requires the alert to be assigned to the caller (admins always pass).
+    Overwrites summary / risk / MITRE / reasoning with the AI result.
     """
     alert = _get_visible(db, user, alert_id)
+    # Hay que tener la alerta asignada para analizarla (el admin, siempre).
+    try:
+        check_analyze(user, alert)
+    except WorkflowError as exc:
+        raise _workflow_http(exc) from None
     model = payload.model if payload else None
     language = resolve_language(payload.language if payload else None, request)
     try:
@@ -135,7 +145,7 @@ def analyze_alert(
     alert.analyzed_at = datetime.now(UTC)
     if alert.user_id is None:
         alert.user_id = user.id
-    mark_triaged(db, alert, user)
+    record_analysis(db, alert, user)
     log_audit(
         db,
         actor=user,
@@ -151,9 +161,6 @@ def analyze_alert(
 
 # ─── Ciclo de vida: escalar, asignar, cerrar, reabrir (Práctica 3) ──────────
 
-
-def _workflow_http(exc: WorkflowError) -> HTTPException:
-    return HTTPException(status_code=exc.status_code, detail=exc.detail)
 
 
 def _finish(db, user, alert: Alert, action: str, details: dict) -> Alert:

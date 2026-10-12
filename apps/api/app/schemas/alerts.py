@@ -126,6 +126,7 @@ class AlertSummary(BaseModel):
     # Ciclo de vida (Práctica 3)
     status: str = "new"
     assigned_to_id: int | None = None
+    assigned_to_name: str | None = None
     escalated_at: datetime | None = None
     resolved_at: datetime | None = None
 

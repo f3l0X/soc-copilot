@@ -279,6 +279,10 @@ class Alert(Base):
     user: Mapped[User | None] = relationship(
         back_populates="alerts", foreign_keys=[user_id]
     )
+    # Analista que tiene la alerta asignada (para mostrar "Asignada a …").
+    assigned_to: Mapped[User | None] = relationship(
+        foreign_keys=[assigned_to_id], lazy="selectin"
+    )
     recommendations: Mapped[list[Recommendation]] = relationship(
         back_populates="alert",
         cascade="all, delete-orphan",
@@ -288,6 +292,16 @@ class Alert(Base):
         cascade="all, delete-orphan",
         order_by="AlertEvent.created_at",
     )
+
+
+    @property
+    def assigned_to_name(self) -> str | None:
+        """Nombre del analista asignado (o su email si no tiene nombre)."""
+        u = self.assigned_to
+        if u is None:
+            return None
+        full = " ".join(p for p in (u.name, u.last_name) if p).strip()
+        return full or u.email
 
 
 class AlertEvent(Base):

@@ -73,11 +73,14 @@ function AlertsInner() {
         setWazuhAlert(detail);
         setLog(detail.log);
         setSource(`wazuh · ${detail.agent_name ?? "?"}`);
+        // Solo se analiza sola si ya está asignada a mí y aún no tiene análisis.
         if (detail.analyzed_at) {
           setResult(toResult(detail));
           setLoading(false);
-        } else {
+        } else if (detail.assigned_to_id === auth.user?.id) {
           void analyzeStored(detail.id);
+        } else {
+          setLoading(false);
         }
       })
       .catch((err) => {
@@ -119,6 +122,14 @@ function AlertsInner() {
   if (!auth.ready) {
     return <div className="p-8 text-slate-500 text-sm">{t("alerts_loading")}</div>;
   }
+
+  // Alerta de Wazuh: hay que tenerla asignada para analizarla (el admin, siempre).
+  const canAnalyze =
+    !wazuhAlert ||
+    auth.user?.role === "admin" ||
+    (wazuhAlert.assigned_to_id === auth.user?.id &&
+      wazuhAlert.status !== "resolved" &&
+      wazuhAlert.status !== "false_positive");
 
   return (
     <div className="p-6 max-w-[1280px] mx-auto space-y-6">
@@ -176,9 +187,12 @@ function AlertsInner() {
           required
           className="w-full rounded bg-slate-900 border border-slate-700 px-3 py-2 font-mono text-xs"
         />
+        {!canAnalyze && (
+          <p className="text-xs text-amber-300">{t("wf_assign_to_analyze")}</p>
+        )}
         <button
           type="submit"
-          disabled={loading || !log.trim()}
+          disabled={loading || !log.trim() || !canAnalyze}
           className="rounded bg-cyan-600 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white"
         >
           {loading ? t("alerts_analyzing_btn") : t("alerts_analyze_btn")}
