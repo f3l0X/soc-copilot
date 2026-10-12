@@ -7,10 +7,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertStatusBadge, ReviewBadge } from "@/components/AlertStatusBadge";
 import { RiskBadge } from "@/components/RiskBadge";
 import {
+  type AlertBulkResolveResult,
   type AlertQueue,
   type AlertSummary,
+  type AlertVerdict,
   ApiError,
   assignAlert,
+  bulkResolveAlerts,
   getWazuhStatus,
   listAlerts,
   type WazuhStatus,
@@ -22,6 +25,7 @@ import { useI18n } from "@/lib/i18n";
 // Colas del ciclo de vida (Práctica 3); "all" = sin filtro.
 type Filter = AlertQueue | "all";
 const REFRESH_MS = 15_000;
+const OPEN_STATUSES = ["new", "in_progress", "escalated"];
 
 function levelClass(level: number | null): string {
   if (level == null) return "bg-slate-800 text-slate-300 border-slate-600";
@@ -147,6 +151,12 @@ export default function SiemPage() {
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>("new");
   const [takingId, setTakingId] = useState<number | null>(null);
+  // Cierre masivo (Práctica 3)
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [bulkMode, setBulkMode] = useState<AlertVerdict | null>(null);
+  const [bulkText, setBulkText] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkResult, setBulkResult] = useState<AlertBulkResolveResult | null>(null);
   const queueChosen = useRef(false);
   const [alerts, setAlerts] = useState<AlertSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -179,6 +189,39 @@ export default function SiemPage() {
     return () => clearInterval(id);
   }, [auth.user, load, autoRefresh]);
 
+  // Al cambiar de cola se vacía la selección.
+  useEffect(() => {
+    setSelected(new Set());
+    setBulkMode(null);
+  }, [filter]);
+
+  function toggle(id: number) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function bulkClose() {
+    if (!bulkMode || bulkText.trim().length < 5 || selected.size === 0) return;
+    setBulkBusy(true);
+    setError(null);
+    try {
+      const r = await bulkResolveAlerts([...selected], bulkMode, bulkText.trim());
+      setBulkResult(r);
+      setSelected(new Set(r.failed.map((f) => f.id)));
+      setBulkMode(null);
+      setBulkText("");
+      load();
+    } catch (e) {
+      setError(errMsg(e));
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   // Asignarse la alerta y abrirla en la página Alertas para analizarla.
   async function take(id: number) {
     setTakingId(id);
@@ -207,6 +250,12 @@ export default function SiemPage() {
   const canTake = (a: AlertSummary) =>
     !isMine(a) &&
     (a.status === "new" || (senior && (a.status === "escalated" || a.status === "in_progress")));
+
+  const openRows = (alerts ?? []).filter((a) => OPEN_STATUSES.includes(a.status));
+  const allSelected = openRows.length > 0 && openRows.every((a) => selected.has(a.id));
+  function toggleAll() {
+    setSelected(allSelected ? new Set() : new Set(openRows.map((a) => a.id)));
+  }
 
   const filters: { key: Filter; label: string }[] = [
     { key: "new", label: t("siem_queue_new") },
@@ -267,6 +316,103 @@ export default function SiemPage() {
         </div>
       )}
 
+      {/* Cierre masivo: una única resolución para todas las seleccionadas */}
+      {selected.size > 0 && (
+        <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-4 text-sm space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium">
+              {selected.size} {t("bulk_selected")}
+            </span>
+            <button
+              type="button"
+              disabled={bulkBusy}
+              onClick={() => setBulkMode("resolved")}
+              className="rounded bg-emerald-600 hover:brightness-110 disabled:opacity-50 px-3 py-1.5 text-xs font-medium text-white"
+            >
+              {t("wf_resolve")}
+            </button>
+            <button
+              type="button"
+              disabled={bulkBusy}
+              onClick={() => setBulkMode("false_positive")}
+              className="rounded border border-ink-700 hover:bg-ink-800 disabled:opacity-50 px-3 py-1.5 text-xs font-medium text-slate-200"
+            >
+              {t("wf_mark_fp")}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSelected(new Set());
+                setBulkMode(null);
+              }}
+              className="ml-auto text-xs text-slate-400 hover:text-slate-200"
+            >
+              {t("bulk_clear")}
+            </button>
+          </div>
+          {bulkMode && (
+            <div className="space-y-2">
+              <textarea
+                value={bulkText}
+                onChange={(e) => setBulkText(e.target.value)}
+                rows={2}
+                placeholder={t("wf_note_resolution")}
+                className="w-full rounded bg-slate-900 border border-slate-700 px-3 py-2 text-sm"
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={bulkBusy || bulkText.trim().length < 5}
+                  onClick={() => void bulkClose()}
+                  className="rounded bg-cyan-600 hover:brightness-110 disabled:opacity-50 px-3 py-1.5 text-xs font-medium text-white"
+                >
+                  {t("wf_confirm")}
+                </button>
+                <button
+                  type="button"
+                  disabled={bulkBusy}
+                  onClick={() => setBulkMode(null)}
+                  className="rounded border border-ink-700 hover:bg-ink-800 px-3 py-1.5 text-xs text-slate-300"
+                >
+                  {t("wf_cancel")}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Resultado del último cierre masivo */}
+      {bulkResult && (
+        <div className="rounded-lg border border-ink-700 bg-ink-900/60 p-4 text-sm space-y-1">
+          <div className="flex items-center justify-between">
+            <span className="text-emerald-300">
+              {t("bulk_result_closed")}: {bulkResult.closed.length}
+            </span>
+            <button
+              type="button"
+              onClick={() => setBulkResult(null)}
+              className="text-xs opacity-60 hover:opacity-100"
+              aria-label="close"
+            >
+              ✕
+            </button>
+          </div>
+          {bulkResult.failed.length > 0 && (
+            <div className="text-amber-300">
+              {t("bulk_result_failed")}: {bulkResult.failed.length}
+              <ul className="mt-1 text-xs text-slate-400 space-y-0.5">
+                {bulkResult.failed.map((f) => (
+                  <li key={f.id}>
+                    #{f.id}: {f.detail}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
       {!alerts && !error && <p className="text-slate-400">{t("history_loading")}</p>}
       {alerts && alerts.length === 0 && <p className="text-slate-400">{t("siem_empty")}</p>}
 
@@ -275,6 +421,15 @@ export default function SiemPage() {
           <table className="w-full text-sm">
             <thead className="text-left text-xs uppercase text-slate-500">
               <tr>
+                <th className="px-3 py-2">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    disabled={openRows.length === 0}
+                    onChange={toggleAll}
+                    aria-label={t("bulk_select_all")}
+                  />
+                </th>
                 <th className="px-3 py-2">{t("siem_col_level")}</th>
                 <th className="px-3 py-2">{t("siem_col_rule")}</th>
                 <th className="px-3 py-2">{t("siem_col_agent")}</th>
@@ -288,6 +443,16 @@ export default function SiemPage() {
             <tbody>
               {alerts.map((a) => (
                 <tr key={a.id} className="border-t border-ink-700 align-top">
+                  <td className="px-3 py-2">
+                    {OPEN_STATUSES.includes(a.status) && (
+                      <input
+                        type="checkbox"
+                        checked={selected.has(a.id)}
+                        onChange={() => toggle(a.id)}
+                        aria-label={`#${a.id}`}
+                      />
+                    )}
+                  </td>
                   <td className="px-3 py-2">
                     <span className={`rounded border px-2 py-0.5 text-xs font-mono ${levelClass(a.rule_level)}`}>
                       {a.rule_level ?? "—"}

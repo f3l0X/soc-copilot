@@ -13,6 +13,9 @@ from app.middleware.ratelimit import rate_limit
 from app.models import Alert
 from app.schemas.alerts import (
     AlertAnalyzeRequest,
+    AlertBulkFailure,
+    AlertBulkResolveRequest,
+    AlertBulkResolveResult,
     AlertDetail,
     AlertEscalateRequest,
     AlertResolveRequest,
@@ -31,6 +34,8 @@ from app.services.alert_workflow import (
     apply_resolve,
     apply_review,
     check_analyze,
+    check_bulk_resolve,
+    is_assignee,
     record_analysis,
 )
 from app.services.audit import log_audit
@@ -244,3 +249,41 @@ def review_alert(
     except WorkflowError as exc:
         raise _workflow_http(exc) from None
     return _finish(db, user, alert, "review", {"rating": payload.rating})
+
+
+@router.post("/bulk-resolve", response_model=AlertBulkResolveResult)
+def bulk_resolve_alerts(
+    payload: AlertBulkResolveRequest, db: DbSession, user: CurrentUser
+) -> AlertBulkResolveResult:
+    """Cierra varias alertas con la misma resolución (máximo 100).
+
+    Cada alerta se comprueba por separado con las reglas de su nivel: las que
+    no se pueden cerrar se devuelven en ``failed`` con el motivo y el resto se
+    cierran igualmente. Las que no eran tuyas se te asignan antes de cerrarlas.
+    """
+    closed: list[int] = []
+    failed: list[AlertBulkFailure] = []
+    for alert_id in payload.alert_ids:
+        alert = db.get(Alert, alert_id)
+        if alert is None or not can_view_alert(user, alert):
+            failed.append(AlertBulkFailure(id=alert_id, detail="alert not found"))
+            continue
+        try:
+            check_bulk_resolve(user, alert, payload.verdict)
+        except WorkflowError as exc:
+            failed.append(AlertBulkFailure(id=alert_id, detail=exc.detail))
+            continue
+        if not is_assignee(user, alert):
+            apply_assign(db, alert, user)
+        apply_resolve(db, alert, user, payload.verdict, payload.resolution)
+        log_audit(
+            db,
+            actor=user,
+            action="alert.resolve",
+            target_type="alert",
+            target_id=alert.id,
+            details={"status": alert.status, "verdict": payload.verdict, "bulk": True},
+        )
+        closed.append(alert.id)
+    db.commit()
+    return AlertBulkResolveResult(closed=closed, failed=failed)
