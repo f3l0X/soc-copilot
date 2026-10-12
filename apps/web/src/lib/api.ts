@@ -60,6 +60,7 @@ export interface AlertSummary {
   status: AlertStatus;
   assigned_to_id: number | null;
   assigned_to_name: string | null;
+  review_rating: ReviewRating | null;
   escalated_at: string | null;
   resolved_at: string | null;
 }
@@ -75,13 +76,32 @@ export type AlertStatus =
   | "resolved"
   | "false_positive";
 
-export type AlertQueue = "new" | "escalated" | "in_progress" | "mine" | "closed";
+export type AlertQueue =
+  | "new"
+  | "escalated"
+  | "in_progress"
+  | "mine"
+  | "closed"
+  | "review";
+
+// Valoración del Instructor sobre la decisión tomada (Práctica 3).
+export type ReviewRating = "correct" | "improvable" | "incorrect";
+
+export interface AlertReview {
+  rating: ReviewRating;
+  comment: string | null;
+  reviewer_id: number | null;
+  reviewer_email: string;
+  analyst_id: number | null;
+  created_at: string;
+  updated_at: string;
+}
 
 export type AlertVerdict = "resolved" | "false_positive";
 
 export interface AlertEvent {
   id: number;
-  action: "analyze" | "escalate" | "assign" | "resolve" | "reopen";
+  action: "analyze" | "escalate" | "assign" | "resolve" | "reopen" | "review";
   actor_id: number | null;
   actor_email: string;
   from_status: AlertStatus | null;
@@ -108,6 +128,7 @@ export interface AlertDetail extends AlertSummary {
   resolution: string | null;
   resolved_by_id: number | null;
   events: AlertEvent[];
+  review: AlertReview | null;
 }
 
 // ─── Internal fetch helper ────────────────────────────────────────────────
@@ -215,6 +236,12 @@ export const resolveAlert = (id: number, verdict: AlertVerdict, resolution: stri
 
 export const reopenAlert = (id: number) =>
   request<AlertDetail>(`/api/alerts/${id}/reopen`, { method: "POST" });
+
+export const reviewAlert = (id: number, rating: ReviewRating, comment?: string) =>
+  request<AlertDetail>(`/api/alerts/${id}/review`, {
+    method: "POST",
+    body: JSON.stringify({ rating, comment: comment || null }),
+  });
 
 // ─── Wazuh SIEM integration ───────────────────────────────────────────────
 

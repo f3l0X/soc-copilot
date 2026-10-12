@@ -16,6 +16,8 @@ Reglas (se comprueban aquí, en la API; la web solo oculta botones):
 - Un L1 solo puede cerrar alertas analizadas de riesgo bajo o medio; las
   altas, críticas o sin analizar las tiene que escalar.
 - Solo L2, INSTRUCTOR o ADMIN pueden reabrir alertas cerradas.
+- Solo INSTRUCTOR o ADMIN pueden valorar la decisión tomada en una alerta
+  escalada o cerrada, y nunca una decisión propia.
 
 Las funciones ``check_*`` solo leen atributos y lanzan ``WorkflowError``, así
 se pueden probar sin base de datos. Las ``apply_*`` aplican el cambio y
@@ -29,7 +31,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.models import Alert, AlertEvent, User, UserLevel, UserRole
+from app.models import Alert, AlertEvent, AlertReview, User, UserLevel, UserRole
 
 
 class AlertStatus(str, Enum):
@@ -50,6 +52,13 @@ CLOSED_STATUSES: frozenset[str] = frozenset(
 )
 # Riesgos que un L1 puede cerrar por sí mismo.
 L1_CLOSABLE_RISKS: frozenset[str] = frozenset({"low", "medium"})
+
+# Alertas con una decisión que el Instructor puede valorar.
+REVIEWABLE_STATUSES: frozenset[str] = frozenset(
+    s.value
+    for s in (AlertStatus.ESCALATED, AlertStatus.RESOLVED, AlertStatus.FALSE_POSITIVE)
+)
+REVIEW_RATINGS: frozenset[str] = frozenset({"correct", "improvable", "incorrect"})
 
 # Colas de la página SIEM → estados que incluye cada una.
 QUEUE_STATUSES: dict[str, tuple[str, ...]] = {
@@ -76,6 +85,18 @@ def is_admin(user: Any) -> bool:
 def is_senior(user: Any) -> bool:
     """L2, INSTRUCTOR o administrador de la plataforma."""
     return is_admin(user) or user.level in (UserLevel.L2, UserLevel.INSTRUCTOR)
+
+
+def is_instructor(user: Any) -> bool:
+    """Puede valorar decisiones: nivel INSTRUCTOR o administrador."""
+    return is_admin(user) or user.level == UserLevel.INSTRUCTOR
+
+
+def decision_maker_id(alert: Any) -> int | None:
+    """Quién tomó la decisión que se valora: quien escaló o quien cerró."""
+    if alert.status == AlertStatus.ESCALATED.value:
+        return alert.escalated_by_id
+    return alert.resolved_by_id
 
 
 def is_assignee(user: Any, alert: Any) -> bool:
@@ -131,6 +152,17 @@ def check_reopen(user: Any, alert: Any) -> None:
         raise WorkflowError(403, "only L2, INSTRUCTOR or admin can reopen alerts")
     if alert.status not in CLOSED_STATUSES:
         raise WorkflowError(409, "only closed alerts can be reopened")
+
+
+def check_review(user: Any, alert: Any, rating: str) -> None:
+    if not is_instructor(user):
+        raise WorkflowError(403, "only INSTRUCTOR or admin can review decisions")
+    if rating not in REVIEW_RATINGS:
+        raise WorkflowError(409, f"invalid rating {rating!r}")
+    if alert.status not in REVIEWABLE_STATUSES:
+        raise WorkflowError(409, "only escalated or closed alerts can be reviewed")
+    if decision_maker_id(alert) == user.id:
+        raise WorkflowError(409, "you can't review your own decision")
 
 
 # ─── Aplicar cambios ────────────────────────────────────────────────────────
@@ -201,3 +233,22 @@ def apply_reopen(db: Session, alert: Alert, user: User, note: str | None = None)
     alert.resolved_at = None
     alert.resolved_by_id = None
     _record(db, alert, user, "reopen", previous, note)
+
+
+def apply_review(
+    db: Session, alert: Alert, user: User, rating: str, comment: str | None
+) -> None:
+    """Crea o actualiza la valoración del Instructor y la deja en el historial."""
+    check_review(user, alert, rating)
+    review = alert.review
+    if review is None:
+        review = AlertReview(alert_id=alert.id)
+        db.add(review)
+        alert.review = review
+    review.reviewer_id = user.id
+    review.reviewer_email = user.email
+    review.analyst_id = decision_maker_id(alert)
+    review.rating = rating
+    review.comment = comment
+    note = rating if not comment else f"{rating}: {comment}"
+    _record(db, alert, user, "review", alert.status, note)

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { AlertStatusBadge } from "@/components/AlertStatusBadge";
+import { AlertStatusBadge, ReviewBadge } from "@/components/AlertStatusBadge";
 import { RiskBadge } from "@/components/RiskBadge";
 import {
   type AlertQueue,
@@ -161,14 +161,14 @@ export default function SiemPage() {
       .catch((e) => setError(errMsg(e)));
   }, [filter]);
 
-  // Cola inicial según el nivel: L1 empieza por las nuevas; L2, Instructor y
-  // admin, por las escaladas. Solo la primera vez, luego manda el usuario.
+  // Cola inicial según el nivel: L1 → nuevas; Instructor → para revisar;
+  // L2 y admin → escaladas. Solo la primera vez, luego manda el usuario.
   useEffect(() => {
     if (!auth.user || queueChosen.current) return;
     queueChosen.current = true;
-    const senior =
-      auth.user.role === "admin" || auth.user.level === "L2" || auth.user.level === "INSTRUCTOR";
-    setFilter(senior ? "escalated" : "new");
+    if (auth.user.level === "INSTRUCTOR") setFilter("review");
+    else if (auth.user.role === "admin" || auth.user.level === "L2") setFilter("escalated");
+    else setFilter("new");
   }, [auth.user]);
 
   useEffect(() => {
@@ -200,6 +200,7 @@ export default function SiemPage() {
   const me = auth.user;
   const senior =
     me?.role === "admin" || me?.level === "L2" || me?.level === "INSTRUCTOR";
+  const instructor = me?.role === "admin" || me?.level === "INSTRUCTOR";
   const isMine = (a: AlertSummary) => me != null && a.assigned_to_id === me.id;
   // Mismas reglas que la API: un L1 solo coge alertas nuevas; L2/Instructor/admin
   // también las escaladas y las de otros analistas.
@@ -213,6 +214,8 @@ export default function SiemPage() {
     { key: "in_progress", label: t("siem_queue_in_progress") },
     { key: "escalated", label: t("siem_queue_escalated") },
     { key: "closed", label: t("siem_queue_closed") },
+    // La cola de revisión solo tiene sentido para Instructor y admin.
+    ...(instructor ? [{ key: "review" as Filter, label: t("siem_queue_review") }] : []),
     { key: "all", label: t("siem_filter_all") },
   ];
 
@@ -304,6 +307,11 @@ export default function SiemPage() {
                     {a.assigned_to_name && (
                       <div className="mt-1 text-[11px] text-slate-400 whitespace-nowrap">
                         {t("wf_assigned_to")}: {isMine(a) ? t("wf_assigned_you") : a.assigned_to_name}
+                      </div>
+                    )}
+                    {a.review_rating && (
+                      <div className="mt-1">
+                        <ReviewBadge rating={a.review_rating} />
                       </div>
                     )}
                   </td>
