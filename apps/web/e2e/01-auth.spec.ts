@@ -21,7 +21,7 @@ test("login → header con email + rol, logout limpia sesión, password mal mues
 
   // Wrong password → inline error.
   await page.getByLabel("Email").fill(user.email);
-  await page.getByLabel("Contraseña").fill("wrong-password-x");
+    await page.locator('input[autocomplete="current-password"]').fill("wrong-password-x");
   await page.getByRole("button", { name: "Iniciar sesión" }).click();
   await expect(page.getByText("Credenciales inválidas.")).toBeVisible();
 });
