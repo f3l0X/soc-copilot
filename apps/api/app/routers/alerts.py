@@ -16,17 +16,20 @@ from app.schemas.alerts import (
     AlertDetail,
     AlertEscalateRequest,
     AlertResolveRequest,
+    AlertReviewRequest,
     AlertSummary,
 )
 from app.services.alert_access import can_view_alert, scope_visible_alerts
 from app.services.alert_workflow import (
     OPEN_STATUSES,
     QUEUE_STATUSES,
+    REVIEWABLE_STATUSES,
     WorkflowError,
     apply_assign,
     apply_escalate,
     apply_reopen,
     apply_resolve,
+    apply_review,
     check_analyze,
     record_analysis,
 )
@@ -49,11 +52,12 @@ def list_alerts(
     pending: bool | None = Query(
         None, description="true = only alerts without AI analysis yet"
     ),
-    queue: Literal["new", "escalated", "in_progress", "mine", "closed"] | None = Query(
+    queue: Literal["new", "escalated", "in_progress", "mine", "closed", "review"]
+    | None = Query(
         None,
         description=(
             "Cola del ciclo de vida: new, in_progress (asignadas), escalated, "
-            "mine (asignadas a mí) o closed"
+            "mine (asignadas a mí), closed o review (decisiones sin valorar)"
         ),
     ),
 ) -> list[Alert]:
@@ -66,7 +70,11 @@ def list_alerts(
         stmt = stmt.where(Alert.analyzed_at.is_(None))
     elif pending is False:
         stmt = stmt.where(Alert.analyzed_at.is_not(None))
-    if queue == "mine":
+    if queue == "review":
+        stmt = stmt.where(
+            Alert.status.in_(tuple(REVIEWABLE_STATUSES)), ~Alert.review.has()
+        )
+    elif queue == "mine":
         stmt = stmt.where(
             Alert.assigned_to_id == user.id, Alert.status.in_(tuple(OPEN_STATUSES))
         )
@@ -223,3 +231,16 @@ def reopen_alert(alert_id: int, db: DbSession, user: CurrentUser) -> Alert:
     except WorkflowError as exc:
         raise _workflow_http(exc) from None
     return _finish(db, user, alert, "reopen", {})
+
+
+@router.post("/{alert_id}/review", response_model=AlertDetail)
+def review_alert(
+    alert_id: int, payload: AlertReviewRequest, db: DbSession, user: CurrentUser
+) -> Alert:
+    """El Instructor valora la decisión tomada (correcta, mejorable o incorrecta)."""
+    alert = _get_visible(db, user, alert_id)
+    try:
+        apply_review(db, alert, user, payload.rating, payload.comment)
+    except WorkflowError as exc:
+        raise _workflow_http(exc) from None
+    return _finish(db, user, alert, "review", {"rating": payload.rating})

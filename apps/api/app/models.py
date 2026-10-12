@@ -292,6 +292,13 @@ class Alert(Base):
         cascade="all, delete-orphan",
         order_by="AlertEvent.created_at",
     )
+    # Valoración del Instructor sobre la decisión tomada (una por alerta).
+    review: Mapped[AlertReview | None] = relationship(
+        back_populates="alert",
+        cascade="all, delete-orphan",
+        uselist=False,
+        lazy="selectin",
+    )
 
 
     @property
@@ -302,6 +309,11 @@ class Alert(Base):
             return None
         full = " ".join(p for p in (u.name, u.last_name) if p).strip()
         return full or u.email
+
+    @property
+    def review_rating(self) -> str | None:
+        """Valoración del Instructor (correct / improvable / incorrect) o None."""
+        return self.review.rating if self.review is not None else None
 
 
 class AlertEvent(Base):
@@ -464,3 +476,42 @@ class GroupMessage(Base):
         default=lambda: datetime.now(UTC),
         index=True,
     )
+
+
+class AlertReview(Base):
+    """Valoración del Instructor sobre la decisión de un analista (Práctica 3).
+
+    Una por alerta: si el Instructor la cambia, se actualiza la misma fila.
+    ``analyst_id`` es quien tomó la decisión valorada (quien escaló o cerró).
+    """
+
+    __tablename__ = "alert_reviews"
+    __table_args__ = (UniqueConstraint("alert_id", name="uq_alert_reviews_alert_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    alert_id: Mapped[int] = mapped_column(
+        ForeignKey("alerts.id", ondelete="CASCADE"), nullable=False
+    )
+    reviewer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    reviewer_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    analyst_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    # correct | improvable | incorrect
+    rating: Mapped[str] = mapped_column(String(16), nullable=False)
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        default=lambda: datetime.now(UTC),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
+
+    alert: Mapped[Alert] = relationship(back_populates="review")

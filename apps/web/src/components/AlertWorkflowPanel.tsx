@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { AlertStatusBadge } from "@/components/AlertStatusBadge";
+import { AlertStatusBadge, ReviewBadge } from "@/components/AlertStatusBadge";
 import {
   type AlertDetail,
   type AlertVerdict,
@@ -11,6 +11,8 @@ import {
   escalateAlert,
   reopenAlert,
   resolveAlert,
+  reviewAlert,
+  type ReviewRating,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
@@ -20,6 +22,8 @@ import { useI18n } from "@/lib/i18n";
 const OPEN_STATUSES = ["new", "in_progress", "escalated"];
 const L1_CLOSABLE_RISKS = ["low", "medium"];
 const MIN_NOTE = { escalate: 10, resolved: 5, false_positive: 5 } as const;
+const REVIEWABLE_STATUSES = ["escalated", "resolved", "false_positive"];
+const RATINGS: ReviewRating[] = ["correct", "improvable", "incorrect"];
 
 type Mode = null | "escalate" | AlertVerdict;
 
@@ -49,6 +53,9 @@ export function AlertWorkflowPanel({
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Revisión del Instructor
+  const [rating, setRating] = useState<ReviewRating | null>(alert.review?.rating ?? null);
+  const [reviewText, setReviewText] = useState(alert.review?.comment ?? "");
 
   if (!user) return null;
 
@@ -64,6 +71,13 @@ export function AlertWorkflowPanel({
   const riskOk = L1_CLOSABLE_RISKS.includes((alert.risk_level ?? "").toLowerCase());
   const canClose = canWork && (senior || riskOk);
   const canReopen = senior && !isOpen;
+  // Quién tomó la decisión que se valora: quien escaló o quien cerró.
+  const decisionBy = alert.status === "escalated" ? alert.escalated_by_id : alert.resolved_by_id;
+  const canReview =
+    (admin || user.level === "INSTRUCTOR") &&
+    REVIEWABLE_STATUSES.includes(alert.status) &&
+    decisionBy !== user.id;
+  const reviewTextOk = rating === "correct" || reviewText.trim().length >= 5;
   const minLen = mode ? MIN_NOTE[mode] : 0;
   const textOk = text.trim().length >= minLen;
 
@@ -224,6 +238,68 @@ export function AlertWorkflowPanel({
       {error && (
         <div className="rounded border border-rose-700 bg-rose-950/40 p-3 text-sm text-rose-300">
           {error}
+        </div>
+      )}
+
+      {/* Revisión del Instructor */}
+      {(alert.review || canReview) && (
+        <div className="space-y-2 rounded-md border border-ink-700 p-4">
+          <h3 className="text-sm font-semibold text-slate-300">{t("rv_title")}</h3>
+          {alert.review && (
+            <div className="text-sm space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <ReviewBadge rating={alert.review.rating} />
+                <span className="text-xs text-slate-400">
+                  {t("rv_by")} {alert.review.reviewer_email} ·{" "}
+                  {new Date(alert.review.updated_at).toLocaleString()}
+                </span>
+              </div>
+              {alert.review.comment && (
+                <p className="text-slate-200 whitespace-pre-line">{alert.review.comment}</p>
+              )}
+            </div>
+          )}
+          {!alert.review && !canReview && (
+            <p className="text-xs text-slate-500">{t("rv_pending")}</p>
+          )}
+          {canReview && (
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-2">
+                {RATINGS.map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setRating(r)}
+                    className={
+                      `${btn} border ` +
+                      (rating === r
+                        ? "border-cyan-500 bg-cyan-500/20 text-cyan-200"
+                        : "border-ink-700 text-slate-300 hover:bg-ink-800")
+                    }
+                  >
+                    {t(`rv_rating_${r}` as Parameters<typeof t>[0])}
+                  </button>
+                ))}
+              </div>
+              <textarea
+                value={reviewText}
+                onChange={(e) => setReviewText(e.target.value)}
+                rows={2}
+                placeholder={t("rv_comment_placeholder")}
+                className="w-full rounded bg-slate-900 border border-slate-700 px-3 py-2 text-sm"
+              />
+              <button
+                type="button"
+                disabled={busy || !rating || !reviewTextOk}
+                onClick={() =>
+                  rating && void run(() => reviewAlert(alert.id, rating, reviewText.trim()))
+                }
+                className={`${btn} bg-cyan-600 text-white hover:brightness-110`}
+              >
+                {t("rv_save")}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

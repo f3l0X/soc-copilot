@@ -15,6 +15,8 @@ from app.services.alert_workflow import (
     check_escalate,
     check_reopen,
     check_resolve,
+    check_review,
+    decision_maker_id,
     is_senior,
 )
 
@@ -179,3 +181,47 @@ def test_queues_cover_every_status_once():
     assert sorted(statuses) == sorted(
         ["new", "in_progress", "escalated", "resolved", "false_positive"]
     )
+
+
+# ── Revisión del Instructor ────────────────────────────────────────────
+
+
+def _decided(status: str, by: int | None) -> SimpleNamespace:
+    return SimpleNamespace(
+        id=1, status=status, risk_level="high", assigned_to_id=None,
+        escalated_by_id=by if status == "escalated" else None,
+        resolved_by_id=by if status in ("resolved", "false_positive") else None,
+    )
+
+
+@pytest.mark.parametrize("status", ["escalated", "resolved", "false_positive"])
+@pytest.mark.parametrize("rating", ["correct", "improvable", "incorrect"])
+def test_instructor_can_review_decisions(status, rating):
+    assert _code(check_review, INSTRUCTOR, _decided(status, 1), rating) is None
+
+
+@pytest.mark.parametrize("user", [L1, L2])
+def test_only_instructor_or_admin_can_review(user):
+    assert _code(check_review, user, _decided("resolved", 2), "correct") == 403
+
+
+def test_admin_can_review():
+    assert _code(check_review, ADMIN, _decided("escalated", 1), "improvable") is None
+
+
+@pytest.mark.parametrize("status", ["new", "in_progress"])
+def test_cannot_review_alert_without_decision(status):
+    assert _code(check_review, INSTRUCTOR, _decided(status, 1), "correct") == 409
+
+
+def test_cannot_review_own_decision():
+    assert _code(check_review, INSTRUCTOR, _decided("resolved", 4), "correct") == 409
+
+
+def test_invalid_rating_rejected():
+    assert _code(check_review, INSTRUCTOR, _decided("resolved", 1), "great") == 409
+
+
+def test_decision_maker_is_escalator_or_closer():
+    assert decision_maker_id(_decided("escalated", 7)) == 7
+    assert decision_maker_id(_decided("false_positive", 8)) == 8

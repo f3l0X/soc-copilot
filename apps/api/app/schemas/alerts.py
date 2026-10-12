@@ -127,6 +127,7 @@ class AlertSummary(BaseModel):
     status: str = "new"
     assigned_to_id: int | None = None
     assigned_to_name: str | None = None
+    review_rating: str | None = None
     escalated_at: datetime | None = None
     resolved_at: datetime | None = None
 
@@ -153,6 +154,7 @@ class AlertDetail(AlertSummary):
     resolution: str | None = None
     resolved_by_id: int | None = None
     events: list[AlertEventOut] = []
+    review: AlertReviewOut | None = None
 
 
 # ─── Ciclo de vida de la alerta (Práctica 3) ────────────────────────────────
@@ -169,6 +171,36 @@ class AlertEventOut(BaseModel):
     to_status: str | None
     note: str | None
     created_at: datetime
+
+
+ReviewRating = Literal["correct", "improvable", "incorrect"]
+
+
+class AlertReviewOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    rating: ReviewRating
+    comment: str | None
+    reviewer_id: int | None
+    reviewer_email: str
+    analyst_id: int | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class AlertReviewRequest(BaseModel):
+    rating: ReviewRating
+    comment: str | None = Field(None, max_length=4_000)
+
+    @model_validator(mode="after")
+    def _comment_when_not_correct(self) -> AlertReviewRequest:
+        text = (self.comment or "").strip()
+        if self.rating != "correct" and len(text) < 5:
+            raise ValueError(
+                "a comment (at least 5 characters) is required unless the rating is 'correct'"
+            )
+        self.comment = text or None
+        return self
 
 
 class AlertEscalateRequest(BaseModel):
