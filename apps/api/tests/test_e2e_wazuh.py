@@ -71,7 +71,7 @@ def test_webhook_ingests_dedupes_and_analyst_can_triage(monkeypatch):
     analyst_email = f"b-{uuid.uuid4().hex[:6]}@example.com"
     for e in (admin_email, analyst_email):
         assert c.post(
-            "/api/auth/register", json={"name": "U", "email": e, "password": PW}
+            "/api/auth/register", json={"name": "Usuario", "email": e, "password": PW}
         ).status_code == 201
     ratelimit.reset()
 

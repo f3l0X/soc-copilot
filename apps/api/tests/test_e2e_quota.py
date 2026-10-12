@@ -86,7 +86,7 @@ def test_quota_wall_then_admin_reset(monkeypatch):
     for email in (admin_email, analyst_email):
         r = client.post(
             "/api/auth/register",
-            json={"name": "U", "email": email, "password": pw},
+            json={"name": "Usuario", "email": email, "password": pw},
         )
         assert r.status_code == 201, r.text
 

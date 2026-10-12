@@ -227,7 +227,7 @@ def test_verification_required_blocks_login_until_token_used(monkeypatch):
     user_pw = "Verif-User-Strong-1!"
     r = client.post(
         "/api/auth/register",
-        json={"name": "U", "email": user_email, "password": user_pw},
+        json={"name": "Usuario", "email": user_email, "password": user_pw},
     )
     assert r.status_code == 201, r.text
     body = r.json()
@@ -282,7 +282,7 @@ def test_verification_token_expired():
     admin_pw = "Exp-Admin-Strong-1!"
     client.post(
         "/api/auth/register",
-        json={"name": "A", "email": _email(), "password": admin_pw},
+        json={"name": "Admin", "email": _email(), "password": admin_pw},
     )
     rl.reset()
 
@@ -290,7 +290,7 @@ def test_verification_token_expired():
     user_pw = "Exp-User-Strong-1!"
     r = client.post(
         "/api/auth/register",
-        json={"name": "U", "email": user_email, "password": user_pw},
+        json={"name": "Usuario", "email": user_email, "password": user_pw},
     )
     assert r.status_code == 201
 

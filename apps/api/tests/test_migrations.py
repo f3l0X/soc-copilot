@@ -12,8 +12,12 @@ the postgres service container alongside the rest of the e2e suite.
 from __future__ import annotations
 
 import os
+from pathlib import Path
+
 
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import text
 
 if os.environ.get("RUN_E2E") != "1":  # pragma: no cover
@@ -68,7 +72,7 @@ def test_bridge_stamps_existing_unmanaged_db():
     # The bridge should detect this and stamp instead of upgrading.
     init_db()
 
-    assert _alembic_version() == "0001_initial"
+    assert _alembic_version() == _alembic_head()
 
 
 def test_upgrade_runs_on_empty_db():
@@ -86,11 +90,11 @@ def test_upgrade_runs_on_empty_db():
         }
     # Schema is in place.
     assert {"users", "alerts", "recommendations", "audit_logs", "role_permissions"} <= tables
-    assert _alembic_version() == "0001_initial"
+    assert _alembic_version() == _alembic_head()
 
 
 def test_idempotent_on_already_migrated_db():
     """alembic_version already at head → second init_db must be a no-op."""
     # Leaves the DB at head from the previous test; calling again must not raise.
     init_db()
-    assert _alembic_version() == "0001_initial"
+    assert _alembic_version() == _alembic_head()

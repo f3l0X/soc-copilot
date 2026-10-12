@@ -69,11 +69,11 @@ def test_stats_empty_for_fresh_analyst(monkeypatch):
     _fake_llm_in_place(monkeypatch, risk="low", mitre=[])
     pw = "Stats-Pw-123456!"
     # First user → admin, second → analyst (so we can hit the analyst branch)
-    client.post("/api/auth/register", json={"name": "A", "email": _email(), "password": pw})
+    client.post("/api/auth/register", json={"name": "Admin", "email": _email(), "password": pw})
     analyst_email = _email()
     client.post(
         "/api/auth/register",
-        json={"name": "B", "email": analyst_email, "password": pw},
+        json={"name": "Analista", "email": analyst_email, "password": pw},
     )
     ratelimit.reset()
     c = TestClient(app)
@@ -101,7 +101,7 @@ def test_stats_ownership_isolation(monkeypatch):
     for email in [admin_email, a_email, b_email]:
         client.post(
             "/api/auth/register",
-            json={"name": "U", "email": email, "password": pw},
+            json={"name": "Usuario", "email": email, "password": pw},
         )
 
     ratelimit.reset()
@@ -155,7 +155,7 @@ def test_stats_daily_bucket(monkeypatch):
     admin_email = _email()
     client.post(
         "/api/auth/register",
-        json={"name": "A", "email": admin_email, "password": pw},
+        json={"name": "Admin", "email": admin_email, "password": pw},
     )
     ratelimit.reset()
     c = TestClient(app)
