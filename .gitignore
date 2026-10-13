@@ -56,3 +56,11 @@ htmlcov/
 
 # Obsidian (parent vault, but ignore if appears here)
 .obsidian/
+
+
+# TypeScript (caché de compilación)
+*.tsbuildinfo
+
+# Copias de seguridad de la base de datos y paquetes del proyecto
+*.dump
+*.zip
