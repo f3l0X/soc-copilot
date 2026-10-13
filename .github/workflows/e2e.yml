@@ -106,6 +106,7 @@ jobs:
           API_PORT=8080
           API_CORS_ORIGINS=http://localhost:13500
           RATE_LIMIT_ENABLED=false
+          AUTH_RATE_LIMIT_REQUESTS=1000
           RATE_LIMIT_REQUESTS=20
           RATE_LIMIT_WINDOW_SECONDS=60
           JWT_SECRET=ci-secret-32+chars-please-12345678
