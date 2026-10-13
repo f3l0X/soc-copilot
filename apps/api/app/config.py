@@ -58,6 +58,11 @@ class Settings(BaseSettings):
     rate_limit_enabled: bool = True
     rate_limit_requests: int = 20
     rate_limit_window_seconds: int = 60
+    # Intentos por minuto y cliente en login/registro (anti fuerza bruta).
+    # Siempre activo, aunque RATE_LIMIT_ENABLED=false. Solo los tests E2E lo
+    # suben (hacen muchos registros seguidos desde la misma IP); en
+    # producción no puede pasar de 10.
+    auth_rate_limit_requests: int = 5
 
     # ── Auth ────────────────────────────────────────────────────────────
     # Generate with: openssl rand -base64 48
@@ -223,6 +228,10 @@ class Settings(BaseSettings):
                 problems.append(
                     f"API_CORS_ORIGINS entry {o!r} must use https:// in production"
                 )
+        if self.auth_rate_limit_requests > 10:
+            problems.append(
+                "AUTH_RATE_LIMIT_REQUESTS must be <= 10 in production (anti fuerza bruta)"
+            )
         if not self.mfa_required:
             problems.append("MFA_REQUIRED must be true in production (MFA obligatorio)")
         if self.wazuh_webhook_token and len(self.wazuh_webhook_token) < 32:

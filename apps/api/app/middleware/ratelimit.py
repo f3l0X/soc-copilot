@@ -99,8 +99,14 @@ def auth_rate_limit(request: Request) -> None:
     """
     settings = get_settings()
     ident = _client_id(request)
-    # 5 attempts per minute per client. Independent of the global bucket.
-    _check("auth", ident, 5, max(settings.rate_limit_window_seconds, 60))
+    # AUTH_RATE_LIMIT_REQUESTS attempts (default 5) per minute per client.
+    # Independent of the global bucket; capped at 10 in production.
+    _check(
+        "auth",
+        ident,
+        settings.auth_rate_limit_requests,
+        max(settings.rate_limit_window_seconds, 60),
+    )
 
 
 def check_email_rate_limit(request: Request) -> None:
