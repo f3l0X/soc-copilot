@@ -61,7 +61,7 @@ export async function loginViaUI(
 ): Promise<void> {
   await page.goto("/login");
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Contraseña").fill(password);
+    await page.locator('input[autocomplete="current-password"]').fill(password);
   const meRequest = page.waitForResponse(
     (r) => r.url().endsWith("/api/auth/login") && r.request().method() === "POST",
   );

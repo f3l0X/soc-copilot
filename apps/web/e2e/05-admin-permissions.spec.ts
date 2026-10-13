@@ -50,7 +50,7 @@ test("admin entra al panel y ve la matriz de permisos", async ({ page, request }
   await expect(page.getByRole("heading", { name: "Usuarios Registrados" })).toBeVisible();
 
   // Ensure the admin can see at least their own row.
-  await expect(page.getByText(adminEmail!)).toBeVisible();
+    await expect(page.getByRole("cell", { name: adminEmail! })).toBeVisible();
 
   // Switch to the permisos tab and confirm the matrix renders.
   await page.getByRole("button", { name: "permisos" }).click();

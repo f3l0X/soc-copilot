@@ -9,8 +9,7 @@ test("login → header con email + rol, logout limpia sesión, password mal mues
   const user = await seedUser(request);
 
   await loginViaUI(page, user.email, user.password);
-  await expect(page.getByText(user.email)).toBeVisible();
-  await expect(page.getByText("analyst", { exact: false })).toBeVisible();
+   await expect(page.getByText(`analyst · ${user.email}`)).toBeVisible();
 
   await page.getByRole("button", { name: "Salir" }).click();
   await expect(page).toHaveURL(/\/login/);
@@ -21,7 +20,7 @@ test("login → header con email + rol, logout limpia sesión, password mal mues
 
   // Wrong password → inline error.
   await page.getByLabel("Email").fill(user.email);
-  await page.getByLabel("Contraseña").fill("wrong-password-x");
+    await page.locator('input[autocomplete="current-password"]').fill("wrong-password-x");
   await page.getByRole("button", { name: "Iniciar sesión" }).click();
   await expect(page.getByText("Credenciales inválidas.")).toBeVisible();
 });
