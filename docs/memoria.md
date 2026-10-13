@@ -540,7 +540,7 @@ Detalle de estrategia, fixtures y comandos en
   (no el último día) descubrió el problema de `NEXT_PUBLIC_API_URL`
   embebido en el bundle de Next, que en local no se ve.
 - **Documentación viva en `docs/`** — el repositorio se ha podido
-  retomar fríamente entre miembros gracias a los `docs/HANDOFF-IA.md`
+  retomar fríamente entre miembros gracias a los `ia/HANDOFF-IA.md`
   y `RUNBOOK.md`.
 
 ### 10.2. Qué nos costó

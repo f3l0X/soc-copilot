@@ -72,6 +72,8 @@ services:
       # and `... python -m scripts.ingest_kb` work without bind-mount flags.
       - ../apps/api/tests:/code/tests:ro
       - ../apps/api/scripts:/code/scripts:ro
+            # Simulador de Wazuh: `docker compose exec api python integrations/wazuh/wazuh_simulator.py`
+      - ../integrations:/code/integrations:ro
     depends_on:
       postgres:
         condition: service_healthy
