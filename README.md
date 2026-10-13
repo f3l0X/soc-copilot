@@ -372,8 +372,7 @@ soc-copilot/
 ├── integrations/wazuh/       # Integración con Wazuh y simulador
 ├── scripts/deploy.sh         # Despliegue en producción
 ├── docs/                     # Documentación detallada
-├── .env.example              # Plantilla de configuración (sin secretos)
-└── GUIA-ARRANQUE.md          # Guía detallada con problemas conocidos
+└── .env.example              # Plantilla de configuración (sin secretos)
 ```
 
 ---
@@ -390,8 +389,37 @@ soc-copilot/
 | No puedo analizar una alerta del SIEM | Hay que **asignársela** primero (botón *Asignármela*) |
 | La API no arranca: `Refusing to start with insecure configuration` | En local, deja `APP_ENV=development` |
 | `npm install` falla en Windows | Ruta con `&`, espacios o dentro de OneDrive: mueve el proyecto (apartado 3) |
+| `mkdir /run/desktop/mnt/host/e: file exists` al arrancar | Docker Desktop no puede montar un disco externo o USB: cierra Docker Desktop, ejecuta `wsl --shutdown`, vuelve a abrirlo o mueve el proyecto a `C:` |
+| *«MFA secret unreadable»* | Ha cambiado `APP_ENCRYPTION_KEY` después de activar el MFA: vuelve a poner la clave anterior, o resetea el MFA del usuario (comando abajo) |
+| No deja entrar tras varios intentos | Tras 4 fallos (contraseña o código) la cuenta se bloquea 15 minutos; espera, o reinicia la API en local: `restart api` |
+| Error 429 al iniciar sesión | Más de 5 intentos por minuto desde la misma IP: espera un minuto |
+| Un usuario ha perdido el móvil del MFA | Que use un código de recuperación, o que un administrador pulse **Reset MFA** en **Admin → Usuarios** |
+| **El administrador** ha perdido el móvil y los códigos | Resetea su MFA desde la base de datos (comando abajo) y vuelve a iniciar sesión: pedirá un QR nuevo |
+| Error 429 «Daily AI call quota exhausted» | Agotadas las llamadas diarias con la clave compartida: cada usuario puede poner su propia clave de Gemini en **Settings**, o un administrador pulsa **Reset cuota** en **Admin** |
+| El chat dice «KB no disponible» | No se ha cargado la base de conocimiento (apartado 4.6) |
+| El enlace de recuperación dice «inválido o caducado» | Caduca a los 30 minutos y solo vale una vez: pide uno nuevo |
+| La web sigue con el aspecto antiguo | Caché del navegador: `Ctrl + F5` o una ventana de incógnito |
 
-Más casos y soluciones en [GUIA-ARRANQUE.md](GUIA-ARRANQUE.md).
+**Resetear el MFA de un usuario** (en local). Entra en la base de datos:
+
+```bash
+docker compose -f infra/docker-compose.yml --env-file .env exec postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+```
+
+y, en el prompt `soc_copilot=#`, ejecuta (cambiando el email) y sal con `\q`:
+
+```sql
+UPDATE users SET mfa_enabled = false, mfa_secret_ciphertext = NULL,
+  mfa_recovery_codes = NULL, mfa_last_used_step = NULL
+WHERE email = 'admin@example.com';
+```
+
+**Ver qué está fallando:** los logs suelen indicar la causa exacta.
+
+```bash
+docker compose -f infra/docker-compose.yml --env-file .env logs --tail 80 api
+docker compose -f infra/docker-compose.yml --env-file .env logs --tail 80 web
+```
 
 **Empezar de cero** (⚠️ borra la base de datos local):
 
@@ -439,7 +467,6 @@ Detalle en [docs/security.md](docs/security.md).
 
 | Para… | Lee |
 |---|---|
-| Instalación detallada y problemas conocidos | [GUIA-ARRANQUE.md](GUIA-ARRANQUE.md) |
 | Manual de usuario | [docs/10-manual-usuario.md](docs/10-manual-usuario.md) |
 | Arquitectura | [docs/03-arquitectura.md](docs/03-arquitectura.md) |
 | Referencia de la API | [docs/06-api-reference.md](docs/06-api-reference.md) |
