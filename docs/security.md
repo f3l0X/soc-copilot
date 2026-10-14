@@ -2,10 +2,15 @@
 
 ## Resumen
 
-Cubre las mitigaciones aplicadas en fases 1–5 (desarrollo + despliegue
-Hetzner) y los riesgos residuales pendientes de tratar antes o después
-de la entrega del 25-05-2026. Estado a fecha 18/05/2026 con el sistema
-en producción.
+Cubre las mitigaciones aplicadas desde la Práctica 1 hasta la Práctica 3
+(desarrollo, despliegue en Hetzner, integración con Wazuh y ciclo de vida
+de las alertas), el modelo de amenazas y los riesgos residuales.
+**Estado a fecha 13/10/2026**, con el sistema en producción en
+<https://soc-copilot.duckdns.org>.
+
+Para informar de una vulnerabilidad, abre un *issue* en el repositorio
+**sin incluir detalles explotables** y pide un canal privado, o contacta
+directamente con el equipo.
 
 ### Endurecimiento incorporado en fase 5
 
@@ -82,9 +87,14 @@ en producción.
 
 - `app/middleware/ratelimit.py` implementa ventana deslizante por IP en
   memoria, con lock para entornos multi-thread.
-- Aplicado a `/api/explain`, `/api/recommend`, `/api/chat`. NO afecta a
-  `/api/health`, `/api/auth/*`, `/api/kb/status`, `/api/llm/models`,
-  `/api/alerts*`.
+- Límite general aplicado a `/api/explain`, `/api/recommend`, `/api/chat`
+  y al análisis de alertas. No afecta a `/api/health`, `/api/kb/status`
+  ni `/api/llm/models`.
+- **Límite anti fuerza bruta en login y registro**: siempre activo, aunque
+  `RATE_LIMIT_ENABLED=false`. 5 intentos por minuto y cliente por
+  defecto (`AUTH_RATE_LIMIT_REQUESTS`); la API **se niega a arrancar en
+  producción** si vale más de 10. Solo el flujo de pruebas E2E lo sube.
+  Se suma al bloqueo de la cuenta tras 4 fallos (15 minutos).
 - Variables:
 
   | Variable | Default |
@@ -92,6 +102,7 @@ en producción.
   | `RATE_LIMIT_ENABLED` | `true` |
   | `RATE_LIMIT_REQUESTS` | `20` |
   | `RATE_LIMIT_WINDOW_SECONDS` | `60` |
+  | `AUTH_RATE_LIMIT_REQUESTS` | `5` (máximo 10 en producción) |
 
 - Limitación: in-memory ⇒ no compartido entre procesos. En prod multi-worker
   se sustituirá el backing store por Redis (fase ≥5).
@@ -161,8 +172,10 @@ Variables (todas en `.env.example`):
 ### Allowlist de modelos LLM
 
 - `Settings.gemini_chat_models_allowlist` define qué modelos puede pedir
-  el cliente (default: `gemini-2.5-flash-lite, gemini-2.5-flash,
-  gemini-2.0-flash-lite`).
+  el cliente (default: `gemini-3.5-flash-lite, gemini-3.5-flash,
+  gemini-3.1-flash-lite`). La serie 2.x se retiró en octubre de 2026
+  porque Google dejó de ofrecerla a claves nuevas; las preferencias de
+  usuario con modelos retirados se limpiaron al desplegar.
 - Pydantic valida `model` contra esa lista (422 si no).
 - `GeminiAdapter._resolve_chat_model` valida también, defense in depth:
   si llega un modelo desconocido (bypass de validación), cae al default
@@ -199,6 +212,43 @@ Variables (todas en `.env.example`):
 - Riesgo residual: el TOTP no protege frente a phishing en tiempo real
   (AitM); WebAuthn/passkeys quedaría como mejora futura.
 
+## Práctica 3 — nuevos controles (octubre 2026)
+
+| Área | Control |
+|------|---------|
+| SIEM | Wazuh 4.12 con UFW de mínimo privilegio; los agentes llegan solo por Tailscale (WireGuard) y la red local; el indexador (9200) no se expone |
+| Detección | Seis reglas propias sobre los logs de Caddy (escaneo, path traversal, SQLi/XSS, ráfagas de 4xx) mapeadas a MITRE ATT&CK |
+| Webhook | Wazuh → SOC Copilot por HTTPS con verificación de certificado; token de 256 bits, comprobado por hash sin mostrarlo durante la depuración; solo alertas de nivel ≥ 7 |
+| Ciclo de vida | Reglas por nivel en la API (403/409): hay que tener la alerta asignada para analizarla, escalarla o cerrarla; un L1 no puede cerrar riesgo alto o crítico; el cierre masivo aplica las mismas reglas alerta por alerta |
+| Revisión | Solo Instructor o admin valoran decisiones, nunca las propias |
+| Trazabilidad | Historial por alerta (`alert_events`) y auditoría de cada acción, incluidos los cierres masivos |
+| Integridad de archivos | Las alertas de cambios en `/boot`, `/etc` y `/usr/bin` **no se silencian**: se comprueban contra `/var/log/apt/history.log` y se cierran juntas |
+| Dependencias | `npm audit --omit=dev`: 0 vulnerabilidades conocidas (`next` 15.5.27 y `postcss` forzado a 8.5.29 con `overrides`) |
+| Servidor | Kernel actualizado tras las alertas de vulnerabilidades de Wazuh, con reinicio y retirada del kernel antiguo |
+| Repositorio | Historial revisado: sin claves de Gemini, claves privadas, `.env` ni tokens reales. Las copias de seguridad (`*.dump`) están en `.gitignore` |
+| MFA | Se mantiene la ventana estándar de 30 s: limitarla a 15 s rompía inicios de sesión legítimos sin ganancia real (el código ya es de un solo uso) |
+
+## Datos personales
+
+El sistema trata datos personales de los propios analistas: nombre,
+correo electrónico, contraseña (solo su hash), secreto MFA (cifrado) y
+las acciones que realizan, que quedan en la auditoría para garantizar la
+trazabilidad de las decisiones. Las alertas pueden contener direcciones
+IP de quien accede a la web, que se tratan como datos de seguridad. Las
+pruebas y demostraciones usan siempre cuentas ficticias
+(`@example.com`) y ataques simulados contra sistemas propios.
+
+## Modelo de amenazas (STRIDE)
+
+| Amenaza | Ejemplo en SOC Copilot | Mitigación |
+|---------|------------------------|------------|
+| **S**uplantación | Robo de contraseña de un analista; alertas falsas enviadas al webhook | MFA/TOTP obligatorio, bloqueo y límite de intentos; webhook con token secreto y HTTPS |
+| **T**ampering (manipulación) | Modificar binarios del servidor; alterar alertas o decisiones | Monitor de integridad de Wazuh; reglas del ciclo de vida en la API; historial de cada cambio |
+| **R**epudio | Un analista niega haber cerrado una alerta | `alert_events` y `audit_logs` con autor y fecha de cada acción |
+| **I**nformation disclosure (fuga) | Ver alertas ajenas; fuga de claves en errores de la IA o en el repositorio | Visibilidad por usuario (404 si no es tuya); errores de la IA saneados; secretos solo en `.env`; historial revisado |
+| **D**enial of service | Fuerza bruta en el login; agotar la cuota de IA; inundar el webhook | Límite de login (5/min), límite general, cuota diaria por usuario, límite propio del webhook y deduplicación |
+| **E**levation of privilege | Un usuario se da nivel L2/Instructor o rol admin | Niveles aprobados por un administrador; matriz de permisos; reglas por nivel comprobadas en el servidor, no en la interfaz |
+
 ## Parches Recientes (Remediación Post-Fase-4)
 
 Se han implementado correcciones específicas basadas en el reporte de vulnerabilidades:
@@ -208,35 +258,36 @@ Se han implementado correcciones específicas basadas en el reporte de vulnerabi
 3. **Catastrophic Backtracking (ReDoS)**: El regex cliente en `/logs` que extraía IPs (SRC/DST) sustituyó los wildcards codiciosos `.*?` por límites controlados `.{0,150}?`. Esto evita bloqueos del navegador si se inyectan líneas de log malformadas gigantescas.
 4. **Denegación de Servicio por Paginación Nula**: El endpoint administrativo `/api/admin/users` fue fortificado con parámetros de paginación (`limit`, `offset`) para prevenir el colapso de memoria al listar conjuntos de datos extensos.
 
-## Riesgos pendientes por fase
+## Riesgos residuales
 
-| Fase | Riesgo | Mitigación planeada |
-|------|--------|---------------------|
-| **5** (deploy) | Hardening VPS | SSH key only, ufw, fail2ban, auto-actualizaciones |
-| **5** | TLS / certificados | Caddy 2 + Let's Encrypt automático |
-| **5** | Secret management | Variables fuera del repo, gestor (Hetzner secrets / age / sops) |
-| **5** | Backups Postgres | `pg_dump` cifrado (age) vía systemd timer + offsite |
-| **5** | Rate limiter en multi-worker | Sustituir backing store por Redis (slowapi) |
-| **5** | Real client IP | `ProxyHeadersMiddleware` en uvicorn + `forwarded_allow_ips` apuntando al IP de Caddy |
-| **5** | Registro público + race condition | `AUTH_REGISTRATION_ENABLED=false` + admin seed CLI |
-| **5** | `JWT_SECRET` aún el de dev | Rotar a `openssl rand -base64 48` antes de exponer |
-| **5** | Chroma sin auth | En prod queda en red interna del compose, sin puertos expuestos |
-| **6** | Guion del informe + demo | Plantilla en `roadmap.md` |
+| Riesgo | Impacto | Tratamiento |
+|--------|---------|-------------|
+| El SIEM corre en una VM de un equipo personal | Sin detección mientras el equipo está apagado (pasó los días 10 y 11 de octubre) | Migrar Wazuh a un servidor en la nube |
+| La VM del SIEM toma la IP local por DHCP | El panel deja de estar en la dirección habitual | Reserva DHCP o IP fija |
+| El token del webhook apareció en capturas de pantalla durante la configuración | Alguien con la captura podría enviar alertas falsas | Rotarlo si esas capturas se comparten fuera del equipo |
+| Cuentas de administrador cuya contraseña nadie conoce | Cuenta privilegiada sin dueño | Desactivarlas desde Admin |
+| Rate limiter en memoria | No se comparte entre procesos si se escala a varios workers | Redis como almacén del limitador |
+| TOTP frente a phishing en tiempo real (AitM) | Un proxy malicioso puede capturar el código | WebAuthn/passkeys como mejora futura |
+| Dependencias de la API sin auditoría automatizada | Vulnerabilidades no detectadas en Python | `pip-audit` en el CI |
+| Next.js 15 | Futuras vulnerabilidades solo corregidas en la 16 | Planificar el cambio de versión mayor |
+| DuckDNS y SMTP de Gmail | Dependencia de servicios gratuitos de terceros | Dominio propio y servicio de correo dedicado |
+| Endurecimiento del VPS (SSH solo con clave, fail2ban) | Por verificar y documentar | Revisión de la configuración del servidor |
+| Sin plazo de conservación de alertas y auditoría | Se acumulan datos personales (correos, acciones de los analistas, IP de quien accede a la web) sin límite | Definir y automatizar un plazo de conservación |
 
 ## Cosas no verificadas o aceptadas
 
-- `npm audit` devuelve 2 moderate por `postcss <8.5.10` que viene
-  vendored dentro de Next.js (`node_modules/next/node_modules/postcss`).
-  Nuestro top-level es 8.5.11. El fix oficial degrada Next a 9.x →
-  inaceptable. Riesgo real bajo: ese postcss procesa CSS del propio
-  bundle de Next, no input de usuario. Revisar al subir Next.
+- **Resuelto en octubre de 2026:** el `postcss` antiguo que Next.js
+  llevaba dentro se fuerza a la versión del proyecto con `overrides`
+  (`"postcss": "$postcss"`), sin cambiar la versión de Next.
+  `npm audit --omit=dev` da 0 vulnerabilidades.
 - Rate limiter detrás de proxy: verificado en producción Caddy → API
   con `trusted_proxies static private_ranges` en el Caddyfile. La API
   ve la IP del cliente real, no la del contenedor de Caddy.
 - `docker-compose.prod.yml` desplegado en Hetzner CPX22 desde
-  18/05/2026. Smoke parcial OK (login, chat con RAG, registro con
-  verificación email, toggle de registro). Smoke E2E con un compañero
-  del grupo todavía pendiente — recomendado antes de la demo.
+  18/05/2026. Desde octubre de 2026 el flujo **E2E de GitHub Actions**
+  (API y Playwright) pasa en verde sobre toda la aplicación levantada con
+  Docker. La instalación desde cero siguiendo el README por una persona
+  ajena al grupo sigue pendiente antes de la entrega.
 - SMTP Gmail App Password: limitado a ~500 emails/día. Para una
   instalación a más usuarios convendría migrar a un servicio dedicado
   (Brevo, Resend con dominio propio, Amazon SES). Documentado como
