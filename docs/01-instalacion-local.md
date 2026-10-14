@@ -1,15 +1,9 @@
-# Instalacion local
+# Instalación local
 
-## Requisitos
-
-- Windows 11, macOS o Linux.
-- Docker Desktop con Docker Compose v2.
-- Git.
-- Una clave de Gemini creada en Google AI Studio: <https://aistudio.google.com/apikey>.
-- Recomendado en Windows: WSL2 activo y virtualizacion habilitada en BIOS/UEFI.
-
-No es necesario instalar Python, Node.js ni PostgreSQL en local si se usa
-Docker. El stack levanta todo en contenedores.
+> La **instalación paso a paso desde cero** está en el
+> [README](../README.md#4-instalación-paso-a-paso) de la raíz del
+> repositorio, que es la única guía mantenida. Este documento solo resume
+> los puertos y los comandos más usados en el día a día.
 
 ## Puertos usados
 
@@ -23,115 +17,39 @@ Docker. El stack levanta todo en contenedores.
 
 > Nota Windows: 5432 (Postgres por defecto) y 3000 (Next por defecto) suelen
 > estar en el rango excluido por Hyper-V en Windows 11. Por eso usamos
-> 55432 y 13500. Ver [Solucion de problemas](05-solucion-problemas.md).
+> 55432 y 13500.
 
-## Pasos de instalacion
+## Comandos útiles
 
-1. Clonar o descomprimir el proyecto:
-
-   ```bash
-   git clone https://github.com/f3l0X/soc-copilot.git
-   cd soc-copilot
-   ```
-
-2. Crear el archivo de entorno a partir del ejemplo:
-
-   ```bash
-   cp .env.example .env
-   ```
-
-   En Windows PowerShell, si `cp` no esta disponible:
-
-   ```powershell
-   Copy-Item .env.example .env
-   ```
-
-3. Editar `.env`:
-
-   ```env
-   GEMINI_API_KEY=tu_clave_de_gemini
-   ```
-
-   Para entorno local se pueden mantener el resto de valores por defecto.
-   Las variables de auth y rate-limit están documentadas en `.env.example`
-   y en [docs/security.md](security.md).
-
-4. Levantar el stack:
-
-   ```bash
-   cd infra
-   docker compose up --build -d
-   ```
-
-   La primera vez tarda ~3 min (descarga imágenes + instala deps).
-
-5. Comprobar arranque:
-
-   ```bash
-   docker compose ps
-   curl http://localhost:8080/api/health
-   ```
-
-   Resultado esperado: 4 servicios healthy + `{"status":"ok"}`.
-
-   > Las cinco migraciones de Alembic actuales (`0001_initial_schema`,
-   > `0002_auth_hardening`, `0003_level_approval`, `0004_app_settings`,
-   > `0005_group_messages`) se aplican automáticamente durante el primer
-   > arranque de la API. Si en un entorno ya existente añades una
-   > migración nueva, fuérzala con
-   > `docker compose exec api alembic upgrade head`.
-
-6. (Una vez por entorno) Poblar la base de conocimiento RAG. Sin este paso
-   el chat funciona pero sin contexto MITRE/OWASP:
-
-   ```bash
-   docker compose exec api python -m scripts.ingest_kb
-   ```
-
-   El script tarda 5–15 min según RPM disponibles del free tier de Gemini.
-   Detalle completo en [docs/08-rag-ingestion.md](08-rag-ingestion.md).
-
-7. Crear el usuario admin desde el frontend:
-
-   - Abrir <http://localhost:13500>.
-   - Te redirige a `/login`. Pulsar **«¿No tienes cuenta? Regístrate»**.
-   - El primer email registrado queda como **admin**. Los siguientes son
-     **analyst**. Detalle en [docs/security.md](security.md).
-
-8. Abrir la aplicacion:
-
-   - Frontend: <http://localhost:13500>
-   - Dashboard: <http://localhost:13500/dashboard>
-   - Alert Explainer: <http://localhost:13500/alerts>
-   - Analizador de logs: <http://localhost:13500/logs>
-   - Next Step Recommender: <http://localhost:13500/respond?alert_id=N>
-   - Histórico: <http://localhost:13500/history>
-   - Chat IA: <http://localhost:13500/chat>
-   - Chat grupal del equipo: <http://localhost:13500/groupchat>
-   - Perfil + BYO Gemini key: <http://localhost:13500/profile> y <http://localhost:13500/settings/llm>
-   - API docs (solo en dev): <http://localhost:8080/docs>
-
-## Comandos utiles
+Desde la raíz del repositorio. Para abreviar, en PowerShell puedes definir
+`$dc = "docker compose -f infra/docker-compose.yml --env-file .env"` y
+usar `Invoke-Expression "$dc ps"`, o escribir el comando completo.
 
 | Acción | Comando |
 |--------|---------|
-| Parar contenedores | `docker compose down` |
-| Parar y borrar volumenes (DB + KB) | `docker compose down -v` |
-| Reconstruir | `docker compose up --build -d` |
-| Ver logs API en vivo | `docker compose logs -f api` |
-| Ver logs frontend | `docker compose logs -f web` |
-| Tests backend | `docker compose exec api pytest -q` |
-| Lint backend | `docker compose exec api ruff check app tests` |
-| Estado KB | `curl http://localhost:8080/api/kb/status` |
+| Arrancar / reconstruir | `docker compose -f infra/docker-compose.yml --env-file .env up -d --build` |
+| Ver el estado | `docker compose -f infra/docker-compose.yml --env-file .env ps` |
+| Parar | `docker compose -f infra/docker-compose.yml --env-file .env down` |
+| Parar y **borrar** la base de datos y la KB | `docker compose -f infra/docker-compose.yml --env-file .env down -v` |
+| Logs de la API / de la web | `docker compose -f infra/docker-compose.yml --env-file .env logs -f api` (o `web`) |
+| Versión de la base de datos | `docker compose -f infra/docker-compose.yml --env-file .env exec api alembic current` (debe ser `0011_alert_reviews`) |
+| Tests de la API | `docker compose -f infra/docker-compose.yml --env-file .env exec api pytest -q --ignore=tests/test_e2e.py` |
+| Lint de la API | `docker compose -f infra/docker-compose.yml --env-file .env exec api ruff check app tests` |
+| Alertas de prueba (simulador de Wazuh) | `docker compose -f infra/docker-compose.yml --env-file .env exec api python integrations/wazuh/wazuh_simulator.py --count 8 --interval 1` |
+| Cargar la base de conocimiento | `docker compose -f infra/docker-compose.yml --env-file .env exec api python -m scripts.ingest_kb` |
+| Estado de la KB | `curl http://localhost:8080/api/kb/status` |
 
-## Pruebas basicas (smoke manual)
+## Prueba rápida (smoke manual)
 
-1. Login con tu usuario en <http://localhost:13500/login>.
-2. Ir a `/alerts`, usar uno de los ejemplos, pulsar **Analizar**.
-3. Confirmar resumen + riesgo + técnicas MITRE + razonamiento.
-4. Pulsar **Siguiente paso**: aparecen acciones recomendadas.
-5. Abrir `/history`: la alerta queda persistida con tu user_id.
-6. Abrir `/chat`, hacer una pregunta sobre alguna técnica MITRE: la
-   respuesta debe citar IDs como `mitre:T1110` u `owasp:A03:2025`.
+1. Inicia sesión en <http://localhost:13500/login> (con MFA).
+2. Lanza el simulador de Wazuh (tabla de arriba) y abre **SIEM → Alertas
+   Wazuh**: deben aparecer alertas en la cola **Nuevas**.
+3. **Asignármela** en una alerta → **Analizar**: resumen, riesgo, MITRE y
+   razonamiento.
+4. Ciérrala o escálala desde el panel **Gestión de la alerta** y comprueba
+   el historial.
+5. Abre `/chat` y pregunta por una técnica MITRE: si la KB está cargada,
+   la respuesta cita IDs como `mitre:T1110`.
 
-Si algo falla, ver [docs/05-solucion-problemas.md](05-solucion-problemas.md).
+Si algo falla, consulta el apartado **Problemas frecuentes** del
+[README](../README.md#10-problemas-frecuentes).

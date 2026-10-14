@@ -104,9 +104,37 @@ se seguirá pidiendo. **No crees otra cuenta**: perderías tu historial.
 | `analyst` | Crear alertas, pedir recomendaciones, chatear, ver su histórico, editar su perfil. |
 | `admin` | Todo lo anterior + gestionar usuarios, roles, matriz de permisos, abrir/cerrar el registro público, aprobar niveles solicitados, ver auditoría global y log analyzer completo. |
 
+Además del rol, cada usuario tiene un **nivel SOC**, que decide qué puede
+hacer con las alertas del SIEM:
+
+| Nivel | Qué hace con las alertas |
+|-------|--------------------------|
+| **L1** | Se asigna alertas **nuevas**, las analiza y cierra las de riesgo bajo o medio. Las altas, críticas o sin analizar las **escala** con una nota. |
+| **L2** | Además, se asigna las **escaladas** (o las de otro analista), las investiga y las cierra con cualquier riesgo. Puede **reabrir** alertas cerradas. |
+| **Instructor** | Como L2, y además **valora** las decisiones de los demás (Correcta, Mejorable o Incorrecta) desde la cola **Para revisar**. |
+
 ---
 
 ## 3. Flujo típico de trabajo
+
+**Alertas del SIEM (Wazuh):**
+
+```
+ Wazuh ──► [SIEM · Alertas Wazuh] cola «Nuevas»
+                 │ Asignármela (L1)
+                 ▼
+            Asignada a ti ──► [Analizar] ──► ¿riesgo bajo/medio?
+                 │                              │ sí           │ no
+                 │                              ▼              ▼
+                 │                          Resolver /      Escalar (nota)
+                 │                          Falso positivo     │
+                 │                                             ▼
+                 │                               cola «Escaladas» ──► L2 se la asigna y la cierra
+                 ▼
+       Instructor: cola «Para revisar» ──► valora la decisión
+```
+
+**Logs o alertas sueltas (sin SIEM):**
 
 ```
    Log/alerta cruda
@@ -207,9 +235,9 @@ ATT&CK y OWASP Top 10 con citas.
    item) que puedes desplegar para verificar.
 
 **Selector de modelo.** En el menú de ajustes puedes elegir entre los
-modelos permitidos por el administrador (Gemini 2.5 Flash, Flash-Lite,
-2.0 Flash-Lite). Flash-Lite es más rápido y barato; Flash da respuestas
-más elaboradas.
+modelos permitidos por el administrador (Gemini 3.5 Flash-Lite, que es el
+predeterminado, 3.5 Flash y 3.1 Flash-Lite). Flash-Lite es más rápido y
+barato; Flash da respuestas más elaboradas.
 
 **Bring Your Own Key (BYOK).** Si tienes tu propia clave de Gemini, ve a
 **Ajustes → IA → Mi clave** y pégala. La clave se cifra en BD; nunca se
@@ -262,27 +290,50 @@ gestionan en **Ajustes → IA** (`/settings/llm`), no aquí.
 
 ---
 
-### 4.7 SIEM · Wazuh (`/siem`) — Práctica 2
+### 4.8 SIEM · Alertas Wazuh (`/siem`)
 
-Cola de alertas que llegan solas desde Wazuh. Filtra por *Pendientes /
-Analizadas*, se refresca cada 15 s y cada alerta tiene «Analizar con IA».
-Al analizarla pasa a ser tuya y puedes seguir en «Ver / responder».
-Los admins ven el estado de la integración y «Sincronizar ahora».
+En el menú lateral, **SIEM** agrupa tres páginas: **Alertas Wazuh**,
+**Alertas** (Alert Explainer) y **Logs**.
 
-### 4.8 Informe de incidente en PDF — Práctica 2
+Las alertas llegan solas desde Wazuh y se reparten en **colas**: Nuevas,
+Mis alertas, Asignadas, Escaladas, Cerradas, Para revisar (solo
+Instructor y admin) y Todas. La página se refresca cada 15 s. Al entrar,
+un L1 empieza en Nuevas, un L2 en Escaladas y un Instructor en Para
+revisar.
+
+1. **Asignármela**: la alerta pasa a «Asignada a: tu nombre» y se abre en
+   la página Alertas. Sin asignártela no puedes analizarla.
+2. **Analizar**: la IA devuelve resumen, riesgo, MITRE y razonamiento.
+3. En el panel **Gestión de la alerta**, según tu nivel:
+   - **Resolver** o **Marcar falso positivo**, con una resolución.
+   - **Escalar**, con una nota que explique por qué (mínimo 10
+     caracteres).
+   - **Reabrir** (L2, Instructor y admin) una alerta cerrada.
+4. El panel muestra el **historial** (quién hizo qué y cuándo) y, si la
+   hay, la **revisión del Instructor**.
+
+**Cerrar varias a la vez:** marca las casillas de la tabla → **Resolver**
+o **Marcar falso positivo** → una resolución para todas. Las que tu nivel
+no permite cerrar se listan con el motivo. Útil tras una actualización del
+servidor, que genera muchas alertas de integridad de golpe.
+
+Los admins ven además el estado de la integración y «Sincronizar ahora».
+Reglas completas en [20-ciclo-vida-alertas.md](20-ciclo-vida-alertas.md).
+
+### 4.9 Informe de incidente en PDF — Práctica 2
 
 En el Chat IA (cuando hay conversación) o en la página de una alerta,
 pulsa «Generar informe de incidente (PDF)». Opcionalmente añade un título
 y notas (p. ej. acciones ya hechas). El PDF se descarga en 10-30 s.
 **Revísalo antes de enviarlo**: lo redacta la IA.
 
-### 4.9 Idioma
+### 4.10 Idioma
 
 La IA te contesta en el idioma en que escribes (español, inglés o
 francés). Si tu mensaje es muy corto, usa el idioma elegido arriba a la
 derecha (ES/EN/FR).
 
-### 4.10 Verificación en dos pasos (MFA) — obligatoria
+### 4.11 Verificación en dos pasos (MFA) — obligatoria
 
 1. Instala una app de autenticación (Google Authenticator, Microsoft
    Authenticator, Authy…).
@@ -374,6 +425,10 @@ Todas las acciones administrativas quedan registradas con `actor_id`,
 | *"Acceso denegado. ¿Tienes el email verificado?"* tras un registro nuevo | No has clicado el link del email de verificación | Mira tu bandeja (y spam). Si nunca llegó, pide al admin que reenvíe la verificación o te marque como verificado a mano. |
 | Tu nivel sigue como L1 después de pedir L2 / Instructor | Falta aprobación del admin | Espera a que el admin te apruebe en `/admin → Usuarios`. El nivel solicitado aparece como "Pendiente" en su panel. |
 | Cuenta bloqueada tras varios intentos de login | Anti-bruteforce: 4 fallos seguidos | Espera 15 minutos. Si urge, el admin puede resetearte la contraseña. |
+| El botón **Analizar** está desactivado en una alerta del SIEM | No tienes la alerta asignada | Pulsa **Asignármela** en la tabla o en el panel de gestión. |
+| No aparece **Resolver** en una alerta de riesgo alto (L1) | Un L1 no puede cerrar alertas altas o críticas | **Escálala** con una nota; la cerrará un L2. |
+| No puedo asignarme una alerta escalada (L1) | Las escaladas son para L2 | Espera a que un L2 la coja, o pide que te aprueben el nivel L2. |
+| *"AI provider error"* con un modelo antiguo guardado | Los modelos 2.x ya no están disponibles | En **Settings**, elige un modelo 3.x. |
 
 Más casos en [05-solucion-problemas.md](05-solucion-problemas.md).
 
