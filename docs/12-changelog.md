@@ -1,5 +1,88 @@
 # Changelog de UI/UX
 
+## [13/10/2026] - Práctica 3 · Pruebas E2E en verde y límite de login configurable
+
+Los 6 tests de Playwright vuelven a pasar. El campo de contraseña se
+localiza por `autocomplete` (el botón «Mostrar contraseña» confundía al
+test), y los textos que aparecen dos veces (rol y email en la barra
+superior) se buscan con más precisión. El límite anti fuerza bruta de
+login y registro pasa a ser configurable con `AUTH_RATE_LIMIT_REQUESTS`:
+**5 por defecto**, máximo 10 en producción (la API no arranca si se
+supera) y alto solo en el flujo E2E, que registra muchos usuarios
+seguidos desde la misma IP.
+
+## [13/10/2026] - Práctica 3 · Instalación unificada en el README
+
+El [README](../README.md) explica la instalación desde cero (generación de
+claves con Docker, usuarios de prueba, simulador de Wazuh, pruebas y
+problemas frecuentes) y sustituye a `GUIA-ARRANQUE.md`. El simulador de
+Wazuh se puede lanzar dentro del contenedor de la API (se monta
+`integrations/`). Se eliminan archivos sin uso (`soc-copilot.zip`,
+`postgresql_setup.sql`…) y las notas de trabajo con IA pasan a
+[`docs/ia/`](ia/).
+
+## [12/10/2026] - Práctica 3 · Cierre masivo de alertas
+
+En **SIEM · Alertas Wazuh** se pueden marcar varias alertas y cerrarlas
+juntas (resueltas o falso positivo) con una única resolución. Cada alerta
+se comprueba con las reglas de su nivel; las que no se pueden cerrar se
+listan con el motivo. Pensado para las ráfagas de alertas de integridad
+tras una actualización del sistema. Ver
+[20-ciclo-vida-alertas.md](20-ciclo-vida-alertas.md#6-cierre-masivo).
+
+## [12/10/2026] - Práctica 3 · Revisión del Instructor
+
+Nueva cola **Para revisar**: el Instructor valora la decisión tomada en
+cada alerta escalada o cerrada como Correcta, Mejorable o Incorrecta, con
+comentario. El analista lo ve en su alerta y en la tabla del SIEM.
+Migración `0011_alert_reviews`.
+
+## [12/10/2026] - Práctica 3 · Asignación obligatoria antes de analizar
+
+Para analizar, escalar o cerrar una alerta hay que asignársela
+(**Asignármela**). Desaparece el estado «Triada»: los estados son Nueva,
+Asignada, Escalada, Resuelta y Falso positivo, y se muestra «Asignada a:
+nombre». El botón «Analizar con IA» pasa a llamarse **Analizar**.
+Migración `0010_alert_assignment_flow`.
+
+## [12/10/2026] - Práctica 3 · Dependencias de la web sin vulnerabilidades
+
+`npm audit` detectaba una vulnerabilidad crítica en `next` y cuatro altas.
+Se actualiza `next` a 15.5.27 sin cambiar de versión mayor y se fuerza
+`postcss` 8.5.29 con `overrides`: 0 vulnerabilidades conocidas en las
+dependencias de producción.
+
+## [11/10/2026] - Práctica 3 · Ciclo de vida de las alertas y colas por nivel
+
+Las alertas de Wazuh tienen estado, se pueden escalar con nota, asignar,
+cerrar y reabrir, con reglas por nivel comprobadas en la API (un L1 no
+puede cerrar alertas de riesgo alto o crítico). La página SIEM muestra
+colas (Nuevas, Mis alertas, Escaladas, Cerradas…) y cada alerta tiene un
+panel de gestión con su historial. Migración `0009_alert_workflow`.
+
+## [11/10/2026] - Práctica 3 · Logo, fondo y bienvenida
+
+Logo del ojo en la barra lateral, fondo animado en el login y versión
+tenue en las páginas internas. La bienvenida muestra solo «BIENVENIDO» y
+el nombre del usuario.
+
+## [09/10/2026] - Práctica 3 · Menú SIEM, análisis desde Wazuh y Gemini 3.x
+
+- Menú **SIEM** desplegable con Alertas Wazuh, Alertas y Logs.
+- «Analizar» en una alerta de Wazuh abre la página Alertas con la alerta
+  cargada (`/alerts?wazuh_id=…`).
+- Modelos **Gemini 3.x** (`gemini-3.5-flash-lite` por defecto): Google
+  retiró la serie 2.5 para claves nuevas.
+- Botón para mostrar u ocultar la contraseña.
+
+## [08/10/2026] - Práctica 3 · Wazuh real en producción
+
+El servidor de producción envía sus eventos a un Wazuh 4.12 por Tailscale;
+seis reglas propias detectan escaneos, path traversal y SQLi/XSS en los
+logs de Caddy (con MITRE ATT&CK), y las alertas de nivel 7 o más llegan
+solas por el webhook. Se unificaron las versiones de producción y de la
+Práctica 2 (Pull Request #10).
+
 ## [05/10/2026] - «¿Has olvidado tu contraseña?»
 
 Nuevo enlace en el inicio de sesión. Envía por email un enlace de un solo

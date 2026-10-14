@@ -11,8 +11,9 @@ Todos los endpoints viven bajo prefijo `/api`.
 - **Auth**: cookie httpOnly `soc_session` (preferido) o
   `Authorization: Bearer <jwt>`. Detalle en
   [security.md](security.md#autenticación-fase-4).
-- **Rate limit**: solo en endpoints LLM. Detalle en
-  [security.md](security.md#rate-limiting).
+- **Rate limit**: en endpoints LLM, y siempre activo en login/registro
+  (`AUTH_RATE_LIMIT_REQUESTS`, 5 intentos por minuto por defecto, máximo
+  10 en producción). Detalle en [security.md](security.md#rate-limiting).
 - **Errores LLM**: 502 con detail genérico (`AI provider error` /
   `AI response could not be processed`). El mensaje real se loggea
   internamente.
@@ -34,8 +35,8 @@ Devuelve el modelo por defecto y el allowlist permitido al cliente.
 
 ```json
 {
-  "default": "gemini-2.5-flash-lite",
-  "available": ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash-lite"]
+  "default": "gemini-3.5-flash-lite",
+  "available": ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.1-flash-lite"]
 }
 ```
 
@@ -159,9 +160,9 @@ Devuelve la configuración LLM por usuario.
   "configured": true,
   "key_last4": "FpMpY",
   "key_validated_at": "2026-05-20T10:11:22Z",
-  "preferred_chat_model": "gemini-2.5-flash",
-  "available_models": ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
-  "default_model": "gemini-2.5-flash-lite",
+  "preferred_chat_model": "gemini-3.5-flash",
+  "available_models": ["gemini-3.5-flash-lite", "gemini-3.5-flash"],
+  "default_model": "gemini-3.5-flash-lite",
   "server_quota_used": 12,
   "server_quota_limit": 50
 }
@@ -176,7 +177,7 @@ Setea/actualiza la BYO key y/o el modelo por defecto del usuario. Body
 (ambos campos opcionales):
 
 ```json
-{"api_key": "AIza…", "preferred_chat_model": "gemini-2.5-flash"}
+{"api_key": "AIza…", "preferred_chat_model": "gemini-3.5-flash"}
 ```
 
 - La key se valida con una llamada *ping* a Gemini **antes** de
@@ -206,7 +207,7 @@ Body:
 {
   "log": "Apr 25 18:42:31 srv-01 sshd[2342]: Failed password for root from 91.234.56.78",
   "source": "auth.log",
-  "model": "gemini-2.5-flash-lite"
+  "model": "gemini-3.5-flash-lite"
 }
 ```
 
@@ -250,7 +251,7 @@ Auth: requerida. Rate-limited.
 Body (uno de los dos modos):
 
 ```json
-{"alert_id": 42, "model": "gemini-2.5-flash-lite"}
+{"alert_id": 42, "model": "gemini-3.5-flash-lite"}
 ```
 
 ```json
@@ -307,7 +308,7 @@ Body:
     {"role": "user", "content": "¿Qué es T1110 y cómo lo detecto?"}
   ],
   "log_context": "Apr 25 ... Failed password ...",
-  "model": "gemini-2.5-flash-lite"
+  "model": "gemini-3.5-flash-lite"
 }
 ```
 
@@ -677,7 +678,8 @@ al anterior no se escribe fila de auditoría (idempotente).
 | `401` | Sin cookie o JWT inválido/expirado/`pv` desfasado |
 | `403` | `require_perm` denegado (rol no tiene esa clave) |
 | `404` | Recurso no existe **o** no es tuyo (analyst sin permisos) |
-| `409` | Conflicto, ej. email duplicado en register / update profile / create admin user |
+| `403` | Acción del ciclo de vida no permitida para tu nivel o sin la alerta asignada |
+| `409` | Conflicto, ej. email duplicado en register / update profile / create admin user, o transición de estado no válida de una alerta |
 | `422` | Validación Pydantic |
 | `429` | Rate limit excedido |
 | `502` | LLM provider error o respuesta inválida |
@@ -728,6 +730,40 @@ Detalle completo, ejemplos y códigos de error en
 `GET /api/alerts` acepta ahora `origin=manual|wazuh` y `pending=true|false`,
 y cada alerta incluye `origin`, `external_id`, `rule_level`, `agent_name`,
 `event_at` y `analyzed_at`.
+
+Desde la Práctica 3, `POST /api/alerts/{id}/analyze` exige **tener la
+alerta asignada** (el admin, siempre); si no, responde `403`.
+
+## Ciclo de vida de las alertas (Práctica 3)
+
+Reglas completas en [20-ciclo-vida-alertas.md](20-ciclo-vida-alertas.md).
+Todas las rutas requieren sesión y devuelven `AlertDetail` (salvo la
+masiva). Errores: `403` (nivel o alerta no asignada), `409` (estado no
+válido), `404` (alerta no visible).
+
+| Método | Ruta | Cuerpo | Quién |
+|---|---|---|---|
+| GET | `/api/alerts?queue=new\|in_progress\|escalated\|mine\|closed\|review` | — | Todos |
+| POST | `/api/alerts/{id}/assign` | — | L1 (solo nuevas); L2, Instructor y admin (todas) |
+| POST | `/api/alerts/{id}/escalate` | `{"note"}` (10..2000 caracteres) | Quien la tiene asignada |
+| POST | `/api/alerts/{id}/resolve` | `{"verdict": "resolved"\|"false_positive", "resolution"}` (5..4000) | Quien la tiene asignada; L1 solo riesgo bajo o medio |
+| POST | `/api/alerts/bulk-resolve` | `{"alert_ids": [..], "verdict", "resolution"}` (1..100 alertas) | Las mismas reglas, alerta por alerta |
+| POST | `/api/alerts/{id}/reopen` | — | L2, Instructor y admin |
+| POST | `/api/alerts/{id}/review` | `{"rating": "correct"\|"improvable"\|"incorrect", "comment"}` | Instructor y admin, nunca sobre una decisión propia |
+
+Campos nuevos en `AlertSummary`: `status`, `assigned_to_id`,
+`assigned_to_name`, `escalated_at`, `resolved_at`, `review_rating`.
+`AlertDetail` añade `escalation_note`, `escalated_by_id`, `resolution`,
+`resolved_by_id`, `events` (historial) y `review`.
+
+Respuesta de `POST /api/alerts/bulk-resolve`:
+
+```json
+{
+  "closed": [12, 13, 15],
+  "failed": [{"id": 14, "detail": "L1 can only close analysed low/medium alerts; escalate this one to L2"}]
+}
+```
 
 
 ## Informe de incidente (Práctica 2)
